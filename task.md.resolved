@@ -1,0 +1,34 @@
+# Inventario CCO - Sistema de Inventariado
+
+## Fase 1: Frontend (React + MUI)
+
+### Estructura del Proyecto
+- [ ] Inicializar proyecto React con Vite
+- [ ] Instalar dependencias (MUI, React Router, barcode libs)
+- [ ] Crear estructura de carpetas (frontend/backend)
+
+### Design System y Componentes Reutilizables
+- [ ] Tema MUI personalizado (colores, tipografía, toggle modo oscuro/claro)
+- [ ] Layout principal (Sidebar, Topbar, Content area)
+- [ ] ThemeContext con toggle y persistencia en localStorage
+- [ ] Componentes reutilizables: DataTable, FormDialog, SearchBar, StatusChip, BarcodeScanner, BarcodeGenerator
+
+### Vistas
+- [ ] **Login** - Formulario de autenticación con validación
+- [ ] **Dashboard** - Resumen del inventario, alertas de stock bajo, gráficos
+- [ ] **Inventario** - CRUD completo de productos con:
+  - [ ] Listado con filtros, búsqueda y paginación
+  - [ ] Formulario de creación/edición de productos
+  - [ ] Escáner de código de barras
+  - [ ] Generador de códigos de barras
+  - [ ] Vista detalle del producto
+
+### Verificación
+- [ ] Verificar que el proyecto compila sin errores
+- [ ] Verificar navegación entre vistas
+- [ ] Verificar funcionalidad del CRUD (con datos mock)
+- [ ] Verificar escáner y generador de códigos de barras
+
+## Fase 2: Backend (futuro)
+- [ ] Crear estructura de carpetas para el backend
+- [ ] Documentar endpoints API esperados

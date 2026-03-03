@@ -1,0 +1,187 @@
+# Inventario CCO — Plan de Implementación Fase 1 (Frontend)
+
+Sistema de inventariado con React + MUI. Diseño moderno con principios UX/UI (jerarquía visual clara, microanimaciones, feedback inmediato, espaciado consistente). El frontend se construye primero con datos mock, preparado para conectar con el backend en Fase 2.
+
+## Proposed Changes
+
+### 1. Estructura del Proyecto
+
+```
+Inventario_CCO/
+├── frontend/                 # React + Vite
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/           # Imágenes, logos
+│   │   ├── components/       # Componentes reutilizables
+│   │   │   ├── layout/       # Sidebar, Topbar, MainLayout
+│   │   │   ├── common/       # DataTable, FormDialog, SearchBar, StatusChip, ConfirmDialog
+│   │   │   └── barcode/      # BarcodeScanner, BarcodeGenerator
+│   │   ├── pages/            # Vistas: Login, Dashboard, Inventory
+│   │   ├── services/         # Capa de datos mock (preparada para API real)
+│   │   ├── hooks/            # Custom hooks
+│   │   ├── context/          # AuthContext, ThemeContext
+│   │   ├── theme/            # Configuración tema MUI
+│   │   ├── utils/            # Helpers (format, validation, barcode utils)
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── package.json
+│   └── vite.config.js
+├── backend/                  # (Fase 2 - solo estructura)
+│   └── README.md
+└── README.md
+```
+
+---
+
+### 2. Inicialización y Dependencias
+
+#### [NEW] `frontend/` — Proyecto Vite + React
+
+- Crear con `npx create-vite@latest`
+- Dependencias principales:
+
+| Paquete | Uso |
+|---------|-----|
+| `@mui/material`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled` | UI Components |
+| `react-router-dom` | Navegación |
+| `@zxing/browser`, `@zxing/library` | Escaneo de códigos de barras (cámara) |
+| `react-barcode` | Generación de códigos de barras |
+| `recharts` | Gráficos del dashboard |
+| `notistack` | Notificaciones snackbar |
+
+---
+
+### 3. Tema MUI Personalizado
+
+#### [NEW] [theme.js](file:///c:/Users/HP/Documents/Gabo/Proyecto/Inventario_CCO/frontend/src/theme/theme.js)
+
+- **Toggle claro/oscuro** con persistencia en `localStorage`
+- Paleta: modo oscuro con fondo `#0a1929` / modo claro con fondo `#f5f7fa`, acento azul/cian
+- Tipografía: `Inter` (Google Fonts)
+- Bordes redondeados (`12px`), sombras suaves, glassmorphism en cards
+- Transiciones suaves al cambiar de modo
+- Overrides para `MuiButton`, `MuiCard`, `MuiTextField`, `MuiDataGrid`
+
+---
+
+### 4. Componentes Reutilizables
+
+Estos componentes se usarán en todas las vistas presentes y futuras.
+
+#### [NEW] Layout (`components/layout/`)
+
+| Componente | Descripción |
+|------------|-------------|
+| `MainLayout.jsx` | Wrapper con Sidebar + Topbar + área de contenido |
+| `Sidebar.jsx` | Navegación lateral con iconos, colapsable |
+| `Topbar.jsx` | Barra superior con título de página, usuario, notificaciones |
+
+#### [NEW] Comunes (`components/common/`)
+
+| Componente | Descripción |
+|------------|-------------|
+| `DataTable.jsx` | Tabla reutilizable con ordenamiento, paginación, búsqueda y acciones (editar/eliminar) |
+| `FormDialog.jsx` | Modal con formulario dinámico para crear/editar registros |
+| `SearchBar.jsx` | Barra de búsqueda con filtro por categoría |
+| `StatusChip.jsx` | Chip de estado con colores semánticos (stock bajo = rojo, ok = verde) |
+| `ConfirmDialog.jsx` | Diálogo de confirmación para acciones destructivas |
+| `StatsCard.jsx` | Tarjeta con ícono, título y valor para el dashboard |
+| `LoadingOverlay.jsx` | Overlay de carga animado |
+
+#### [NEW] Barcode (`components/barcode/`)
+
+| Componente | Descripción |
+|------------|-------------|
+| `BarcodeScanner.jsx` | Usa `@zxing/browser` para escanear con la cámara del dispositivo |
+| `BarcodeGenerator.jsx` | Genera código de barras SVG usando `react-barcode` (para productos sin código) |
+
+---
+
+### 5. Vistas (Pages)
+
+#### [NEW] [LoginPage.jsx](file:///c:/Users/HP/Documents/Gabo/Proyecto/Inventario_CCO/frontend/src/pages/LoginPage.jsx)
+
+- Formulario con email y contraseña
+- Validación de campos
+- Diseño centrado con fondo animado (gradiente + glassmorphism)
+- Credenciales mock: `admin@cco.com` / `admin123`
+- Autenticación mock: guarda token en `AuthContext`
+
+#### [NEW] [DashboardPage.jsx](file:///c:/Users/HP/Documents/Gabo/Proyecto/Inventario_CCO/frontend/src/pages/DashboardPage.jsx)
+
+- **StatsCards**: Total productos, stock bajo, categorías, movimientos recientes
+- **Gráficos** (recharts): distribución por categoría, tendencia de movimientos
+- **Tabla rápida**: últimos movimientos de inventario
+- **Alertas**: productos con stock bajo (`quantity < min_stock`)
+
+#### [NEW] [InventoryPage.jsx](file:///c:/Users/HP/Documents/Gabo/Proyecto/Inventario_CCO/frontend/src/pages/InventoryPage.jsx)
+
+- **CRUD completo** de productos:
+  - Tabla con columnas: ID, SKU, Nombre, Categoría, Stock, Estado, Acciones
+  - Botón "Agregar Producto" → `FormDialog`
+  - Editar producto → `FormDialog` con datos precargados
+  - Eliminar → `ConfirmDialog`
+- **Escáner de código de barras**: botón que abre `BarcodeScanner`, busca el producto por barcode
+- **Generador de código de barras**: en el formulario, botón para generar barcode automático (formato `CCO-XXXXXX`)
+- **Filtros**: por categoría, tipo (fungible/no_fungible/office_supply), stock bajo
+- **Detalle del producto**: panel lateral o modal con toda la info
+
+---
+
+### 6. Capa de Servicios (Mock Data)
+
+#### [NEW] [services/](file:///c:/Users/HP/Documents/Gabo/Proyecto/Inventario_CCO/frontend/src/services/)
+
+- `mockData.js` — Datos de ejemplo con categorías: **Fungibles** (Tóner, Hojas, Bolígrafos), **No Fungibles** (Laptops, Monitores, Impresoras), **Oficina** (Papel bond, Carpetas, Grapas), **Papelería** (Sobres, Post-it, Marcadores)
+- `inventoryService.js` — CRUD mock con `localStorage` para persistencia temporal
+- `authService.js` — Login mock (`admin@cco.com` / `admin123`)
+- `dashboardService.js` — Estadísticas calculadas desde los datos mock
+
+> Cada servicio exporta funciones async (simulando llamadas API) para facilitar la migración al backend real.
+
+---
+
+### 7. Contextos y Navegación
+
+#### [NEW] Contextos (`context/`)
+
+- `AuthContext.jsx` — Estado de autenticación, usuario actual, login/logout
+- `ThemeContext.jsx` — Toggle modo oscuro/claro con persistencia en `localStorage`
+- `InventoryContext.jsx` — Estado global del inventario (opcional, según complejidad)
+
+#### Rutas (en `App.jsx`)
+
+| Ruta | Componente | Protegida |
+|------|-----------|-----------|
+| `/login` | `LoginPage` | No |
+| `/` | `DashboardPage` | Sí |
+| `/inventory` | `InventoryPage` | Sí |
+
+---
+
+### 8. Backend (solo estructura)
+
+#### [NEW] `backend/README.md`
+
+Crear carpeta `backend/` con un README que documente los endpoints API esperados, preparando la Fase 2.
+
+---
+
+## Verification Plan
+
+### Automated (Dev Server)
+1. `cd frontend && npm run dev` — verificar que compila sin errores
+2. Navegar a `http://localhost:5173` en el browser
+
+### Browser Testing (usando el browser tool)
+1. **Login**: ingresar credenciales mock → redirige al Dashboard
+2. **Dashboard**: verificar que muestra tarjetas de estadísticas y gráficos
+3. **Inventario**: 
+   - Ver lista de productos
+   - Crear nuevo producto
+   - Editar un producto existente
+   - Eliminar un producto (con confirmación)
+   - Abrir escáner de barcode
+   - Generar barcode para un producto
+4. **Navegación**: verificar que el Sidebar navega correctamente entre vistas
+5. **Protección de rutas**: acceder a `/` sin login → redirige a `/login`
