@@ -89,12 +89,22 @@ const DataTable = ({
             </Box>
 
             {/* Table */}
-            <TableContainer>
-                <Table>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table sx={{ minWidth: 900 }}>
                     <TableHead>
                         <TableRow>
                             {columns.map((col) => (
-                                <TableCell key={col.field} sx={{ fontWeight: 600 }}>
+                                <TableCell
+                                    key={col.field}
+                                    sx={{
+                                        fontWeight: 600,
+                                        fontSize: '0.72rem',
+                                        letterSpacing: '0.05em',
+                                        textTransform: 'uppercase',
+                                        whiteSpace: 'nowrap',
+                                        py: 1.5,
+                                    }}
+                                >
                                     {col.sortable !== false ? (
                                         <TableSortLabel
                                             active={orderBy === col.field}
@@ -108,7 +118,7 @@ const DataTable = ({
                                     )}
                                 </TableCell>
                             ))}
-                            {actions && <TableCell align="right" sx={{ fontWeight: 600 }}>Acciones</TableCell>}
+                            {actions && <TableCell align="right" sx={{ fontWeight: 600, fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap', py: 1.5 }}>Acciones</TableCell>}
                         </TableRow>
                     </TableHead>
                     <TableBody>

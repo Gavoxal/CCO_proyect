@@ -1,6 +1,7 @@
-import { mockProducts, mockCategories, mockBrands, mockUnits } from './mockData';
+import { mockProducts, mockCategories, mockAreas } from './mockData';
 
 const STORAGE_KEY = 'cco_inventory_products';
+const AREAS_KEY = 'cco_inventory_areas';
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
 const getProducts = () => {
@@ -16,15 +17,50 @@ const saveProducts = (products) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
 };
 
+const getAreasFromStorage = () => {
+    const saved = localStorage.getItem(AREAS_KEY);
+    if (saved) {
+        try { return JSON.parse(saved); } catch { /* fall through */ }
+    }
+    return [...mockAreas];
+};
+
+const saveAreas = (areas) => {
+    localStorage.setItem(AREAS_KEY, JSON.stringify(areas));
+};
+
 let nextId = 11;
 
-const generateSKU = () => {
+/** Extract initials from a string: "Equipos de Cómputo" → "EC" */
+const getInitials = (str = '') =>
+    str
+        .split(/\s+/)
+        .filter(w => w.length > 2 || /^[A-ZÁÉÍÓÚÑ]/i.test(w))
+        .map(w => w[0].toUpperCase())
+        .join('')
+        .slice(0, 3) || 'GEN';
+
+/**
+ * Generate SKU based on category and area initials.
+ * Format: [CAT_INITIALS]-[AREA_INITIALS]-[SEQUENTIAL]
+ * Example: "Equipos de Cómputo" + "Sala de Reuniones" → EC-SR-0001
+ */
+const generateSKU = (categoryName = '', areaName = '') => {
     const products = getProducts();
+    const catCode = getInitials(categoryName) || 'CCO';
+    const areaCode = getInitials(areaName) || 'GEN';
+    const prefix = `${catCode}-${areaCode}-`;
+
+    // Find max sequential for this specific prefix
     const maxNum = products.reduce((max, p) => {
-        const num = parseInt(p.sku.replace('CCO-', ''), 10);
-        return num > max ? num : max;
+        if (p.sku && p.sku.startsWith(prefix)) {
+            const num = parseInt(p.sku.replace(prefix, ''), 10);
+            return num > max ? num : max;
+        }
+        return max;
     }, 0);
-    return `CCO-${String(maxNum + 1).padStart(6, '0')}`;
+
+    return `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
 };
 
 const generateBarcode = () => {
@@ -41,10 +77,12 @@ export const inventoryService = {
         if (filters.search) {
             const s = filters.search.toLowerCase();
             products = products.filter(p =>
-                p.name.toLowerCase().includes(s) ||
-                p.sku.toLowerCase().includes(s) ||
+                p.name?.toLowerCase().includes(s) ||
+                p.sku?.toLowerCase().includes(s) ||
                 (p.barcode && p.barcode.includes(s)) ||
-                (p.description && p.description.toLowerCase().includes(s))
+                (p.description && p.description.toLowerCase().includes(s)) ||
+                (p._categoryName && p._categoryName.toLowerCase().includes(s)) ||
+                (p.area && p.area.toLowerCase().includes(s))
             );
         }
 
@@ -85,23 +123,38 @@ export const inventoryService = {
         await delay(500);
         const products = getProducts();
 
-        const category = mockCategories.find(c => c.id === productData.category_id);
-        const brand = mockBrands.find(b => b.id === productData.brand_id);
-        const unit = mockUnits.find(u => u.id === productData.unit_id);
+        // Persist new area if it doesn't exist yet
+        if (productData.area) {
+            const areas = getAreasFromStorage();
+            if (!areas.includes(productData.area)) {
+                areas.push(productData.area);
+                saveAreas(areas);
+            }
+        }
+
+        // Persist new category if it doesn't match any existing
+        const categoryName = productData._categoryName || productData.categoryName || 'Sin categoría';
+        const existingCat = mockCategories.find(c =>
+            c.name.toLowerCase() === categoryName.toLowerCase()
+        );
 
         const newProduct = {
             ...productData,
             id: nextId++,
-            sku: productData.sku || generateSKU(),
+            sku: productData.sku || generateSKU(categoryName, productData.area),
             barcode: productData.barcode || null,
+            category_id: existingCat?.id || null,
             active: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            _categoryName: category?.name || 'Sin categoría',
-            _brandName: brand?.name || 'Genérico',
-            _unitName: unit?.name || 'Unidad',
+            _categoryName: categoryName,
+            _brandName: productData._brandName || productData.brand || 'Genérico',
             _stock: productData._stock || 0,
         };
+
+        // Remove temporary fields
+        delete newProduct.categoryName;
+        delete newProduct.brand;
 
         products.push(newProduct);
         saveProducts(products);
@@ -117,18 +170,32 @@ export const inventoryService = {
             return { success: false, message: 'Producto no encontrado' };
         }
 
-        const category = mockCategories.find(c => c.id === productData.category_id);
-        const brand = mockBrands.find(b => b.id === productData.brand_id);
-        const unit = mockUnits.find(u => u.id === productData.unit_id);
+        // Persist new area if it doesn't exist yet
+        if (productData.area) {
+            const areas = getAreasFromStorage();
+            if (!areas.includes(productData.area)) {
+                areas.push(productData.area);
+                saveAreas(areas);
+            }
+        }
+
+        const categoryName = productData._categoryName || productData.categoryName || products[index]._categoryName;
+        const existingCat = mockCategories.find(c =>
+            c.name.toLowerCase() === categoryName?.toLowerCase()
+        );
 
         products[index] = {
             ...products[index],
             ...productData,
             updated_at: new Date().toISOString(),
-            _categoryName: category?.name || products[index]._categoryName,
-            _brandName: brand?.name || products[index]._brandName,
-            _unitName: unit?.name || products[index]._unitName,
+            category_id: existingCat?.id || products[index].category_id,
+            _categoryName: categoryName,
+            _brandName: productData._brandName || productData.brand || products[index]._brandName,
         };
+
+        // Remove temporary fields
+        delete products[index].categoryName;
+        delete products[index].brand;
 
         saveProducts(products);
         return { success: true, data: products[index], message: 'Producto actualizado exitosamente' };
@@ -149,20 +216,72 @@ export const inventoryService = {
     },
 
     generateBarcode: () => generateBarcode(),
-    generateSKU: () => generateSKU(),
+    generateSKU: (categoryName, areaName) => generateSKU(categoryName, areaName),
+
+    /**
+     * Bulk import from Excel rows.
+     */
+    bulkImport: async (rows) => {
+        await delay(50);
+        const products = getProducts();
+        const existingSKUs = new Set(products.map(p => p.sku?.toLowerCase()).filter(Boolean));
+
+        let imported = 0, skipped = 0, errors = 0;
+
+        for (const row of rows) {
+            try {
+                if (row.sku && existingSKUs.has(row.sku.toLowerCase())) {
+                    skipped++;
+                    continue;
+                }
+
+                const categoryName = row._categoryName || row.categoryName || 'Sin categoría';
+                const sku = row.sku || generateSKU(categoryName, row.area);
+                const newProduct = {
+                    ...row,
+                    id: nextId++,
+                    sku,
+                    barcode: row.barcode || null,
+                    category_id: null,
+                    active: true,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    _categoryName: categoryName,
+                    _brandName: row._brandName || row.brand || 'Genérico',
+                    _stock: row._stock ?? 1,
+                    min_stock: row.min_stock ?? 1,
+                    unit_cost: row.unit_cost ?? 0,
+                };
+
+                products.push(newProduct);
+                existingSKUs.add(sku.toLowerCase());
+                imported++;
+            } catch {
+                errors++;
+            }
+        }
+
+        saveProducts(products);
+        return { imported, skipped, errors };
+    },
 
     getCategories: async () => {
         await delay(200);
         return { success: true, data: mockCategories };
     },
 
-    getBrands: async () => {
-        await delay(200);
-        return { success: true, data: mockBrands };
+    getAreas: async () => {
+        await delay(100);
+        const areas = getAreasFromStorage();
+        return { success: true, data: areas };
     },
 
-    getUnits: async () => {
-        await delay(200);
-        return { success: true, data: mockUnits };
+    addArea: async (areaName) => {
+        const areas = getAreasFromStorage();
+        if (!areas.includes(areaName)) {
+            areas.push(areaName);
+            saveAreas(areas);
+        }
+        return { success: true, data: areas };
     },
 };

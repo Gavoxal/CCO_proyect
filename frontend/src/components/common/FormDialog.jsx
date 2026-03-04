@@ -4,6 +4,7 @@ import {
     alpha, useTheme, CircularProgress,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { Autocomplete } from '@mui/material';
 import { useState, useEffect } from 'react';
 
 const FormDialog = ({
@@ -57,6 +58,88 @@ const FormDialog = ({
         }
     };
 
+    const renderField = (field) => {
+        if (field.type === 'select') {
+            return (
+                <TextField
+                    select
+                    label={field.label}
+                    name={field.name}
+                    value={values[field.name] ?? ''}
+                    onChange={(e) => handleChange(field.name, e.target.value)}
+                    fullWidth
+                    size="small"
+                    required={field.required}
+                    error={!!errors[field.name]}
+                    helperText={errors[field.name]}
+                    disabled={field.disabled}
+                >
+                    {(field.options || []).map((opt) => (
+                        <MenuItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </MenuItem>
+                    ))}
+                </TextField>
+            );
+        }
+
+        if (field.type === 'autocomplete') {
+            return (
+                <Autocomplete
+                    freeSolo
+                    options={field.options || []}
+                    value={values[field.name] ?? ''}
+                    onChange={(_, newValue) => {
+                        handleChange(field.name, newValue ?? '');
+                        field.onChange?.(newValue ?? '');
+                    }}
+                    onInputChange={(_, newInput) => {
+                        handleChange(field.name, newInput);
+                        field.onChange?.(newInput);
+                    }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            label={field.label}
+                            size="small"
+                            required={field.required}
+                            error={!!errors[field.name]}
+                            helperText={errors[field.name] || field.helperText}
+                            disabled={field.disabled}
+                            placeholder={field.placeholder}
+                        />
+                    )}
+                />
+            );
+        }
+
+        if (field.type === 'custom') {
+            return <Box>{field.render({ values, handleChange, errors })}</Box>;
+        }
+
+        return (
+            <TextField
+                label={field.label}
+                name={field.name}
+                type={field.type || 'text'}
+                value={values[field.name] ?? ''}
+                onChange={(e) =>
+                    handleChange(field.name, field.type === 'number' ? Number(e.target.value) : e.target.value)
+                }
+                fullWidth
+                size="small"
+                required={field.required}
+                error={!!errors[field.name]}
+                helperText={errors[field.name]}
+                multiline={field.multiline}
+                rows={field.rows || 1}
+                disabled={field.disabled}
+                InputProps={field.InputProps}
+                placeholder={field.placeholder}
+            />
+        );
+    };
+
     return (
         <Dialog
             open={open}
@@ -99,46 +182,7 @@ const FormDialog = ({
                                     sm: field.fullWidth ? 12 : 6,
                                 }}
                             >
-                                {field.type === 'select' ? (
-                                    <TextField
-                                        select
-                                        label={field.label}
-                                        name={field.name}
-                                        value={values[field.name] ?? ''}
-                                        onChange={(e) => handleChange(field.name, e.target.value)}
-                                        fullWidth
-                                        size="small"
-                                        required={field.required}
-                                        error={!!errors[field.name]}
-                                        helperText={errors[field.name]}
-                                        disabled={field.disabled}
-                                    >
-                                        {(field.options || []).map((opt) => (
-                                            <MenuItem key={opt.value} value={opt.value}>
-                                                {opt.label}
-                                            </MenuItem>
-                                        ))}
-                                    </TextField>
-                                ) : field.type === 'custom' ? (
-                                    <Box>{field.render({ values, handleChange, errors })}</Box>
-                                ) : (
-                                    <TextField
-                                        label={field.label}
-                                        name={field.name}
-                                        type={field.type || 'text'}
-                                        value={values[field.name] ?? ''}
-                                        onChange={(e) => handleChange(field.name, field.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                        fullWidth
-                                        size="small"
-                                        required={field.required}
-                                        error={!!errors[field.name]}
-                                        helperText={errors[field.name]}
-                                        multiline={field.multiline}
-                                        rows={field.rows || 1}
-                                        disabled={field.disabled}
-                                        InputProps={field.InputProps}
-                                    />
-                                )}
+                                {renderField(field)}
                             </Grid>
                         ))}
                     </Grid>

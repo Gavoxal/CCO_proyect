@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
     Box, Button, Grid, MenuItem, TextField, Typography,
     Dialog, DialogTitle, DialogContent, IconButton, Chip,
-    alpha, useTheme, Fade, Tabs, Tab,
+    alpha, useTheme, Fade, Tabs, Tab, Tooltip,
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -10,6 +10,8 @@ import {
     FilterList as FilterIcon,
     Close as CloseIcon,
     Inventory2 as InventoryIcon,
+    UploadFile as UploadFileIcon,
+    Print as PrintIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import MainLayout from '../components/layout/MainLayout';
@@ -19,6 +21,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import StatusChip, { getStockStatus } from '../components/common/StatusChip';
 import BarcodeScanner from '../components/barcode/BarcodeScanner';
 import BarcodeGenerator from '../components/barcode/BarcodeGenerator';
+import ExcelImportDialog from '../components/common/ExcelImportDialog';
 import { inventoryService } from '../services/inventoryService';
 
 const productTypes = [
@@ -27,22 +30,37 @@ const productTypes = [
     { value: 'office_supply', label: 'Suministro de Oficina' },
 ];
 
+const formatDate = (iso) => {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString('es-ES', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+        });
+    } catch { return iso; }
+};
+
 const InventoryPage = () => {
     const theme = useTheme();
     const { enqueueSnackbar } = useSnackbar();
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [brands, setBrands] = useState([]);
-    const [units, setUnits] = useState([]);
+    const [areas, setAreas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({ type: '', category_id: '', lowStock: false });
     const [showFilters, setShowFilters] = useState(false);
+
+    // For the SKU preview inside the form
+    const [formCategoryName, setFormCategoryName] = useState('');
+    const [formAreaName, setFormAreaName] = useState('');
+    const [skuPreview, setSkuPreview] = useState('');
 
     // Dialogs
     const [formOpen, setFormOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [deleteDialog, setDeleteDialog] = useState({ open: false, product: null });
     const [scannerOpen, setScannerOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [detailProduct, setDetailProduct] = useState(null);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -51,7 +69,7 @@ const InventoryPage = () => {
         try {
             const res = await inventoryService.getAll(filters);
             if (res.success) setProducts(res.data);
-        } catch (err) {
+        } catch {
             enqueueSnackbar('Error al cargar productos', { variant: 'error' });
         } finally {
             setLoading(false);
@@ -59,14 +77,12 @@ const InventoryPage = () => {
     }, [filters, enqueueSnackbar]);
 
     const loadMeta = async () => {
-        const [catRes, brandRes, unitRes] = await Promise.all([
+        const [catRes, areasRes] = await Promise.all([
             inventoryService.getCategories(),
-            inventoryService.getBrands(),
-            inventoryService.getUnits(),
+            inventoryService.getAreas(),
         ]);
         if (catRes.success) setCategories(catRes.data);
-        if (brandRes.success) setBrands(brandRes.data);
-        if (unitRes.success) setUnits(unitRes.data);
+        if (areasRes.success) setAreas(areasRes.data);
     };
 
     useEffect(() => { loadMeta(); }, []);
@@ -75,11 +91,16 @@ const InventoryPage = () => {
     // CRUD handlers
     const handleCreate = () => {
         setEditingProduct(null);
+        setFormCategoryName('');
+        setFormAreaName('');
+        skuPreview.current = '';
         setFormOpen(true);
     };
 
     const handleEdit = (product) => {
         setEditingProduct(product);
+        setFormCategoryName(product._categoryName || '');
+        setFormAreaName(product.area || '');
         setFormOpen(true);
     };
 
@@ -87,14 +108,17 @@ const InventoryPage = () => {
         try {
             const data = {
                 ...values,
-                category_id: Number(values.category_id),
-                brand_id: values.brand_id ? Number(values.brand_id) : null,
-                unit_id: Number(values.unit_id),
-                min_stock: Number(values.min_stock) || 0,
-                unit_cost: Number(values.unit_cost) || 0,
-                _stock: Number(values._stock) || 0,
+                _categoryName: values._categoryName || formCategoryName,
+                _brandName: values._brandName || values.brand || '',
+                area: values.area || formAreaName,
                 has_serial: values.type === 'non_fungible',
             };
+
+            // Remove legacy fields
+            delete data.brand;
+            delete data.category_id;
+            delete data.brand_id;
+            delete data.unit_id;
 
             let res;
             if (editingProduct) {
@@ -106,6 +130,9 @@ const InventoryPage = () => {
             if (res.success) {
                 enqueueSnackbar(res.message, { variant: 'success' });
                 setFormOpen(false);
+                // Refresh areas list (user may have added a new one)
+                const areasRes = await inventoryService.getAreas();
+                if (areasRes.success) setAreas(areasRes.data);
                 loadProducts();
             } else {
                 enqueueSnackbar(res.message, { variant: 'error' });
@@ -141,87 +168,174 @@ const InventoryPage = () => {
         }
     };
 
-    const handleGenerateBarcode = () => {
-        return inventoryService.generateBarcode();
+    const handleGenerateBarcode = () => inventoryService.generateBarcode();
+
+    const handleBulkImport = async (rows) => inventoryService.bulkImport(rows);
+
+    const handleImportClose = async () => {
+        setImportOpen(false);
+        await loadProducts();
+        enqueueSnackbar('Inventario actualizado desde Excel', { variant: 'success' });
+    };
+
+    // Print barcode
+    const handlePrintBarcode = (product) => {
+        setDetailProduct(product);
+        setActiveTab(1);
     };
 
     // Table columns
     const columns = [
-        { field: 'sku', headerName: 'SKU', sortable: true },
+        { field: 'sku', headerName: 'Código del Artículo', sortable: true },
         {
-            field: 'name', headerName: 'Nombre', sortable: true, renderCell: (row) => (
-                <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{row.barcode || 'Sin código'}</Typography>
-                </Box>
+            field: 'name', headerName: 'Nombre del Artículo', sortable: true, renderCell: (row) => (
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.name}</Typography>
             )
         },
         { field: '_categoryName', headerName: 'Categoría', sortable: true },
+        {
+            field: '_locationName', headerName: 'Ubicación', sortable: true, renderCell: (row) => (
+                <Typography variant="body2">{row._locationName || '—'}</Typography>
+            )
+        },
+        { field: '_brandName', headerName: 'Marca / Modelo', sortable: true },
         {
             field: 'type', headerName: 'Tipo', sortable: true, renderCell: (row) => (
                 <StatusChip status={row.type} />
             )
         },
         {
-            field: '_stock', headerName: 'Stock', sortable: true, renderCell: (row) => (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{row._stock}</Typography>
-                    <StatusChip status={getStockStatus(row._stock, row.min_stock)} />
-                </Box>
+            field: 'condition', headerName: 'Condición', sortable: true, renderCell: (row) => {
+                if (!row.condition) return <Typography variant="body2" color="text.disabled">—</Typography>;
+                const colorMap = { Buena: 'success', Regular: 'warning', 'Dañada': 'error' };
+                return <StatusChip status={row.condition} colorOverride={colorMap[row.condition]} />;
+            }
+        },
+        {
+            field: 'area', headerName: 'Área', sortable: true, renderCell: (row) => (
+                <Typography variant="body2">{row.area || '—'}</Typography>
             )
         },
         {
-            field: 'unit_cost', headerName: 'Costo', sortable: true, renderCell: (row) => (
-                <Typography variant="body2">${(row.unit_cost || 0).toFixed(2)}</Typography>
+            field: 'responsible', headerName: 'Responsable', sortable: true, renderCell: (row) => (
+                <Typography variant="body2">{row.responsible || '—'}</Typography>
             )
         },
     ];
 
+    // Build category options for Autocomplete (names only, freeSolo)
+    const categoryOptions = categories.map(c => c.name);
+
     // Form fields
     const formFields = [
-        { name: 'name', label: 'Nombre del producto', required: true, fullWidth: true },
-        { name: 'description', label: 'Descripción', multiline: true, rows: 2, fullWidth: true },
+        // SKU — auto-generated, read-only display
         {
-            name: 'category_id', label: 'Categoría', type: 'select', required: true,
-            options: categories.map(c => ({ value: c.id, label: `${c.parent_id ? '  └ ' : ''}${c.name}` })),
+            name: 'sku',
+            label: 'Código del Artículo (auto-generado)',
+            fullWidth: true,
+            disabled: true,
+            placeholder: 'Se genera automáticamente al elegir Categoría y Área',
+            helperText: editingProduct ? undefined : 'Formato: [CAT]-[ÁREA]-[SECUENCIAL]',
         },
+        // Name
+        { name: 'name', label: 'Nombre del Artículo', required: true, fullWidth: true },
+        // Description
+        { name: 'description', label: 'Descripción', multiline: true, rows: 2, fullWidth: true },
+        // Category — Autocomplete editable
         {
-            name: 'type', label: 'Tipo', type: 'select', required: true,
+            name: '_categoryName',
+            label: 'Categoría',
+            type: 'autocomplete',
+            required: true,
+            options: categoryOptions,
+            placeholder: 'Selecciona o escribe una nueva...',
+            onChange: (val) => setFormCategoryName(val),
+        },
+        // Location
+        { name: '_locationName', label: 'Ubicación', fullWidth: true },
+        // Brand — free text
+        { name: '_brandName', label: 'Marca / Modelo', placeholder: 'Ej: HP, Dell, Logitech...' },
+        // Type
+        {
+            name: 'type', label: 'Tipo (Fungible / No Fungible)', type: 'select', required: true,
             options: productTypes,
         },
+        // Condition
         {
-            name: 'brand_id', label: 'Marca', type: 'select',
-            options: [{ value: '', label: 'Sin marca' }, ...brands.map(b => ({ value: b.id, label: b.name }))],
+            name: 'condition', label: 'Condición', type: 'select',
+            options: [
+                { value: '', label: 'No especificada' },
+                { value: 'Buena', label: 'Buena' },
+                { value: 'Regular', label: 'Regular' },
+                { value: 'Dañada', label: 'Dañada' },
+            ],
         },
+        // Observation
+        { name: 'observation', label: 'Observación', multiline: true, rows: 2, fullWidth: true },
+        // Area — Autocomplete editable
         {
-            name: 'unit_id', label: 'Unidad de medida', type: 'select', required: true,
-            options: units.map(u => ({ value: u.id, label: `${u.name} (${u.abbreviation})` })),
+            name: 'area',
+            label: 'Área',
+            type: 'autocomplete',
+            options: areas,
+            placeholder: 'Selecciona o escribe una nueva área...',
+            onChange: (val) => setFormAreaName(val),
         },
+        // Responsible
+        { name: 'responsible', label: 'Responsable', fullWidth: true },
+        // Barcode — Número de Serie
         {
-            name: 'barcode', label: 'Código de barras', type: 'custom', render: ({ values, handleChange }) => (
+            name: 'barcode', label: 'Número de Serie / Código de Barras', type: 'custom',
+            render: ({ values, handleChange }) => (
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
                         size="small"
-                        label="Código de barras"
+                        label="Número de Serie / Código de Barras"
                         value={values.barcode || ''}
                         onChange={(e) => handleChange('barcode', e.target.value)}
                         fullWidth
+                        helperText="Este código se puede imprimir como etiqueta"
                     />
                     <Button
                         variant="outlined"
                         size="small"
                         onClick={() => handleChange('barcode', handleGenerateBarcode())}
-                        sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 2 }}
+                        sx={{ whiteSpace: 'nowrap', minWidth: 'auto', px: 2, alignSelf: 'flex-start', mt: '2px' }}
                     >
                         Generar
                     </Button>
                 </Box>
             )
         },
-        { name: '_stock', label: 'Stock inicial', type: 'number' },
+        // Stock & cost
+        { name: '_stock', label: 'Cantidad / Stock', type: 'number' },
         { name: 'min_stock', label: 'Stock mínimo', type: 'number' },
         { name: 'unit_cost', label: 'Costo unitario ($)', type: 'number' },
     ];
+
+    // Compute initial values — when editing, map existing product; when creating, SKU empty
+    const getInitialValues = () => {
+        if (!editingProduct) return {};
+        return { ...editingProduct };
+    };
+
+    // Recompute SKU preview when category or area changes (only for new products)
+    useEffect(() => {
+        if (!formOpen || editingProduct) return;
+        if (formCategoryName && formAreaName) {
+            const newSku = inventoryService.generateSKU(formCategoryName, formAreaName);
+            setSkuPreview(newSku);
+        } else {
+            setSkuPreview('');
+        }
+    }, [formCategoryName, formAreaName, formOpen, editingProduct]);
+
+    // The formKey changes when SKU preview changes, forcing FormDialog to re-initialize values
+    const formKey = `${formOpen}-${skuPreview}`;
+    const computedInitialValues = {
+        ...getInitialValues(),
+        ...((!editingProduct && skuPreview) ? { sku: skuPreview } : {}),
+    };
 
     return (
         <MainLayout title="Inventario">
@@ -230,10 +344,10 @@ const InventoryPage = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                     <Box>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            Gestión de Productos
+                            Gestión de Inventario
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            {products.length} productos registrados
+                            {products.length} artículos registrados
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -254,12 +368,21 @@ const InventoryPage = () => {
                             Filtros
                         </Button>
                         <Button
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={<UploadFileIcon />}
+                            onClick={() => setImportOpen(true)}
+                            sx={{ borderRadius: '10px' }}
+                        >
+                            Importar Excel
+                        </Button>
+                        <Button
                             variant="contained"
                             startIcon={<AddIcon />}
                             onClick={handleCreate}
                             sx={{ borderRadius: '10px' }}
                         >
-                            Nuevo Producto
+                            Nuevo Artículo
                         </Button>
                     </Box>
                 </Box>
@@ -268,9 +391,7 @@ const InventoryPage = () => {
                 <Fade in={showFilters}>
                     <Box sx={{ display: showFilters ? 'flex' : 'none', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                         <TextField
-                            select
-                            size="small"
-                            label="Tipo"
+                            select size="small" label="Tipo"
                             value={filters.type}
                             onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
                             sx={{ minWidth: 160 }}
@@ -281,9 +402,7 @@ const InventoryPage = () => {
                             ))}
                         </TextField>
                         <TextField
-                            select
-                            size="small"
-                            label="Categoría"
+                            select size="small" label="Categoría"
                             value={filters.category_id}
                             onChange={(e) => setFilters(prev => ({ ...prev, category_id: e.target.value ? Number(e.target.value) : '' }))}
                             sx={{ minWidth: 180 }}
@@ -317,19 +436,20 @@ const InventoryPage = () => {
                     loading={loading}
                     onEdit={handleEdit}
                     onDelete={(product) => setDeleteDialog({ open: true, product })}
-                    onView={(product) => setDetailProduct(product)}
-                    searchPlaceholder="Buscar por nombre, SKU o código de barras..."
+                    onView={(product) => { setDetailProduct(product); setActiveTab(0); }}
+                    searchPlaceholder="Buscar por nombre, código o área..."
                 />
 
                 {/* Create/Edit Form */}
                 <FormDialog
+                    key={formKey}
                     open={formOpen}
-                    onClose={() => setFormOpen(false)}
+                    onClose={() => { setFormOpen(false); setFormCategoryName(''); setFormAreaName(''); }}
                     onSubmit={handleSubmit}
-                    title={editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+                    title={editingProduct ? 'Editar Artículo' : 'Nuevo Artículo'}
                     fields={formFields}
-                    initialValues={editingProduct || {}}
-                    submitLabel={editingProduct ? 'Actualizar' : 'Crear Producto'}
+                    initialValues={computedInitialValues}
+                    submitLabel={editingProduct ? 'Actualizar' : 'Crear Artículo'}
                     maxWidth="md"
                 />
 
@@ -338,7 +458,7 @@ const InventoryPage = () => {
                     open={deleteDialog.open}
                     onClose={() => setDeleteDialog({ open: false, product: null })}
                     onConfirm={handleDeleteConfirm}
-                    title="¿Eliminar producto?"
+                    title="¿Eliminar artículo?"
                     message={`¿Estás seguro de eliminar "${deleteDialog.product?.name}"? Esta acción no se puede deshacer.`}
                 />
 
@@ -349,7 +469,14 @@ const InventoryPage = () => {
                     onScan={handleScan}
                 />
 
-                {/* Product Detail */}
+                {/* Excel Import */}
+                <ExcelImportDialog
+                    open={importOpen}
+                    onClose={handleImportClose}
+                    onImport={handleBulkImport}
+                />
+
+                {/* Product Detail Dialog */}
                 <Dialog
                     open={!!detailProduct}
                     onClose={() => setDetailProduct(null)}
@@ -362,12 +489,25 @@ const InventoryPage = () => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <InventoryIcon sx={{ color: theme.palette.primary.main }} />
                                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                        Detalle del Producto
+                                        Detalle del Artículo
                                     </Typography>
                                 </Box>
-                                <IconButton onClick={() => setDetailProduct(null)} size="small">
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
+                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    {detailProduct.barcode && (
+                                        <Tooltip title="Ver e imprimir código de barras">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => setActiveTab(1)}
+                                                sx={{ color: theme.palette.primary.main }}
+                                            >
+                                                <PrintIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    )}
+                                    <IconButton onClick={() => setDetailProduct(null)} size="small">
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
                             </DialogTitle>
                             <DialogContent dividers>
                                 <Tabs
@@ -376,22 +516,32 @@ const InventoryPage = () => {
                                     sx={{ mb: 2, borderBottom: `1px solid ${theme.palette.divider}` }}
                                 >
                                     <Tab label="Información" />
-                                    <Tab label="Código de Barras" />
+                                    <Tab label="Código de Barras / Serie" />
                                 </Tabs>
 
                                 {activeTab === 0 && (
                                     <Grid container spacing={2}>
                                         {[
-                                            { label: 'SKU', value: detailProduct.sku },
-                                            { label: 'Nombre', value: detailProduct.name },
+                                            { label: 'Código del Artículo', value: detailProduct.sku },
+                                            { label: 'Nombre del Artículo', value: detailProduct.name },
                                             { label: 'Categoría', value: detailProduct._categoryName },
-                                            { label: 'Marca', value: detailProduct._brandName },
+                                            { label: 'Ubicación', value: detailProduct._locationName || '—' },
+                                            { label: 'Marca / Modelo', value: detailProduct._brandName || '—' },
                                             { label: 'Tipo', value: detailProduct.type, chip: true },
-                                            { label: 'Unidad', value: detailProduct._unitName },
+                                            { label: 'Condición', value: detailProduct.condition || '—' },
+                                            { label: 'Área', value: detailProduct.area || '—' },
+                                            { label: 'Responsable', value: detailProduct.responsible || '—' },
                                             { label: 'Stock', value: detailProduct._stock, stock: true },
                                             { label: 'Stock Mínimo', value: detailProduct.min_stock },
                                             { label: 'Costo Unitario', value: `$${(detailProduct.unit_cost || 0).toFixed(2)}` },
-                                            { label: 'Código de Barras', value: detailProduct.barcode || 'No asignado' },
+                                            {
+                                                label: 'Número de Serie / Código de Barras',
+                                                value: detailProduct.barcode || 'No asignado'
+                                            },
+                                            {
+                                                label: 'Últ. Actualización',
+                                                value: formatDate(detailProduct.updated_at)
+                                            },
                                         ].map((item) => (
                                             <Grid size={{ xs: 6 }} key={item.label}>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -417,6 +567,14 @@ const InventoryPage = () => {
                                                 <Typography variant="body2">{detailProduct.description}</Typography>
                                             </Grid>
                                         )}
+                                        {detailProduct.observation && (
+                                            <Grid size={{ xs: 12 }}>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                    Observación
+                                                </Typography>
+                                                <Typography variant="body2">{detailProduct.observation}</Typography>
+                                            </Grid>
+                                        )}
                                     </Grid>
                                 )}
 
@@ -430,7 +588,7 @@ const InventoryPage = () => {
                                         ) : (
                                             <Box sx={{ textAlign: 'center', py: 4 }}>
                                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                                    Este producto no tiene código de barras asignado
+                                                    Este artículo no tiene número de serie / código de barras asignado
                                                 </Typography>
                                                 <Button
                                                     variant="contained"
@@ -442,10 +600,10 @@ const InventoryPage = () => {
                                                         });
                                                         setDetailProduct({ ...detailProduct, barcode: newBarcode });
                                                         loadProducts();
-                                                        enqueueSnackbar('Código de barras generado exitosamente', { variant: 'success' });
+                                                        enqueueSnackbar('Código generado exitosamente', { variant: 'success' });
                                                     }}
                                                 >
-                                                    Generar Código de Barras
+                                                    Generar Número de Serie
                                                 </Button>
                                             </Box>
                                         )}

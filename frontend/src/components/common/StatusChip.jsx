@@ -14,10 +14,17 @@ const statusConfig = {
     in_use: { label: 'En Uso', color: '#40c4ff', bgColor: 'rgba(64, 196, 255, 0.12)' },
     damaged: { label: 'Dañado', color: '#ff5252', bgColor: 'rgba(255, 82, 82, 0.12)' },
     retired: { label: 'Retirado', color: '#90a4ae', bgColor: 'rgba(144, 164, 174, 0.12)' },
+    // Condiciones del Excel
+    Buena: { label: 'Buena', color: '#00e676', bgColor: 'rgba(0, 230, 118, 0.12)' },
+    Regular: { label: 'Regular', color: '#ff9800', bgColor: 'rgba(255, 152, 0, 0.12)' },
+    Dañada: { label: 'Dañada', color: '#ff5252', bgColor: 'rgba(255, 82, 82, 0.12)' },
 };
 
-const StatusChip = ({ status, label: customLabel, size = 'small', ...props }) => {
+const StatusChip = ({ status, label: customLabel, size = 'small', colorOverride, ...props }) => {
     const config = statusConfig[status] || { label: status, color: '#90a4ae', bgColor: 'rgba(144, 164, 174, 0.12)' };
+
+    // colorOverride allows semantic palette colors ('success', 'warning', 'error') fallback
+    // when status is not in config — already handled via statusConfig entries above
 
     return (
         <Chip

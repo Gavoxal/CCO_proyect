@@ -72,6 +72,18 @@ export const mockLocations = [
     { id: 4, name: 'Oficina Admin', parent_id: null, type: 'zona', description: 'Oficina administrativa' },
 ];
 
+// ─── Areas ───
+export const mockAreas = [
+    'Administración',
+    'Bodega',
+    'Contabilidad',
+    'Dirección General',
+    'Informática',
+    'Recursos Humanos',
+    'Sala de Reuniones',
+    'Secretaría',
+];
+
 // ─── Products ───
 export const mockProducts = [
     {
