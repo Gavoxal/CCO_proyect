@@ -1,0 +1,363 @@
+// This is your Prisma schema file for CCO KidScam
+// Tecnologías: Prisma v6 + MySQL 8.0
+// Sistema: Centro Cristiano de Obrapía / Ministerio Vías en Acción
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum RolUsuario {
+  admin
+  director
+  secretaria
+  tutor_especial
+  tutor
+}
+
+enum FuentePatrocinio {
+  Compassion
+  Plan
+  Ninguno
+}
+
+enum TipoPrograma {
+  Ministerio
+  Comedor
+  Ambos
+}
+
+enum EstadoAsistencia {
+  Presente
+  Ausente
+  Justificado
+}
+
+enum FuenteRecurso {
+  Compassion
+  Plan
+  Iglesia
+  ViasEnAccion
+}
+
+enum EstadoSolicitud {
+  Pendiente
+  Aprobada
+  Rechazada
+  Entregada
+}
+
+enum TipoRegalo {
+  regalo_navidad
+  kit_escolar
+  atencion_especial
+}
+
+enum EstadoRegalo {
+  pendiente
+  entregado
+}
+
+enum TipoMembresia {
+  Activo
+  Regular
+  Lider
+  Diacono
+}
+
+enum EstadoCasaPaz {
+  EnProgreso
+  Completada
+  Cancelada
+}
+
+enum TipoEvento {
+  Ministerio
+  Iglesia
+  Emergencia
+}
+
+// ============================================================
+// PERSONAS — entidad base para cualquier persona en el sistema
+// ============================================================
+
+model Persona {
+  id              Int       @id @default(autoincrement())
+  nombres         String    @db.VarChar(255)
+  apellidos       String    @db.VarChar(255)
+  cedula          String?   @unique @db.VarChar(20)
+  telefono1       String    @db.VarChar(20)
+  telefono2       String?   @db.VarChar(20)
+  email           String?   @db.VarChar(255)
+  direccion       String?   @db.VarChar(500)
+  fechaNacimiento DateTime? @db.Date
+  ubicacionGps    String?   @db.VarChar(255)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relaciones 1:1 opcionales
+  infante  Infante?
+  tutor    Tutor?
+  miembro  Miembro?
+  usuario  Usuario?
+
+  @@map("personas")
+}
+
+// ============================================================
+// USUARIOS — autenticación y control de acceso
+// ============================================================
+
+model Usuario {
+  id           Int        @id @default(autoincrement())
+  username     String     @unique @db.VarChar(50)
+  email        String     @unique @db.VarChar(255)
+  password     String     @db.VarChar(255)
+  rol          RolUsuario @default(tutor)
+  activo       Boolean    @default(true)
+  ultimoAcceso DateTime?
+  tokenVersion Int        @default(0)
+  personaId    Int?       @unique
+  persona      Persona?   @relation(fields: [personaId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("usuarios")
+}
+
+// ============================================================
+// INFANTES — niños del Ministerio y/o Comedor
+// NOTA: patrocinado y no patrocinado son la misma entidad.
+//       La diferencia está en esPatrocinado y fuentePatrocinio.
+// ============================================================
+
+model Infante {
+  id                    Int              @id @default(autoincrement())
+  codigo                String           @unique @db.VarChar(50)
+  enfermedades          String?          @db.Text
+  alergias              String?          @db.Text
+  esPatrocinado         Boolean          @default(false)
+  tipoPrograma          TipoPrograma     @default(Ministerio)
+  fuentePatrocinio      FuentePatrocinio @default(Ninguno)
+  // FOTO del niño (ruta relativa o URL)
+  fotografia            String?          @db.VarChar(500)
+  fechaActualizacionFoto DateTime?        @db.Date
+  // Relaciones
+  personaId             Int              @unique
+  persona               Persona          @relation(fields: [personaId], references: [id])
+  tutorId               Int?
+  tutor                 Tutor?           @relation(fields: [tutorId], references: [id])
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  asistencias Asistencia[]
+  visitas     Visita[]
+  regalos     Regalo[]
+
+  @@map("infantes")
+}
+
+// ============================================================
+// TUTORES
+// ============================================================
+
+model Tutor {
+  id        Int      @id @default(autoincrement())
+  codigo    String   @unique @db.VarChar(50)
+  profesion String?  @db.VarChar(255)
+  personaId Int      @unique
+  persona   Persona  @relation(fields: [personaId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  infantes          Infante[]
+  solicitudes       SolicitudMaterial[]
+  visitasRealizadas Visita[]
+
+  @@map("tutores")
+}
+
+// ============================================================
+// ASISTENCIA — registro de asistencia de infantes
+// ============================================================
+
+model Asistencia {
+  id        Int              @id @default(autoincrement())
+  fecha     DateTime         @db.Date
+  estado    EstadoAsistencia @default(Presente)
+  infanteId Int
+  infante   Infante          @relation(fields: [infanteId], references: [id])
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([infanteId, fecha])
+  @@index([infanteId])
+  @@index([fecha])
+  @@map("asistencias")
+}
+
+// ============================================================
+// VISITAS — visita domiciliaria a infante (req. una por año)
+// ============================================================
+
+model Visita {
+  id             Int      @id @default(autoincrement())
+  fecha          DateTime @db.Date
+  observaciones  String?  @db.Text
+  archivoAdjunto String?  @db.VarChar(500)
+  infanteId      Int
+  infante        Infante  @relation(fields: [infanteId], references: [id])
+  tutorId        Int?
+  tutor          Tutor?   @relation(fields: [tutorId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([infanteId])
+  @@map("visitas")
+}
+
+// ============================================================
+// INVENTARIO DE MATERIALES
+// ============================================================
+
+model InventarioMaterial {
+  id                      Int           @id @default(autoincrement())
+  codigo                  String        @unique @db.VarChar(50)
+  nombreMaterial          String        @db.VarChar(255)
+  cantidadDisponible      Int           @default(0)
+  stockMinimo             Int           @default(5)
+  fechaUltimaActualizacion DateTime      @db.Date
+  fuenteRecurso           FuenteRecurso @default(Iglesia)
+  categoria               String?       @db.VarChar(100)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  solicitudes SolicitudMaterial[]
+
+  @@map("inventario_materiales")
+}
+
+// ============================================================
+// INVENTARIO DE ALIMENTOS (Comedor)
+// ============================================================
+
+model InventarioAlimento {
+  id                      Int      @id @default(autoincrement())
+  codigo                  String   @unique @db.VarChar(50)
+  nombreAlimento          String   @db.VarChar(255)
+  cantidadDisponible      Int      @default(0)
+  stockMinimo             Int      @default(5)
+  categoria               String?  @db.VarChar(100)
+  fechaUltimaActualizacion DateTime @db.Date
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@map("inventario_alimentos")
+}
+
+// ============================================================
+// SOLICITUDES DE MATERIALES — flujo tutor → admin → secretaria
+// ============================================================
+
+model SolicitudMaterial {
+  id                 Int                @id @default(autoincrement())
+  cantidadSolicitada Int
+  observacion        String?            @db.Text
+  fechaSolicitud     DateTime           @default(now())
+  estado             EstadoSolicitud    @default(Pendiente)
+  tutorId            Int?
+  tutor              Tutor?             @relation(fields: [tutorId], references: [id])
+  materialId         Int
+  material           InventarioMaterial @relation(fields: [materialId], references: [id])
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@map("solicitudes_materiales")
+}
+
+// ============================================================
+// REGALOS y KITS ESCOLARES
+// ============================================================
+
+model Regalo {
+  id            Int          @id @default(autoincrement())
+  tipo          TipoRegalo
+  fechaEntrega  DateTime?    @db.Date
+  estado        EstadoRegalo @default(pendiente)
+  observaciones String?      @db.Text
+  anio          Int
+  infanteId     Int
+  infante       Infante      @relation(fields: [infanteId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([infanteId, anio])
+  @@map("regalos")
+}
+
+// ============================================================
+// MIEMBROS DE LA IGLESIA (CCO)
+// ============================================================
+
+model Miembro {
+  id            Int           @id @default(autoincrement())
+  tipoMembresia TipoMembresia @default(Regular)
+  fechaIngreso  DateTime?     @db.Date
+  personaId     Int           @unique
+  persona       Persona       @relation(fields: [personaId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  casasDePazComoLider   CasaDePaz[] @relation("LiderCasaPaz")
+  casasDePazComoAsistido CasaDePaz[] @relation("AsistidoCasaPaz")
+
+  @@map("miembros")
+}
+
+// ============================================================
+// CASAS DE PAZ
+// ============================================================
+
+model CasaDePaz {
+  id              Int           @id @default(autoincrement())
+  fechaInicio     DateTime      @db.Date
+  fechaFin        DateTime?     @db.Date
+  estado          EstadoCasaPaz @default(EnProgreso)
+  lugar           String?       @db.VarChar(500)
+  diasVisita      String?       @db.VarChar(255)
+  liderId         Int?
+  lider           Miembro?      @relation("LiderCasaPaz", fields: [liderId], references: [id])
+  personaAsistidaId Int?
+  personaAsistida Miembro?      @relation("AsistidoCasaPaz", fields: [personaAsistidaId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("casas_de_paz")
+}
+
+// ============================================================
+// EVENTOS / CALENDARIO CENTRALIZADO
+// ============================================================
+
+model Evento {
+  id          Int        @id @default(autoincrement())
+  titulo      String     @db.VarChar(255)
+  descripcion String?    @db.Text
+  fechaInicio DateTime
+  fechaFin    DateTime?
+  tipo        TipoEvento @default(Ministerio)
+  notificar   Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([fechaInicio])
+  @@map("eventos")
+}
