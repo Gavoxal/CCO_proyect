@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { authService } from '../services/authService';
+import { authService } from '../services/appServices';
 
 const AuthContext = createContext();
 
@@ -15,45 +15,41 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const savedUser = localStorage.getItem('user');
-        if (savedUser) {
-            try {
-                setUser(JSON.parse(savedUser));
-            } catch {
-                localStorage.removeItem('user');
-            }
+        const savedToken = localStorage.getItem('token');
+        if (savedUser && savedToken) {
+            try { setUser(JSON.parse(savedUser)); } catch { localStorage.clear(); }
         }
         setLoading(false);
     }, []);
 
-    const login = async (email, password) => {
-        const result = await authService.login(email, password);
+    const login = async (username, password) => {
+        const result = await authService.login(username, password);
         if (result.success) {
-            setUser(result.user);
-            localStorage.setItem('user', JSON.stringify(result.user));
-            localStorage.setItem('token', result.token);
+            const u = result.data.usuario;
+            setUser(u);
+            localStorage.setItem('user', JSON.stringify(u));
+            localStorage.setItem('token', result.data.token);
         }
         return result;
     };
 
     const logout = () => {
         setUser(null);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
+        authService.logout();
     };
 
+    const hasRole = (...roles) => user && roles.includes(user.rol);
+
     const value = useMemo(() => ({
-        user,
-        loading,
-        login,
-        logout,
+        user, loading, login, logout, hasRole,
         isAuthenticated: !!user,
+        isAdmin: user?.rol === 'admin',
+        isDirector: user?.rol === 'director',
+        isSecretaria: user?.rol === 'secretaria',
+        isTutor: ['tutor', 'tutor_especial'].includes(user?.rol),
     }), [user, loading]);
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export default AuthContext;

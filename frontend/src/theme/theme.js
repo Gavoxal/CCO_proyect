@@ -1,59 +1,53 @@
 import { createTheme, alpha } from '@mui/material/styles';
 
+// ─── Paleta de la Organización CCO ───────────────────────────────────────────
+const CCO = {
+    amarillo: '#FFD700',
+    naranja: '#FF8C00',
+    violeta: '#6A5ACD',
+    azul: '#4169E1',
+};
+
 const getDesignTokens = (mode) => ({
     palette: {
         mode,
         ...(mode === 'dark'
             ? {
-                primary: { main: '#00bcd4', light: '#4dd0e1', dark: '#0097a7' },
-                secondary: { main: '#7c4dff', light: '#b47cff', dark: '#3f1dcb' },
-                background: {
-                    default: '#0a1929',
-                    paper: '#0d2137',
-                },
+                primary: { main: CCO.naranja, light: '#ffac40', dark: '#c45f00' },
+                secondary: { main: CCO.violeta, light: '#9d8fe0', dark: '#4b3e99' },
+                background: { default: '#0a0e1a', paper: '#0f1629' },
                 success: { main: '#00e676' },
-                warning: { main: '#ffab40' },
+                warning: { main: CCO.amarillo },
                 error: { main: '#ff5252' },
-                info: { main: '#40c4ff' },
-                text: {
-                    primary: '#e3f2fd',
-                    secondary: '#90a4ae',
-                },
-                divider: alpha('#90caf9', 0.12),
+                info: { main: CCO.azul },
+                text: { primary: '#f0f4ff', secondary: '#8fa3c0' },
+                divider: alpha('#8fa3c0', 0.12),
             }
             : {
-                primary: { main: '#0288d1', light: '#03a9f4', dark: '#01579b' },
-                secondary: { main: '#7c4dff', light: '#b47cff', dark: '#3f1dcb' },
-                background: {
-                    default: '#f5f7fa',
-                    paper: '#ffffff',
-                },
+                primary: { main: CCO.azul, light: '#738eea', dark: '#2b4db0' },
+                secondary: { main: CCO.violeta, light: '#9d8fe0', dark: '#4b3e99' },
+                background: { default: '#f5f7ff', paper: '#ffffff' },
                 success: { main: '#2e7d32' },
-                warning: { main: '#ed6c02' },
+                warning: { main: CCO.naranja },
                 error: { main: '#d32f2f' },
-                info: { main: '#0288d1' },
-                text: {
-                    primary: '#1a2027',
-                    secondary: '#637381',
-                },
+                info: { main: CCO.azul },
+                text: { primary: '#1a2040', secondary: '#5b6b8a' },
                 divider: alpha('#919eab', 0.2),
             }),
     },
     typography: {
         fontFamily: "'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif",
-        h1: { fontWeight: 700, fontSize: '2.5rem', letterSpacing: '-0.02em' },
+        h1: { fontWeight: 800, fontSize: '2.5rem', letterSpacing: '-0.02em' },
         h2: { fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.01em' },
         h3: { fontWeight: 600, fontSize: '1.5rem' },
-        h4: { fontWeight: 600, fontSize: '1.25rem' },
+        h4: { fontWeight: 700, fontSize: '1.25rem' },
         h5: { fontWeight: 600, fontSize: '1.1rem' },
         h6: { fontWeight: 600, fontSize: '1rem' },
         subtitle1: { fontWeight: 500, fontSize: '0.95rem' },
         subtitle2: { fontWeight: 500, fontSize: '0.85rem' },
-        button: { fontWeight: 600, textTransform: 'none' },
+        button: { fontWeight: 700, textTransform: 'none' },
     },
-    shape: {
-        borderRadius: 12,
-    },
+    shape: { borderRadius: 12 },
     components: {
         MuiButton: {
             styleOverrides: {
@@ -62,21 +56,21 @@ const getDesignTokens = (mode) => ({
                     padding: '8px 20px',
                     fontSize: '0.875rem',
                     boxShadow: 'none',
-                    transition: 'all 0.2s ease-in-out',
+                    transition: 'all 0.25s ease-in-out',
                     '&:hover': {
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
                         transform: 'translateY(-1px)',
                     },
                 },
                 contained: {
                     background: mode === 'dark'
-                        ? 'linear-gradient(135deg, #00bcd4 0%, #7c4dff 100%)'
-                        : 'linear-gradient(135deg, #0288d1 0%, #7c4dff 100%)',
+                        ? `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`
+                        : `linear-gradient(135deg, ${CCO.azul} 0%, ${CCO.violeta} 100%)`,
                     color: '#fff',
                     '&:hover': {
                         background: mode === 'dark'
-                            ? 'linear-gradient(135deg, #4dd0e1 0%, #b47cff 100%)'
-                            : 'linear-gradient(135deg, #03a9f4 0%, #b47cff 100%)',
+                            ? `linear-gradient(135deg, #ffac40 0%, #9d8fe0 100%)`
+                            : `linear-gradient(135deg, #5578e8 0%, #9d8fe0 100%)`,
                     },
                 },
             },
@@ -86,19 +80,19 @@ const getDesignTokens = (mode) => ({
                 root: {
                     borderRadius: 16,
                     boxShadow: mode === 'dark'
-                        ? '0 4px 20px rgba(0,0,0,0.4)'
-                        : '0 2px 12px rgba(0,0,0,0.08)',
+                        ? '0 4px 24px rgba(0,0,0,0.5)'
+                        : '0 2px 14px rgba(0,0,0,0.08)',
                     backdropFilter: 'blur(20px)',
                     background: mode === 'dark'
-                        ? alpha('#0d2137', 0.8)
-                        : alpha('#ffffff', 0.9),
-                    border: `1px solid ${mode === 'dark' ? alpha('#90caf9', 0.08) : alpha('#919eab', 0.12)}`,
+                        ? alpha('#0f1629', 0.85)
+                        : alpha('#ffffff', 0.92),
+                    border: `1px solid ${mode === 'dark' ? alpha('#8fa3c0', 0.1) : alpha('#919eab', 0.14)}`,
                     transition: 'all 0.3s ease-in-out',
                     '&:hover': {
                         transform: 'translateY(-2px)',
                         boxShadow: mode === 'dark'
-                            ? '0 8px 30px rgba(0,0,0,0.5)'
-                            : '0 4px 20px rgba(0,0,0,0.12)',
+                            ? '0 8px 32px rgba(0,0,0,0.55)'
+                            : '0 4px 22px rgba(0,0,0,0.12)',
                     },
                 },
             },
@@ -111,70 +105,50 @@ const getDesignTokens = (mode) => ({
                         transition: 'all 0.2s ease-in-out',
                         '&:hover': {
                             boxShadow: mode === 'dark'
-                                ? '0 0 0 2px rgba(0,188,212,0.2)'
-                                : '0 0 0 2px rgba(2,136,209,0.15)',
+                                ? `0 0 0 2px ${alpha(CCO.naranja, 0.25)}`
+                                : `0 0 0 2px ${alpha(CCO.azul, 0.2)}`,
                         },
                         '&.Mui-focused': {
                             boxShadow: mode === 'dark'
-                                ? '0 0 0 3px rgba(0,188,212,0.3)'
-                                : '0 0 0 3px rgba(2,136,209,0.2)',
+                                ? `0 0 0 3px ${alpha(CCO.naranja, 0.35)}`
+                                : `0 0 0 3px ${alpha(CCO.azul, 0.25)}`,
                         },
                     },
                 },
             },
         },
         MuiPaper: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 16,
-                    backgroundImage: 'none',
-                },
-            },
+            styleOverrides: { root: { borderRadius: 16, backgroundImage: 'none' } },
         },
         MuiDrawer: {
             styleOverrides: {
                 paper: {
                     borderRight: 'none',
                     boxShadow: mode === 'dark'
-                        ? '4px 0 20px rgba(0,0,0,0.3)'
-                        : '2px 0 12px rgba(0,0,0,0.06)',
+                        ? '4px 0 24px rgba(0,0,0,0.35)'
+                        : '2px 0 12px rgba(0,0,0,0.07)',
                 },
             },
         },
         MuiChip: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 8,
-                    fontWeight: 500,
-                },
-            },
+            styleOverrides: { root: { borderRadius: 8, fontWeight: 600 } },
         },
         MuiTableCell: {
             styleOverrides: {
                 head: {
-                    fontWeight: 600,
+                    fontWeight: 700,
                     textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.05em',
-                    color: mode === 'dark' ? '#90a4ae' : '#637381',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.06em',
+                    color: mode === 'dark' ? '#8fa3c0' : '#5b6b8a',
                 },
             },
         },
         MuiDialog: {
-            styleOverrides: {
-                paper: {
-                    borderRadius: 20,
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-                },
-            },
+            styleOverrides: { paper: { borderRadius: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' } },
         },
         MuiTooltip: {
-            styleOverrides: {
-                tooltip: {
-                    borderRadius: 8,
-                    fontSize: '0.75rem',
-                },
-            },
+            styleOverrides: { tooltip: { borderRadius: 8, fontSize: '0.75rem' } },
         },
     },
 });

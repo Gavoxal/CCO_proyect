@@ -1,0 +1,5 @@
+import MainLayout from '../../components/layout/MainLayout';
+import { Box, Typography, Alert } from '@mui/material';
+export default function CalendarioPage() {
+    return <MainLayout><Box sx={{ p: 3 }}><Typography variant="h4" fontWeight={800} sx={{ mb: 2 }}>Calendario de Eventos</Typography><Alert severity="info">Módulo en construcción — se implementará con react-big-calendar</Alert></Box></MainLayout>;
+}

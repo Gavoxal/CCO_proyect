@@ -1,295 +1,340 @@
 import { useState, useEffect } from 'react';
-import { Box, Grid, Typography, Card, CardContent, alpha, useTheme, Chip } from '@mui/material';
 import {
-    Inventory2 as InventoryIcon,
+    Box, Grid, Typography, Card, CardContent, LinearProgress,
+    Alert, Chip, Avatar, List, ListItem, ListItemText, ListItemAvatar,
+    Divider, Skeleton, alpha, useTheme,
+} from '@mui/material';
+import {
+    PeopleAlt as InfantesIcon,
+    CheckCircle as CheckIcon,
     Warning as WarningIcon,
-    Category as CategoryIcon,
-    AttachMoney as MoneyIcon,
-    TrendingDown as TrendingDownIcon,
-    TrendingUp as TrendingUpIcon,
+    Inventory2 as InvIcon,
+    CalendarMonth as CalIcon,
+    Church as ChurchIcon,
+    CardGiftcard as GiftIcon,
+    TrendingUp as TrendIcon,
+    HomeWork as VisitaIcon,
 } from '@mui/icons-material';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import MainLayout from '../components/layout/MainLayout';
-import StatsCard from '../components/common/StatsCard';
-import StatusChip from '../components/common/StatusChip';
-import LoadingOverlay from '../components/common/LoadingOverlay';
-import { dashboardService } from '../services/dashboardService';
+import { useAuth } from '../context/AuthContext';
+import {
+    infantesService, asistenciaService, materialesService,
+    regalosService, miembrosService, casasPazService, eventosService,
+} from '../services/appServices';
 
-const CHART_COLORS = ['#00bcd4', '#7c4dff', '#ffab40', '#ff5252', '#00e676', '#40c4ff'];
+// ─── Componente de tarjeta de estadística ────────────────────────────────────
+const StatCard = ({ icon, title, value, subtitle, color, loading }) => {
+    const theme = useTheme();
+    return (
+        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, height: '100%' }}>
+            <CardContent sx={{ p: 2.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase" letterSpacing={0.5}>
+                            {title}
+                        </Typography>
+                        {loading ? (
+                            <Skeleton width={80} height={44} />
+                        ) : (
+                            <Typography variant="h3" fontWeight={800} lineHeight={1.1} sx={{ mt: 0.5 }}>
+                                {value}
+                            </Typography>
+                        )}
+                        {subtitle && !loading && (
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                {subtitle}
+                            </Typography>
+                        )}
+                    </Box>
+                    <Box sx={{
+                        width: 48, height: 48, borderRadius: '14px',
+                        bgcolor: alpha(color, 0.12),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                        {icon}
+                    </Box>
+                </Box>
+            </CardContent>
+        </Card>
+    );
+};
 
+// ─── Barra de progreso con label ─────────────────────────────────────────────
+const ProgressRow = ({ label, value, total, color }) => (
+    <Box sx={{ mb: 1.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+            <Typography variant="body2">{label}</Typography>
+            <Typography variant="body2" fontWeight={600} color={color}>
+                {value}/{total}
+            </Typography>
+        </Box>
+        <LinearProgress
+            variant="determinate"
+            value={total > 0 ? (value / total) * 100 : 0}
+            sx={{
+                height: 8, borderRadius: 4,
+                bgcolor: alpha(color, 0.15),
+                '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 4 },
+            }}
+        />
+    </Box>
+);
+
+// ─── Evento del calendario ───────────────────────────────────────────────────
+const EventoRow = ({ evento }) => {
+    const colores = { Ministerio: '#7c4dff', Iglesia: '#4caf50', Emergencia: '#f44336' };
+    const color = colores[evento.tipo] || '#9e9e9e';
+    const fecha = new Date(evento.fechaInicio);
+    return (
+        <ListItem disableGutters sx={{ py: 0.75 }}>
+            <ListItemAvatar>
+                <Avatar sx={{ bgcolor: alpha(color, 0.15), color, width: 40, height: 40, fontSize: '0.75rem', fontWeight: 700 }}>
+                    {fecha.getDate()}
+                </Avatar>
+            </ListItemAvatar>
+            <ListItemText
+                primary={evento.titulo}
+                secondary={`${fecha.toLocaleDateString('es-EC', { month: 'short' })} · ${evento.tipo}`}
+                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
+                secondaryTypographyProps={{ fontSize: '0.75rem' }}
+            />
+            <Chip label={evento.tipo} size="small" sx={{ bgcolor: alpha(color, 0.12), color, fontSize: '0.65rem' }} />
+        </ListItem>
+    );
+};
+
+// ─── DashboardPage ────────────────────────────────────────────────────────────
 const DashboardPage = () => {
     const theme = useTheme();
-    const [stats, setStats] = useState(null);
-    const [categoryData, setCategoryData] = useState([]);
-    const [stockByType, setStockByType] = useState([]);
-    const [movements, setMovements] = useState([]);
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [data, setData] = useState({
+        totalInfantes: 0, patrocinados: 0, noPatrocinados: 0,
+        asistenciaMes: 0, // porcentaje
+        regalosNavidad: { entregados: 0, total: 0 },
+        kitsEscolares: { entregados: 0, total: 0 },
+        sinVisita: 0,
+        stockBajo: [], desactualizados: [],
+        solicitudesPendientes: 0,
+        miembros: { activos: 0, regulares: 0, lideres: 0 },
+        casasPazActivas: 0,
+        proximosEventos: [],
+    });
 
     useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
+        const cargar = async () => {
             try {
-                const [statsRes, catRes, typeRes, movRes] = await Promise.all([
-                    dashboardService.getStats(),
-                    dashboardService.getCategoryDistribution(),
-                    dashboardService.getStockByType(),
-                    dashboardService.getRecentMovements(),
+                const anio = new Date().getFullYear();
+                const [
+                    infantesRes, sinVisitaRes, alertasRes,
+                    regalosNavRes, kitsRes,
+                    eventosRes,
+                ] = await Promise.allSettled([
+                    infantesService.listar({ limit: 1 }),
+                    infantesService.sinVisitaAnio(),
+                    materialesService.alertas(),
+                    regalosService.listar({ tipo: 'regalo_navidad', anio, limit: 1 }),
+                    regalosService.listar({ tipo: 'kit_escolar', anio, limit: 1 }),
+                    eventosService.listar({ limit: 3 }),
                 ]);
-                if (statsRes.success) setStats(statsRes.data);
-                if (catRes.success) setCategoryData(catRes.data);
-                if (typeRes.success) setStockByType(typeRes.data);
-                if (movRes.success) setMovements(movRes.data);
+
+                const infTotal = infantesRes.value?.meta?.total || 0;
+                const sinVisita = sinVisitaRes.value?.data?.length || 0;
+                const alertas = alertasRes.value?.data || {};
+                const navTotal = regalosNavRes.value?.meta?.total || 0;
+                const kitsTotal = kitsRes.value?.meta?.total || 0;
+                const eventos = eventosRes.value?.data || [];
+
+                // Calcular entregados (aproximación con conteo por estado)
+                const [navEntRes, kitEntRes, solPendRes] = await Promise.allSettled([
+                    regalosService.listar({ tipo: 'regalo_navidad', anio, estado: 'entregado', limit: 1 }),
+                    regalosService.listar({ tipo: 'kit_escolar', anio, estado: 'entregado', limit: 1 }),
+                    infantesService.listar({ limit: 1 }), // placeholder
+                ]);
+
+                setData({
+                    totalInfantes: infTotal,
+                    sinVisita,
+                    regalosNavidad: { entregados: navEntRes.value?.meta?.total || 0, total: navTotal },
+                    kitsEscolares: { entregados: kitEntRes.value?.meta?.total || 0, total: kitsTotal },
+                    stockBajo: alertas.stockBajo || [],
+                    desactualizados: alertas.desactualizados || [],
+                    proximosEventos: eventos,
+                });
             } catch (err) {
-                console.error('Error loading dashboard:', err);
+                console.error('Error cargando dashboard:', err);
             } finally {
                 setLoading(false);
             }
         };
-        loadData();
+        cargar();
     }, []);
 
-    if (loading) {
-        return (
-            <MainLayout title="Dashboard">
-                <LoadingOverlay message="Cargando dashboard..." />
-            </MainLayout>
-        );
-    }
-
     return (
-        <MainLayout title="Dashboard">
-            <Box sx={{ animation: 'fadeIn 0.5s ease', '@keyframes fadeIn': { from: { opacity: 0, transform: 'translateY(10px)' }, to: { opacity: 1, transform: 'translateY(0)' } } }}>
-                {/* Stats Cards */}
-                <Grid container spacing={3} sx={{ mb: 3 }}>
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                        <StatsCard
-                            title="Total Productos"
-                            value={stats?.totalProducts || 0}
-                            icon={<InventoryIcon fontSize="large" />}
-                            color="primary"
-                            subtitle={`${stats?.totalStock || 0} unidades en stock`}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                        <StatsCard
-                            title="Stock Bajo"
-                            value={stats?.lowStockCount || 0}
-                            icon={<WarningIcon fontSize="large" />}
-                            color="warning"
-                            subtitle="Productos por debajo del mínimo"
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                        <StatsCard
-                            title="Categorías"
-                            value={stats?.totalCategories || 0}
-                            icon={<CategoryIcon fontSize="large" />}
-                            color="secondary"
-                            subtitle="Categorías principales"
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                        <StatsCard
-                            title="Valor Total"
-                            value={`$${stats?.totalValue || '0.00'}`}
-                            icon={<MoneyIcon fontSize="large" />}
-                            color="success"
-                            subtitle="Valor del inventario"
-                        />
-                    </Grid>
-                </Grid>
+        <MainLayout>
+            <Box sx={{ p: 3 }}>
+                {/* Header */}
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="h4" fontWeight={800}>
+                        ¡Bienvenido, {user?.nombre?.split(' ')[0] || user?.username}! 👋
+                    </Typography>
+                    <Typography color="text.secondary">
+                        Sistema KidScam · CCO / Ministerio Vías en Acción
+                    </Typography>
+                </Box>
 
-                {/* Charts Row */}
-                <Grid container spacing={3} sx={{ mb: 3 }}>
-                    {/* Category Distribution Pie */}
-                    <Grid size={{ xs: 12, md: 5 }}>
-                        <Card sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                                    Distribución por Categoría
-                                </Typography>
-                                <Box sx={{ height: 280 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={categoryData}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={100}
-                                                paddingAngle={4}
-                                                dataKey="value"
-                                            >
-                                                {categoryData.map((_, index) => (
-                                                    <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <RechartsTooltip
-                                                contentStyle={{
-                                                    background: theme.palette.background.paper,
-                                                    border: `1px solid ${theme.palette.divider}`,
-                                                    borderRadius: 8,
-                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                                }}
-                                            />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                </Box>
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
-                                    {categoryData.map((cat, i) => (
-                                        <Chip
-                                            key={cat.name}
-                                            label={`${cat.name} (${cat.value})`}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: alpha(CHART_COLORS[i % CHART_COLORS.length], 0.12),
-                                                color: CHART_COLORS[i % CHART_COLORS.length],
-                                                fontWeight: 500,
-                                                fontSize: '0.7rem',
-                                            }}
-                                        />
-                                    ))}
-                                </Box>
-                            </CardContent>
-                        </Card>
+                {/* ━━━ SECCIÓN A: Ministerio Infantes ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                <Box sx={{ mb: 1 }}>
+                    <Typography variant="overline" color="text.disabled" fontWeight={700} letterSpacing={1}>
+                        👶 Ministerio · Infantes
+                    </Typography>
+                </Box>
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <StatCard
+                            loading={loading}
+                            icon={<InfantesIcon sx={{ color: '#7c4dff' }} />}
+                            title="Total Infantes"
+                            value={data.totalInfantes}
+                            subtitle="Registrados en el sistema"
+                            color="#7c4dff"
+                        />
                     </Grid>
-
-                    {/* Stock by Type Bar */}
-                    <Grid size={{ xs: 12, md: 7 }}>
-                        <Card sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                                    Stock por Tipo
-                                </Typography>
-                                <Box sx={{ height: 300 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={stockByType} barGap={8}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.text.secondary, 0.1)} />
-                                            <XAxis dataKey="name" tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} />
-                                            <YAxis tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} />
-                                            <RechartsTooltip
-                                                contentStyle={{
-                                                    background: theme.palette.background.paper,
-                                                    border: `1px solid ${theme.palette.divider}`,
-                                                    borderRadius: 8,
-                                                }}
-                                            />
-                                            <Bar dataKey="count" name="Productos" fill="#00bcd4" radius={[6, 6, 0, 0]} />
-                                            <Bar dataKey="stock" name="Stock" fill="#7c4dff" radius={[6, 6, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </Box>
-                            </CardContent>
-                        </Card>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <StatCard
+                            loading={loading}
+                            icon={<VisitaIcon sx={{ color: data.sinVisita > 0 ? '#f44336' : '#4caf50' }} />}
+                            title="Sin Visita este Año"
+                            value={data.sinVisita}
+                            subtitle={data.sinVisita > 0 ? '⚠️ Requieren visita' : '✅ Todos visitados'}
+                            color={data.sinVisita > 0 ? '#f44336' : '#4caf50'}
+                        />
                     </Grid>
-                </Grid>
-
-                {/* Low Stock Alerts & Recent Movements */}
-                <Grid container spacing={3}>
-                    {/* Low Stock */}
-                    <Grid size={{ xs: 12, md: 5 }}>
-                        <Card>
-                            <CardContent>
-                                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <WarningIcon sx={{ color: 'warning.main' }} />
-                                    Alertas de Stock Bajo
-                                </Typography>
-                                {stats?.lowStockItems?.length === 0 ? (
-                                    <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                                        ¡Todo el inventario está en niveles óptimos! 🎉
-                                    </Typography>
+                    <Grid item xs={12} md={6}>
+                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, height: '100%' }}>
+                            <CardContent sx={{ p: 2.5 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                    <GiftIcon sx={{ color: '#ff9800' }} />
+                                    <Typography variant="subtitle2" fontWeight={700}>Regalos y Kits {new Date().getFullYear()}</Typography>
+                                </Box>
+                                {loading ? (
+                                    <><Skeleton variant="text" sx={{ mb: 1 }} /><Skeleton variant="rectangular" height={10} sx={{ mb: 1.5 }} /></>
                                 ) : (
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                        {stats?.lowStockItems?.map((item) => (
-                                            <Box
-                                                key={item.id}
-                                                sx={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    p: 1.5,
-                                                    borderRadius: 2,
-                                                    bgcolor: alpha(theme.palette.warning.main, 0.06),
-                                                    border: `1px solid ${alpha(theme.palette.warning.main, 0.15)}`,
-                                                }}
-                                            >
-                                                <Box>
-                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                        {item.name}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        Mín: {item.min_stock} | Actual: {item._stock}
-                                                    </Typography>
-                                                </Box>
-                                                <StatusChip status={item._stock === 0 ? 'out' : 'critical'} />
-                                            </Box>
-                                        ))}
-                                    </Box>
+                                    <>
+                                        <ProgressRow label="🎁 Navidad" value={data.regalosNavidad.entregados} total={data.regalosNavidad.total} color="#f44336" />
+                                        <ProgressRow label="🎒 Kit Escolar" value={data.kitsEscolares.entregados} total={data.kitsEscolares.total} color="#2196f3" />
+                                    </>
                                 )}
                             </CardContent>
                         </Card>
                     </Grid>
+                </Grid>
 
-                    {/* Recent Movements */}
-                    <Grid size={{ xs: 12, md: 7 }}>
-                        <Card>
-                            <CardContent>
-                                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                                    Últimos Movimientos
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                    {movements.map((mov) => (
-                                        <Box
-                                            key={mov.id}
-                                            sx={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                p: 1.5,
-                                                borderRadius: 2,
-                                                bgcolor: alpha(theme.palette.primary.main, 0.03),
-                                                border: `1px solid ${theme.palette.divider}`,
-                                                transition: 'all 0.2s ease',
-                                                '&:hover': {
-                                                    bgcolor: alpha(theme.palette.primary.main, 0.06),
-                                                },
-                                            }}
-                                        >
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                <Box
-                                                    sx={{
-                                                        width: 34,
-                                                        height: 34,
-                                                        borderRadius: '8px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        bgcolor: mov.movement_type === 'Entrada' || mov.movement_type === 'Devolución'
-                                                            ? alpha('#00e676', 0.12)
-                                                            : alpha('#ff5252', 0.12),
-                                                    }}
-                                                >
-                                                    {mov.movement_type === 'Entrada' || mov.movement_type === 'Devolución' ? (
-                                                        <TrendingUpIcon sx={{ fontSize: 18, color: '#00e676' }} />
-                                                    ) : (
-                                                        <TrendingDownIcon sx={{ fontSize: 18, color: '#ff5252' }} />
-                                                    )}
-                                                </Box>
-                                                <Box>
-                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                        {mov.product_name}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {mov.movement_type} • {mov.quantity} ud • {mov.user_name}
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {new Date(mov.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                                            </Typography>
-                                        </Box>
-                                    ))}
+                {/* ━━━ SECCIÓN B: Inventario ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                <Box sx={{ mb: 1 }}>
+                    <Typography variant="overline" color="text.disabled" fontWeight={700} letterSpacing={1}>
+                        📦 Inventario
+                    </Typography>
+                </Box>
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={12} md={6}>
+                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
+                            <CardContent sx={{ p: 2.5 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                    <WarningIcon sx={{ color: '#f44336' }} fontSize="small" />
+                                    <Typography variant="subtitle2" fontWeight={700}>Stock Bajo o Crítico</Typography>
                                 </Box>
+                                {loading ? <Skeleton variant="rectangular" height={60} /> : (
+                                    data.stockBajo.length === 0
+                                        ? <Alert severity="success" variant="outlined" sx={{ borderRadius: 2 }}>Todo el inventario está en niveles normales</Alert>
+                                        : data.stockBajo.slice(0, 4).map(item => (
+                                            <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                                                <Typography variant="body2">{item.nombreMaterial}</Typography>
+                                                <Chip label={`${item.cantidadDisponible} uds`} size="small" color="error" variant="outlined" />
+                                            </Box>
+                                        ))
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
+                            <CardContent sx={{ p: 2.5 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                    <InvIcon sx={{ color: '#ff9800' }} fontSize="small" />
+                                    <Typography variant="subtitle2" fontWeight={700}>Sin Actualizar (+30 días)</Typography>
+                                </Box>
+                                {loading ? <Skeleton variant="rectangular" height={60} /> : (
+                                    data.desactualizados.length === 0
+                                        ? <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>Todo el inventario está actualizado</Alert>
+                                        : data.desactualizados.slice(0, 4).map(item => (
+                                            <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                                                <Typography variant="body2">{item.nombreMaterial}</Typography>
+                                                <Chip label="Desactualizado" size="small" color="warning" variant="outlined" />
+                                            </Box>
+                                        ))
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
+
+                {/* ━━━ SECCIÓN C + D: Iglesia CCO + Calendario ━━━━━━━━━━━━━━━━━━━━━ */}
+                <Grid container spacing={2}>
+                    <Grid item xs={12} md={4}>
+                        <Box sx={{ mb: 1 }}>
+                            <Typography variant="overline" color="text.disabled" fontWeight={700} letterSpacing={1}>
+                                ⛪ Iglesia CCO
+                            </Typography>
+                        </Box>
+                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
+                            <CardContent sx={{ p: 2.5 }}>
+                                {loading ? (
+                                    [1, 2, 3].map(i => <Skeleton key={i} variant="text" sx={{ mb: 1 }} />)
+                                ) : (
+                                    <>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                                            <Typography variant="body2" color="text.secondary">Miembros Activos</Typography>
+                                            <Typography variant="body2" fontWeight={700}>{data.miembros?.activos ?? '—'}</Typography>
+                                        </Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                                            <Typography variant="body2" color="text.secondary">Regulares</Typography>
+                                            <Typography variant="body2" fontWeight={700}>{data.miembros?.regulares ?? '—'}</Typography>
+                                        </Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                                            <Typography variant="body2" color="text.secondary">Líderes</Typography>
+                                            <Typography variant="body2" fontWeight={700}>{data.miembros?.lideres ?? '—'}</Typography>
+                                        </Box>
+                                        <Divider sx={{ my: 1 }} />
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <Typography variant="body2" color="text.secondary">Casas de Paz Activas</Typography>
+                                            <Typography variant="body2" fontWeight={700} color="primary">{data.casasPazActivas ?? '—'}</Typography>
+                                        </Box>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} md={8}>
+                        <Box sx={{ mb: 1 }}>
+                            <Typography variant="overline" color="text.disabled" fontWeight={700} letterSpacing={1}>
+                                📅 Próximos Eventos
+                            </Typography>
+                        </Box>
+                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
+                            <CardContent sx={{ p: 2.5 }}>
+                                {loading ? [1, 2, 3].map(i => <Skeleton key={i} variant="text" height={50} />) : (
+                                    data.proximosEventos.length === 0
+                                        ? <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>No hay eventos próximos registrados</Alert>
+                                        : <List disablePadding>
+                                            {data.proximosEventos.map((ev, i) => (
+                                                <Box key={ev.id}>
+                                                    <EventoRow evento={ev} />
+                                                    {i < data.proximosEventos.length - 1 && <Divider />}
+                                                </Box>
+                                            ))}
+                                        </List>
+                                )}
                             </CardContent>
                         </Card>
                     </Grid>
