@@ -1,10 +1,39 @@
 // Servicio de autenticación — conecta al backend real
 import api from './api';
 
+// ─── Usuarios mock (solo para desarrollo sin backend) ────────────────────────
+const MOCK_USERS = [
+    { id: 1, username: 'admin', password: 'Admin2026!', rol: 'admin', nombre: 'Administrador CCO', email: 'admin@cco.com' },
+    { id: 2, username: 'secretaria', password: 'Secretaria2026!', rol: 'secretaria', nombre: 'Secretaria CCO', email: 'secretaria@cco.com' },
+    { id: 3, username: 'tutor1', password: 'Tutor2026!', rol: 'tutor', nombre: 'Tutor del Ministerio', email: 'tutor1@cco.com' },
+];
+
 export const authService = {
     login: async (username, password) => {
-        const { data } = await api.post('/auth/login', { username, password });
-        return data; // { success, data: { token, usuario } }
+        try {
+            // Intenta con el backend real
+            const { data } = await api.post('/auth/login', { username, password });
+            return data; // { success, data: { token, usuario } }
+        } catch (err) {
+            // Si no hay backend (red caída), usa modo mock
+            const isNetworkError = !err.response;
+            if (!isNetworkError) throw err; // error real del servidor (401, 500, etc.) → propagar
+
+            const found = MOCK_USERS.find(
+                u => (u.username === username || u.email === username) && u.password === password
+            );
+            if (!found) {
+                return { success: false, message: 'Usuario o contraseña incorrectos (modo demo)' };
+            }
+            const { password: _, ...usuario } = found;
+            return {
+                success: true,
+                data: {
+                    token: `mock-token-${Date.now()}`,
+                    usuario: { ...usuario },
+                },
+            };
+        }
     },
 
     me: async () => {
@@ -17,6 +46,7 @@ export const authService = {
         localStorage.removeItem('user');
     },
 };
+
 
 export const infantesService = {
     listar: (params) => api.get('/infantes', { params }).then(r => r.data),
