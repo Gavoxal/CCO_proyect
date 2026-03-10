@@ -93,7 +93,7 @@ const InventoryPage = () => {
         setEditingProduct(null);
         setFormCategoryName('');
         setFormAreaName('');
-        skuPreview.current = '';
+        setSkuPreview('');
         setFormOpen(true);
     };
 

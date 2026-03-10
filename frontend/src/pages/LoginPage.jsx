@@ -33,19 +33,19 @@ const MOCK_USERS = [
 // ─── Slides del carrusel ─────────────────────────────────────────────────────
 const SLIDES = [
     {
-        src: '/login_panel.png',
+        src: '/login1.jpg',
         titulo: 'Transformando vidas',
         desc: 'Ministerio Vías en Acción — Acompañando a niños, familias y comunidades hacia un futuro mejor.',
         color: CCO.naranja,
     },
     {
-        src: '/login_panel_2.png',
+        src: '/login2.jpg',
         titulo: 'Formando el futuro',
         desc: 'Cada niño importa — educamos con amor, fe y propósito para construir communidades más fuertes.',
         color: CCO.violeta,
     },
     {
-        src: '/login_panel_3.png',
+        src: '/login3.jpeg',
         titulo: 'Sirviendo con amor',
         desc: 'Kits escolares, regalos de navidad y mucho más — porque cada sonrisa vale el esfuerzo.',
         color: CCO.azul,
