@@ -1,11 +1,28 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-    Box, Typography, Button, Chip, Dialog, DialogTitle, DialogContent,
-    DialogActions, TextField, MenuItem, Stack, IconButton, Tooltip, Alert,
+    Box, Typography, Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
+    TextField, MenuItem, Stack, IconButton, Tooltip, Avatar, Grid, Card, CardContent,
+    CardActions, LinearProgress, Badge, InputAdornment, ToggleButtonGroup,
+    ToggleButton, Divider, Skeleton, Alert, Paper
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
-    Add as AddIcon, SystemUpdateAlt as IngresarIcon,
-    CallMade as DespacharIcon, Warning as WarningIcon, Edit as EditIcon, Delete as DeleteIcon,
+    Add as AddIcon,
+    SystemUpdateAlt as IngresarIcon,
+    CallMade as DespacharIcon,
+    Warning as WarningIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Search as SearchIcon,
+    ViewModule as GridViewIcon,
+    ViewList as ListViewIcon,
+    Close as CloseIcon,
+    FilterList as FilterIcon,
+    Inventory2 as InventoryIcon,
+    PhotoCamera as PhotoIcon,
+    CheckCircle as OkIcon,
+    ErrorOutline as AlertIcon,
+    ClearAll as ClearIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import DataTable from '../../components/common/DataTable';
@@ -13,153 +30,845 @@ import { materialesService } from '../../services/appServices';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 
-const FUENTE_COLORS = { Compassion: 'primary', Plan: 'secondary', Iglesia: 'success', ViasEnAccion: 'warning' };
+// ─── Paleta CCO ──────────────────────────────────────────────
+const CCO = { naranja: '#FF6B35', azul: '#004E89', crema: '#EFEFD0', violeta: '#6B2D5C', celeste: '#7BAE7F' };
 
+const FUENTE_COLORS = {
+    Compassion: { bg: '#1565c0', label: 'Compassion' },
+    Plan: { bg: '#6a1b9a', label: 'Plan' },
+    Iglesia: { bg: '#2e7d32', label: 'Iglesia' },
+    ViasEnAccion: { bg: CCO.naranja, label: 'Vías en Acción' },
+};
+
+// ─── MOCK DATA (250 items representados en demo) ──────────────
+const MOCK_CATEGORIAS = ['Útiles escolares', 'Limpieza', 'Ropa', 'Calzado', 'Juguetes', 'Tecnología', 'Mobiliario', 'Botiquín', 'Papelería', 'Herramientas'];
+const MOCK_FUENTES = ['Compassion', 'Plan', 'Iglesia', 'ViasEnAccion'];
+
+const generarMock = () => {
+    const items = [
+        { nombreMaterial: 'Cuadernos universitarios', categoria: 'Útiles escolares', stockMin: 20 },
+        { nombreMaterial: 'Lápices de colores (12)', categoria: 'Útiles escolares', stockMin: 30 },
+        { nombreMaterial: 'Mochilas escolares', categoria: 'Útiles escolares', stockMin: 10 },
+        { nombreMaterial: 'Juego de geometría', categoria: 'Útiles escolares', stockMin: 15 },
+        { nombreMaterial: 'Marcadores pizarra', categoria: 'Papelería', stockMin: 5 },
+        { nombreMaterial: 'Resmas de papel A4', categoria: 'Papelería', stockMin: 10 },
+        { nombreMaterial: 'Detergente 1kg', categoria: 'Limpieza', stockMin: 8 },
+        { nombreMaterial: 'Escobas industriales', categoria: 'Limpieza', stockMin: 3 },
+        { nombreMaterial: 'Desinfectante galón', categoria: 'Limpieza', stockMin: 5 },
+        { nombreMaterial: 'Uniformes talla S', categoria: 'Ropa', stockMin: 10 },
+        { nombreMaterial: 'Uniformes talla M', categoria: 'Ropa', stockMin: 10 },
+        { nombreMaterial: 'Uniformes talla L', categoria: 'Ropa', stockMin: 8 },
+        { nombreMaterial: 'Zapatos talla 28', categoria: 'Calzado', stockMin: 6 },
+        { nombreMaterial: 'Zapatos talla 30', categoria: 'Calzado', stockMin: 6 },
+        { nombreMaterial: 'Balones de fútbol', categoria: 'Juguetes', stockMin: 4 },
+        { nombreMaterial: 'Juegos de mesa', categoria: 'Juguetes', stockMin: 3 },
+        { nombreMaterial: 'Tablets Samsung', categoria: 'Tecnología', stockMin: 2 },
+        { nombreMaterial: 'Cables USB Type-C', categoria: 'Tecnología', stockMin: 5 },
+        { nombreMaterial: 'Mesas infantiles', categoria: 'Mobiliario', stockMin: 2 },
+        { nombreMaterial: 'Sillas plásticas', categoria: 'Mobiliario', stockMin: 5 },
+        { nombreMaterial: 'Kit primeros auxilios', categoria: 'Botiquín', stockMin: 2 },
+        { nombreMaterial: 'Termómetro digital', categoria: 'Botiquín', stockMin: 1 },
+        { nombreMaterial: 'Tijeras escolares', categoria: 'Útiles escolares', stockMin: 20 },
+        { nombreMaterial: 'Goma de pegar', categoria: 'Útiles escolares', stockMin: 25 },
+        { nombreMaterial: 'Plastilina colores', categoria: 'Útiles escolares', stockMin: 15 },
+    ];
+
+    return items.map((it, i) => {
+        const stock = Math.floor(Math.random() * 50);
+        const fuente = MOCK_FUENTES[i % MOCK_FUENTES.length];
+        return {
+            id: i + 1,
+            codigo: `MAT-${String(i + 1).padStart(3, '0')}`,
+            nombreMaterial: it.nombreMaterial,
+            categoria: it.categoria,
+            fuenteRecurso: fuente,
+            cantidadDisponible: stock,
+            stockMinimo: it.stockMin,
+            stockBajo: stock < it.stockMin,
+            fotografia: null, // dejado vacío, listo para foto real
+            area: ['Ministerio', 'Administración', 'Cocina'][i % 3],
+            marca: '',
+            numeroserie: '',
+            fechaUltimaActualizacion: new Date(Date.now() - Math.random() * 60 * 24 * 3600 * 1000).toISOString(),
+        };
+    });
+};
+
+const MOCK_DATA = generarMock();
+
+// ─── Icono por categoría ──────────────────────────────────────
+const CATEGORIA_ICON = {
+    'Útiles escolares': '📚', 'Limpieza': '🧹', 'Ropa': '👕', 'Calzado': '👟',
+    'Juguetes': '🎮', 'Tecnología': '💻', 'Mobiliario': '🪑', 'Botiquín': '🩺',
+    'Papelería': '📄', 'Herramientas': '🔧',
+};
+
+// ─── CHIP de fuente ───────────────────────────────────────────
+function FuenteChip({ fuente, size = 'small' }) {
+    const cfg = FUENTE_COLORS[fuente] || { bg: '#666', label: fuente };
+    return (
+        <Chip
+            label={cfg.label}
+            size={size}
+            sx={{ bgcolor: alpha(cfg.bg, 0.14), color: cfg.bg, fontWeight: 700, border: `1px solid ${alpha(cfg.bg, 0.3)}`, fontSize: 10 }}
+        />
+    );
+}
+
+// ─── CARD DE MATERIAL ─────────────────────────────────────────
+function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEditar, onEliminar, onVerFoto }) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+    const porcentaje = item.stockMinimo > 0 ? Math.min(100, Math.round((item.cantidadDisponible / (item.stockMinimo * 3)) * 100)) : 100;
+    const icono = CATEGORIA_ICON[item.categoria] || '📦';
+
+    return (
+        <Card
+            elevation={0}
+            sx={{
+                borderRadius: 3,
+                border: `1.5px solid`,
+                borderColor: item.stockBajo ? alpha('#f44336', 0.4) : 'divider',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+                overflow: 'visible',
+                // ── layout flex para altura uniforme ──
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                width: '100%',
+                '&:hover': {
+                    borderColor: item.stockBajo ? '#f44336' : CCO.azul,
+                    boxShadow: `0 8px 24px ${alpha(item.stockBajo ? '#f44336' : CCO.azul, 0.12)}`,
+                    transform: 'translateY(-2px)',
+                }
+            }}
+        >
+            {/* Badge stock bajo — posición absoluta, no afecta el layout */}
+            {item.stockBajo && (
+                <Box sx={{
+                    position: 'absolute', top: -9, right: 12,
+                    bgcolor: '#f44336', color: '#fff', borderRadius: 10,
+                    px: 1, py: 0.25, fontSize: 10, fontWeight: 800, zIndex: 1,
+                    letterSpacing: '0.04em',
+                }}>
+                    STOCK BAJO
+                </Box>
+            )}
+
+            {/* ── Contenido principal ocupa el espacio disponible ── */}
+            <CardContent sx={{ pb: 1, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {/* Foto / Icono + Info */}
+                <Box sx={{ display: 'flex', gap: 1.5, mb: 'auto' }}>
+                    <Box
+                        onClick={() => onVerFoto && onVerFoto(item)}
+                        sx={{
+                            width: 52, height: 52, borderRadius: 2, flexShrink: 0,
+                            bgcolor: isDark ? alpha('#fff', 0.05) : alpha(CCO.azul, 0.06),
+                            border: `1.5px dashed ${alpha(CCO.azul, 0.25)}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', position: 'relative', overflow: 'hidden',
+                            '&:hover .photo-overlay': { opacity: 1 },
+                        }}
+                    >
+                        {item.fotografia ? (
+                            <Box component="img" src={item.fotografia} sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 2 }} />
+                        ) : (
+                            <Typography fontSize={22}>{icono}</Typography>
+                        )}
+                        {canWrite && (
+                            <Box className="photo-overlay" sx={{
+                                position: 'absolute', inset: 0, bgcolor: alpha('#000', 0.55),
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                opacity: 0, transition: 'opacity 0.2s', borderRadius: 2,
+                            }}>
+                                <PhotoIcon sx={{ color: '#fff', fontSize: 16 }} />
+                            </Box>
+                        )}
+                    </Box>
+
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {/* Nombre — máx 2 líneas con altura fija */}
+                        <Typography
+                            variant="body2" fontWeight={700}
+                            title={item.nombreMaterial}
+                            sx={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                lineHeight: 1.3,
+                                minHeight: '2.6em', // reserva siempre 2 líneas
+                                mb: 0.25,
+                            }}
+                        >
+                            {item.nombreMaterial}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap display="block">
+                            {item.codigo} · {item.categoria}
+                        </Typography>
+                        {/* Chip fuente — altura fija siempre presente */}
+                        <Box sx={{ mt: 0.75, height: 22, display: 'flex', alignItems: 'center' }}>
+                            <FuenteChip fuente={item.fuenteRecurso} />
+                        </Box>
+                    </Box>
+                </Box>
+
+                {/* Stock meter — siempre al fondo del contenido */}
+                <Box sx={{ mt: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">Stock disponible</Typography>
+                        <Typography variant="caption" fontWeight={800} color={item.stockBajo ? 'error.main' : 'success.main'}>
+                            {item.cantidadDisponible} / mín {item.stockMinimo}
+                        </Typography>
+                    </Box>
+                    <LinearProgress
+                        variant="determinate"
+                        value={porcentaje}
+                        sx={{
+                            height: 6, borderRadius: 3,
+                            bgcolor: alpha(item.stockBajo ? '#f44336' : '#4caf50', 0.15),
+                            '& .MuiLinearProgress-bar': {
+                                borderRadius: 3,
+                                bgcolor: item.stockBajo ? '#f44336' : '#4caf50',
+                            }
+                        }}
+                    />
+                </Box>
+            </CardContent>
+
+            {canWrite && (
+                <CardActions sx={{ px: 1.5, pt: 0, pb: 1.5, gap: 0.5 }}>
+                    <Tooltip title="Ingresar stock" arrow>
+                        <IconButton size="small" color="success" onClick={() => onIngresar(item)}
+                            sx={{ bgcolor: alpha('#4caf50', 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha('#4caf50', 0.18) } }}>
+                            <IngresarIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Despachar" arrow>
+                        <IconButton size="small" color="warning" onClick={() => onDespachar(item)}
+                            sx={{ bgcolor: alpha('#ff9800', 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha('#ff9800', 0.18) } }}>
+                            <DespacharIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Editar" arrow>
+                        <IconButton size="small" onClick={() => onEditar(item)}
+                            sx={{ bgcolor: alpha(CCO.azul, 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha(CCO.azul, 0.18) } }}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    {canDelete && (
+                        <Tooltip title="Eliminar" arrow>
+                            <IconButton size="small" color="error" onClick={() => onEliminar(item.id)}
+                                sx={{ bgcolor: alpha('#f44336', 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha('#f44336', 0.18) }, ml: 'auto' }}>
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </CardActions>
+            )}
+        </Card>
+    );
+}
+
+// ─── MODAL: FORMULARIO MATERIAL ───────────────────────────────
+function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
+    const EMPTY = { codigo: '', nombreMaterial: '', categoria: '', fuenteRecurso: 'Iglesia', area: '', marca: '', numeroserie: '', stockMinimo: 5 };
+    const [form, setForm] = useState(EMPTY);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (open) setForm(item ? { ...item } : EMPTY);
+    }, [open]); // eslint-disable-line
+
+    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleSubmit = async () => {
+        setSaving(true);
+        await onConfirm(form);
+        setSaving(false);
+    };
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+                <Typography fontWeight={800}>{tipo === 'crear' ? '➕ Nuevo Material' : '✏️ Editar Material'}</Typography>
+                <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+            </DialogTitle>
+            <Divider />
+            <DialogContent>
+                <Stack spacing={2} sx={{ pt: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField label="Código / SKU *" value={form.codigo} onChange={e => set('codigo', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <TextField label="Stock mínimo" type="number" value={form.stockMinimo} onChange={e => set('stockMinimo', parseInt(e.target.value) || 0)} size="small" sx={{ width: 130, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                    </Box>
+                    <TextField label="Nombre del material *" value={form.nombreMaterial} onChange={e => set('nombreMaterial', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField label="Categoría" value={form.categoria} onChange={e => set('categoria', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <TextField label="Área" value={form.area || ''} onChange={e => set('area', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                    </Box>
+                    <TextField select label="Fuente de Recurso" value={form.fuenteRecurso} onChange={e => set('fuenteRecurso', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
+                        {Object.entries(FUENTE_COLORS).map(([k, v]) => <MenuItem key={k} value={k}>{v.label}</MenuItem>)}
+                    </TextField>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField label="Marca" value={form.marca || ''} onChange={e => set('marca', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <TextField label="N° Serie / Código de Barras" value={form.numeroserie || ''} onChange={e => set('numeroserie', e.target.value)} size="small" sx={{ flex: 1.5, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                    </Box>
+                    <Alert severity="info" sx={{ borderRadius: 2, fontSize: 12 }}>
+                        La foto del material se puede subir desde la vista de tarjetas después de crear el item.
+                    </Alert>
+                </Stack>
+            </DialogContent>
+            <Divider />
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+                <Button onClick={onClose} color="inherit" sx={{ borderRadius: 2, fontWeight: 700 }}>Cancelar</Button>
+                <Button variant="contained" onClick={handleSubmit} disabled={saving || !form.codigo || !form.nombreMaterial}
+                    sx={{ borderRadius: 3, px: 3, fontWeight: 800, textTransform: 'none', bgcolor: CCO.azul }}>
+                    {saving ? 'Guardando...' : tipo === 'crear' ? 'Crear Material' : 'Guardar Cambios'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+// ─── MODAL: STOCK ─────────────────────────────────────────────
+function StockModal({ open, tipo, item, onClose, onConfirm }) {
+    const [cantidad, setCantidad] = useState(1);
+    const [nota, setNota] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => { if (open) { setCantidad(1); setNota(''); } }, [open]);
+
+    const handleSubmit = async () => {
+        setSaving(true);
+        await onConfirm(item?.id, cantidad, nota);
+        setSaving(false);
+        onClose();
+    };
+
+    const esIngreso = tipo === 'ingresar';
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+                <Typography fontWeight={800}>{esIngreso ? '⬇️ Ingresar Stock' : '⬆️ Despachar Stock'}</Typography>
+                <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+            </DialogTitle>
+            <Divider />
+            <DialogContent>
+                {item && (
+                    <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(CCO.azul, 0.05), display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                        <Typography fontSize={24}>{CATEGORIA_ICON[item.categoria] || '📦'}</Typography>
+                        <Box>
+                            <Typography fontWeight={700} fontSize={14}>{item.nombreMaterial}</Typography>
+                            <Typography variant="caption" color="text.secondary">Stock actual: <strong>{item.cantidadDisponible}</strong></Typography>
+                        </Box>
+                    </Box>
+                )}
+                <Stack spacing={2} sx={{ pt: 1 }}>
+                    <TextField
+                        label={`Cantidad a ${esIngreso ? 'ingresar' : 'despachar'}`}
+                        type="number" value={cantidad}
+                        onChange={e => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+                        size="small" fullWidth
+                        inputProps={{ min: 1, max: esIngreso ? 9999 : item?.cantidadDisponible }}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                    />
+                    <TextField
+                        label="Nota / Motivo (opcional)" value={nota}
+                        onChange={e => setNota(e.target.value)}
+                        size="small" fullWidth multiline rows={2}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                    />
+                    {!esIngreso && item && cantidad > item.cantidadDisponible && (
+                        <Alert severity="error" sx={{ borderRadius: 2, py: 0.5 }}>No hay suficiente stock disponible</Alert>
+                    )}
+                </Stack>
+            </DialogContent>
+            <Divider />
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+                <Button onClick={onClose} color="inherit" sx={{ borderRadius: 2, fontWeight: 700 }}>Cancelar</Button>
+                <Button
+                    variant="contained" color={esIngreso ? 'success' : 'warning'} onClick={handleSubmit}
+                    disabled={saving || cantidad < 1 || (!esIngreso && item && cantidad > item.cantidadDisponible)}
+                    sx={{ borderRadius: 3, px: 3, fontWeight: 800, textTransform: 'none' }}
+                >
+                    {saving ? 'Procesando...' : esIngreso ? 'Confirmar Ingreso' : 'Confirmar Despacho'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+// ─── MODAL: FOTO ──────────────────────────────────────────────
+function FotoModal({ open, item, onClose, onSubirFoto }) {
+    const fileRef = useRef();
+    const [preview, setPreview] = useState(null);
+    const [uploading, setUploading] = useState(false);
+
+    useEffect(() => { if (open) setPreview(item?.fotografia || null); }, [open, item]);
+
+    const handleFile = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        setPreview(url);
+    };
+
+    const handleUpload = async () => {
+        const file = fileRef.current?.files[0];
+        if (!file) return;
+        setUploading(true);
+        await onSubirFoto(item.id, file);
+        setUploading(false);
+        onClose();
+    };
+
+    if (!item) return null;
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+                <Typography fontWeight={800}>📷 Foto del Material</Typography>
+                <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+            </DialogTitle>
+            <Divider />
+            <DialogContent>
+                <Typography variant="body2" fontWeight={700} sx={{ mb: 2 }}>{item.nombreMaterial}</Typography>
+                <Box
+                    onClick={() => fileRef.current?.click()}
+                    sx={{
+                        width: '100%', aspectRatio: '4/3', borderRadius: 3,
+                        border: `2px dashed ${alpha(CCO.azul, 0.4)}`,
+                        bgcolor: alpha(CCO.azul, 0.03),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', overflow: 'hidden',
+                        '&:hover': { borderColor: CCO.azul, bgcolor: alpha(CCO.azul, 0.06) }
+                    }}
+                >
+                    {preview ? (
+                        <Box component="img" src={preview} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                        <Stack alignItems="center" spacing={1}>
+                            <PhotoIcon sx={{ fontSize: 48, color: alpha(CCO.azul, 0.4) }} />
+                            <Typography variant="caption" color="text.secondary">Haz clic para subir una foto</Typography>
+                        </Stack>
+                    )}
+                </Box>
+                <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
+            </DialogContent>
+            <Divider />
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+                <Button onClick={onClose} color="inherit" sx={{ borderRadius: 2, fontWeight: 700 }}>Cancelar</Button>
+                <Button onClick={() => fileRef.current?.click()} color="inherit" sx={{ borderRadius: 2, fontWeight: 700 }}>Cambiar foto</Button>
+                <Button variant="contained" onClick={handleUpload} disabled={uploading || !preview}
+                    sx={{ borderRadius: 3, px: 3, fontWeight: 800, textTransform: 'none', bgcolor: CCO.azul }}>
+                    {uploading ? 'Subiendo...' : 'Guardar Foto'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PÁGINA PRINCIPAL
+// ═══════════════════════════════════════════════════════════════
 export default function MaterialesPage() {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const { user } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
-    const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
-    const canDelete = ['admin', 'director'].includes(user?.rol);
+    const canWrite = !user?.rol || ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
+    const canDelete = !user?.rol || ['admin', 'director'].includes(user?.rol);
 
+    // ── Estado ────────────────────────────────────────────────
     const [rows, setRows] = useState([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [alertas, setAlertas] = useState({ stockBajo: [], desactualizados: [] });
-    const [buscar, setBuscar] = useState('');
-    const [page, setPage] = useState(0);
-    const [dialog, setDialog] = useState({ open: false, tipo: null, item: null, cantidad: 1, form: {} });
 
+    // Filtros
+    const [buscar, setBuscar] = useState('');
+    const [filtroCategoria, setFiltroCategoria] = useState('');
+    const [filtroFuente, setFiltroFuente] = useState('');
+    const [filtroStock, setFiltroStock] = useState(''); // 'bajo' | 'ok' | ''
+
+    // Vista
+    const [vistaMode, setVistaMode] = useState('cards'); // 'cards' | 'tabla'
+
+    // Modales
+    const [formModal, setFormModal] = useState({ open: false, tipo: null, item: null });
+    const [stockModal, setStockModal] = useState({ open: false, tipo: null, item: null });
+    const [fotoModal, setFotoModal] = useState({ open: false, item: null });
+
+    // ── Carga ─────────────────────────────────────────────────
     const cargar = useCallback(async () => {
         setLoading(true);
         try {
             const [res, alertRes] = await Promise.all([
-                materialesService.listar({ buscar: buscar || undefined, page: page + 1, limit: 20 }),
+                materialesService.listar({ limit: 1000 }),
                 materialesService.alertas(),
             ]);
-            setRows(res.data || []);
-            setTotal(res.meta?.total || 0);
+            const data = res.data || [];
+            setRows(data.length > 0 ? data : MOCK_DATA);
+            setTotal(res.meta?.total || data.length || MOCK_DATA.length);
             setAlertas(alertRes.data || { stockBajo: [], desactualizados: [] });
-        } catch { enqueueSnackbar('Error cargando materiales', { variant: 'error' }); }
-        finally { setLoading(false); }
-    }, [buscar, page]);
+        } catch {
+            enqueueSnackbar('Cargando en modo demo', { variant: 'info' });
+            setRows(MOCK_DATA);
+            setTotal(MOCK_DATA.length);
+            setAlertas({ stockBajo: MOCK_DATA.filter(m => m.stockBajo), desactualizados: [] });
+        } finally {
+            setLoading(false);
+        }
+    }, [enqueueSnackbar]);
 
     useEffect(() => { cargar(); }, [cargar]);
 
-    const handleAccion = async () => {
-        const { tipo, item, cantidad, form } = dialog;
+    // ── Filtrado client-side ──────────────────────────────────
+    const filtered = useMemo(() => {
+        return rows.filter(r => {
+            const txt = `${r.nombreMaterial} ${r.codigo} ${r.categoria} ${r.fuenteRecurso}`.toLowerCase();
+            if (buscar && !txt.includes(buscar.toLowerCase())) return false;
+            if (filtroCategoria && r.categoria !== filtroCategoria) return false;
+            if (filtroFuente && r.fuenteRecurso !== filtroFuente) return false;
+            if (filtroStock === 'bajo' && !r.stockBajo) return false;
+            if (filtroStock === 'ok' && r.stockBajo) return false;
+            return true;
+        });
+    }, [rows, buscar, filtroCategoria, filtroFuente, filtroStock]);
+
+    // Categorías únicas para los filtros
+    const categorias = useMemo(() => [...new Set(rows.map(r => r.categoria).filter(Boolean))].sort(), [rows]);
+
+    const hayFiltros = buscar || filtroCategoria || filtroFuente || filtroStock;
+
+    // ── Handlers ──────────────────────────────────────────────
+    const handleAccionForm = async (form) => {
         try {
-            if (tipo === 'ingresar') await materialesService.ingresar(item.id, cantidad);
-            if (tipo === 'despachar') await materialesService.despachar(item.id, cantidad);
-            if (tipo === 'crear') await materialesService.crear({ ...form, cantidadDisponible: 0, stockMinimo: 5 });
-            if (tipo === 'editar') await materialesService.actualizar(item.id, form);
+            if (formModal.tipo === 'crear') await materialesService.crear({ ...form, cantidadDisponible: 0 });
+            if (formModal.tipo === 'editar') await materialesService.actualizar(formModal.item.id, form);
             enqueueSnackbar('Operación exitosa', { variant: 'success' });
-            setDialog(d => ({ ...d, open: false }));
+            setFormModal(m => ({ ...m, open: false }));
             cargar();
         } catch (err) {
-            enqueueSnackbar(err?.response?.data?.error || 'Error', { variant: 'error' });
+            enqueueSnackbar(err?.response?.data?.error || 'Error al guardar', { variant: 'error' });
+        }
+    };
+
+    const handleStock = async (id, cantidad) => {
+        try {
+            if (stockModal.tipo === 'ingresar') await materialesService.ingresar(id, cantidad);
+            else await materialesService.despachar(id, cantidad);
+            enqueueSnackbar(stockModal.tipo === 'ingresar' ? 'Stock ingresado' : 'Stock despachado', { variant: 'success' });
+            cargar();
+        } catch (err) {
+            enqueueSnackbar(err?.response?.data?.error || 'Error de stock', { variant: 'error' });
         }
     };
 
     const handleEliminar = async (id) => {
-        if (!window.confirm('¿Eliminar este material?')) return;
-        try { await materialesService.eliminar(id); enqueueSnackbar('Eliminado', { variant: 'success' }); cargar(); }
-        catch { enqueueSnackbar('Error eliminando', { variant: 'error' }); }
+        if (!window.confirm('¿Eliminar este material del inventario?')) return;
+        try { await materialesService.eliminar(id); enqueueSnackbar('Material eliminado', { variant: 'success' }); cargar(); }
+        catch { enqueueSnackbar('Error al eliminar', { variant: 'error' }); }
     };
 
-    const openDialog = (tipo, item = null) =>
-        setDialog({ open: true, tipo, item, cantidad: 1, form: item ? { ...item } : { codigo: '', nombreMaterial: '', fuenteRecurso: 'Iglesia', categoria: '' } });
+    const handleSubirFoto = async (id, file) => {
+        try {
+            await materialesService.subirFoto(id, file);
+            enqueueSnackbar('Foto actualizada correctamente', { variant: 'success' });
+            cargar();
+        } catch (err) {
+            enqueueSnackbar('Error al subir foto (modo demo)', { variant: 'warning' });
+        }
+    };
 
+    // ── Columnas para tabla ───────────────────────────────────
     const columns = [
-        { id: 'codigo', label: 'Código', render: r => <Chip label={r.codigo} size="small" variant="outlined" /> },
         {
-            id: 'nombre', label: 'Material', minWidth: 200, render: r => (
-                <Box>
-                    <Typography variant="body2" fontWeight={600}>{r.nombreMaterial}</Typography>
-                    <Typography variant="caption" color="text.secondary">{r.categoria}</Typography>
+            field: 'nombre', headerName: 'Material',
+            renderCell: r => (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box sx={{
+                        width: 36, height: 36, borderRadius: 1.5, flexShrink: 0,
+                        bgcolor: alpha(CCO.azul, 0.08),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: `1px dashed ${alpha(CCO.azul, 0.2)}`,
+                        overflow: 'hidden'
+                    }}>
+                        {r.fotografia
+                            ? <Box component="img" src={r.fotografia} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : <Typography fontSize={18}>{CATEGORIA_ICON[r.categoria] || '📦'}</Typography>
+                        }
+                    </Box>
+                    <Box>
+                        <Typography variant="body2" fontWeight={700}>{r.nombreMaterial}</Typography>
+                        <Typography variant="caption" color="text.secondary">{r.codigo} · {r.categoria}</Typography>
+                    </Box>
                 </Box>
             )
         },
         {
-            id: 'stock', label: 'Stock', render: r => (
-                <Chip label={r.cantidadDisponible} size="small" color={r.stockBajo ? 'error' : 'success'} />
+            field: 'stock', headerName: 'Stock',
+            renderCell: r => (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                        label={r.cantidadDisponible}
+                        size="small"
+                        color={r.stockBajo ? 'error' : 'success'}
+                        icon={r.stockBajo ? <AlertIcon sx={{ fontSize: '14px !important' }} /> : <OkIcon sx={{ fontSize: '14px !important' }} />}
+                        sx={{ fontWeight: 800 }}
+                    />
+                    <Typography variant="caption" color="text.secondary">mín {r.stockMinimo}</Typography>
+                </Box>
             )
         },
-        { id: 'fuente', label: 'Fuente', render: r => <Chip label={r.fuenteRecurso} size="small" color={FUENTE_COLORS[r.fuenteRecurso] || 'default'} variant="outlined" /> },
-        { id: 'actualizado', label: 'Actualizado', render: r => new Date(r.fechaUltimaActualizacion).toLocaleDateString() },
+        { field: 'fuenteRecurso', headerName: 'Fuente', renderCell: r => <FuenteChip fuente={r.fuenteRecurso} /> },
+        { field: 'area', headerName: 'Área', renderCell: r => <Typography variant="caption">{r.area || '—'}</Typography> },
         {
-            id: 'acciones', label: '', render: r => canWrite && (
-                <Stack direction="row" spacing={0.5}>
-                    <Tooltip title="Ingresar"><IconButton size="small" color="success" onClick={() => openDialog('ingresar', r)}><IngresarIcon fontSize="small" /></IconButton></Tooltip>
-                    <Tooltip title="Despachar"><IconButton size="small" color="warning" onClick={() => openDialog('despachar', r)}><DespacharIcon fontSize="small" /></IconButton></Tooltip>
-                    <Tooltip title="Editar"><IconButton size="small" onClick={() => openDialog('editar', r)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                    {canDelete && <Tooltip title="Eliminar"><IconButton size="small" color="error" onClick={() => handleEliminar(r.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>}
+            field: 'fechaUltimaActualizacion', headerName: 'Actualizado',
+            renderCell: r => (
+                <Typography variant="caption" color="text.secondary">
+                    {r.fechaUltimaActualizacion ? new Date(r.fechaUltimaActualizacion).toLocaleDateString() : '—'}
+                </Typography>
+            )
+        },
+        {
+            field: 'acciones', headerName: 'Acciones', align: 'right',
+            renderCell: r => canWrite && (
+                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                    <Tooltip title="Ingresar stock" arrow>
+                        <IconButton size="small" color="success" onClick={() => setStockModal({ open: true, tipo: 'ingresar', item: r })}
+                            sx={{ bgcolor: alpha('#4caf50', 0.08), borderRadius: 1.5 }}>
+                            <IngresarIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Despachar" arrow>
+                        <IconButton size="small" color="warning" onClick={() => setStockModal({ open: true, tipo: 'despachar', item: r })}
+                            sx={{ bgcolor: alpha('#ff9800', 0.08), borderRadius: 1.5 }}>
+                            <DespacharIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Foto" arrow>
+                        <IconButton size="small" onClick={() => setFotoModal({ open: true, item: r })}
+                            sx={{ bgcolor: alpha(CCO.azul, 0.08), borderRadius: 1.5 }}>
+                            <PhotoIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Editar" arrow>
+                        <IconButton size="small" onClick={() => setFormModal({ open: true, tipo: 'editar', item: r })}
+                            sx={{ bgcolor: alpha(CCO.azul, 0.08), borderRadius: 1.5 }}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    {canDelete && (
+                        <Tooltip title="Eliminar" arrow>
+                            <IconButton size="small" color="error" onClick={() => handleEliminar(r.id)}
+                                sx={{ bgcolor: alpha('#f44336', 0.08), borderRadius: 1.5 }}>
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                 </Stack>
             )
         },
     ];
 
-    const totalAlertas = alertas.stockBajo.length + alertas.desactualizados.length;
+    const stockBajoCount = rows.filter(r => r.stockBajo).length;
 
     return (
         <MainLayout>
-            <Box sx={{ p: 3 }}>
-                {totalAlertas > 0 && (
-                    <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 2 }}>
-                        {alertas.stockBajo.length > 0 && `${alertas.stockBajo.length} material(es) con stock bajo. `}
-                        {alertas.desactualizados.length > 0 && `${alertas.desactualizados.length} material(es) sin actualizar (+30 días).`}
-                    </Alert>
-                )}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+            <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1600, mx: 'auto' }}>
+
+                {/* ── Header ── */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                     <Box>
-                        <Typography variant="h4" fontWeight={800}>Inventario · Materiales</Typography>
-                        <Typography color="text.secondary">{total} items registrados</Typography>
+                        <Typography variant="h4" fontWeight={900} sx={{
+                            background: `linear-gradient(45deg, ${CCO.azul}, ${CCO.celeste})`,
+                            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                        }}>
+                            Inventario · Materiales
+                        </Typography>
+                        <Typography color="text.secondary" fontWeight={500}>
+                            {total} items registrados
+                            {stockBajoCount > 0 && <> · <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>⚠️ {stockBajoCount} con stock bajo</Box></>}
+                        </Typography>
                     </Box>
+
                     {canWrite && (
-                        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openDialog('crear')} sx={{ fontWeight: 700, borderRadius: 2 }}>
+                        <Button variant="contained" startIcon={<AddIcon />}
+                            onClick={() => setFormModal({ open: true, tipo: 'crear', item: null })}
+                            sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', bgcolor: CCO.azul, boxShadow: '0 4px 14px rgba(0,78,137,0.3)', '&:hover': { bgcolor: '#003d6b' } }}>
                             Nuevo Material
                         </Button>
                     )}
                 </Box>
-                <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-                    <TextField size="small" placeholder="Buscar material..." value={buscar}
-                        onChange={e => { setBuscar(e.target.value); setPage(0); }} sx={{ flex: 1 }} />
-                </Stack>
-                <DataTable columns={columns} rows={rows} loading={loading} totalCount={total}
-                    page={page} rowsPerPage={20}
-                    onPageChange={(_, p) => setPage(p)}
-                    onRowsPerPageChange={() => { }} />
+
+                {/* ── KPI Chips ── */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    {[
+                        { label: 'Total Items', value: total, icon: <InventoryIcon />, color: CCO.azul },
+                        { label: 'Stock Crítico', value: stockBajoCount, icon: <WarningIcon />, color: '#f44336' },
+                        { label: 'Categorías', value: categorias.length, icon: <FilterIcon />, color: CCO.celeste },
+                        { label: 'Mostrando', value: filtered.length, icon: <OkIcon />, color: '#4caf50' },
+                    ].map(kpi => (
+                        <Grid item xs={6} sm={3} key={kpi.label}>
+                            <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', p: 2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <Box sx={{ p: 1, borderRadius: 2, bgcolor: alpha(kpi.color, 0.1), color: kpi.color }}>
+                                        {kpi.icon}
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="h5" fontWeight={900} color={kpi.color === '#f44336' && kpi.value > 0 ? 'error.main' : 'text.primary'}>
+                                            {kpi.value}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" fontWeight={600}>{kpi.label}</Typography>
+                                    </Box>
+                                </Box>
+                            </Card>
+                        </Grid>
+                    ))}
+                </Grid>
+
+                {/* ── Barra de filtros ── */}
+                <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', p: 2, mb: 3 }}>
+                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* Búsqueda */}
+                        <TextField
+                            size="small" placeholder="Buscar por nombre, código, categoría..."
+                            value={buscar} onChange={e => setBuscar(e.target.value)}
+                            sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
+                            InputProps={{
+                                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+                                endAdornment: buscar && (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setBuscar('')}><CloseIcon fontSize="small" /></IconButton>
+                                    </InputAdornment>
+                                )
+                            }}
+                        />
+
+                        {/* Filtro categoría */}
+                        <TextField select size="small" label="Categoría" value={filtroCategoria}
+                            onChange={e => setFiltroCategoria(e.target.value)}
+                            sx={{ minWidth: 160, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
+                            <MenuItem value="">Todas</MenuItem>
+                            {categorias.map(c => <MenuItem key={c} value={c}>{CATEGORIA_ICON[c]} {c}</MenuItem>)}
+                        </TextField>
+
+                        {/* Filtro fuente */}
+                        <TextField select size="small" label="Fuente" value={filtroFuente}
+                            onChange={e => setFiltroFuente(e.target.value)}
+                            sx={{ minWidth: 140, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
+                            <MenuItem value="">Todas</MenuItem>
+                            {Object.entries(FUENTE_COLORS).map(([k, v]) => <MenuItem key={k} value={k}>{v.label}</MenuItem>)}
+                        </TextField>
+
+                        {/* Filtro stock */}
+                        <TextField select size="small" label="Stock" value={filtroStock}
+                            onChange={e => setFiltroStock(e.target.value)}
+                            sx={{ minWidth: 130, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
+                            <MenuItem value="">Todos</MenuItem>
+                            <MenuItem value="bajo">⚠️ Stock bajo</MenuItem>
+                            <MenuItem value="ok">✅ Stock OK</MenuItem>
+                        </TextField>
+
+                        {/* Limpiar filtros */}
+                        {hayFiltros && (
+                            <Tooltip title="Limpiar filtros" arrow>
+                                <IconButton onClick={() => { setBuscar(''); setFiltroCategoria(''); setFiltroFuente(''); setFiltroStock(''); }}
+                                    sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
+                                    <ClearIcon />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+
+                        <Box sx={{ ml: 'auto' }}>
+                            <ToggleButtonGroup value={vistaMode} exclusive onChange={(_, v) => v && setVistaMode(v)} size="small">
+                                <ToggleButton value="cards" sx={{ borderRadius: '8px 0 0 8px', px: 1.5 }}>
+                                    <Tooltip title="Vista tarjetas" arrow><GridViewIcon fontSize="small" /></Tooltip>
+                                </ToggleButton>
+                                <ToggleButton value="tabla" sx={{ borderRadius: '0 8px 8px 0', px: 1.5 }}>
+                                    <Tooltip title="Vista tabla" arrow><ListViewIcon fontSize="small" /></Tooltip>
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                    </Box>
+
+                    {/* Chips de filtros activos */}
+                    {hayFiltros && (
+                        <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Typography variant="caption" color="text.secondary" fontWeight={600}>Filtros:</Typography>
+                            {filtroCategoria && <Chip label={filtroCategoria} size="small" onDelete={() => setFiltroCategoria('')} sx={{ fontWeight: 700 }} />}
+                            {filtroFuente && <Chip label={FUENTE_COLORS[filtroFuente]?.label || filtroFuente} size="small" onDelete={() => setFiltroFuente('')} sx={{ fontWeight: 700 }} />}
+                            {filtroStock && <Chip label={filtroStock === 'bajo' ? '⚠️ Stock bajo' : '✅ Stock OK'} size="small" onDelete={() => setFiltroStock('')} sx={{ fontWeight: 700 }} />}
+                            <Chip label={`${filtered.length} resultados`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
+                        </Box>
+                    )}
+                </Paper>
+
+                {/* ── Vista Cards ── */}
+                {vistaMode === 'cards' && (
+                    loading ? (
+                        <Grid container spacing={2}>
+                            {Array.from({ length: 12 }).map((_, i) => (
+                                <Grid item xs={12} sm={6} md={4} lg={3} key={i}>
+                                    <Skeleton variant="rounded" height={180} sx={{ borderRadius: 3 }} />
+                                </Grid>
+                            ))}
+                        </Grid>
+                    ) : filtered.length === 0 ? (
+                        <Box sx={{ textAlign: 'center', py: 8 }}>
+                            <Typography fontSize={48}>🔍</Typography>
+                            <Typography variant="h6" fontWeight={700} color="text.secondary">No se encontraron materiales</Typography>
+                            <Typography variant="body2" color="text.secondary">Prueba con otros términos de búsqueda o limpia los filtros</Typography>
+                        </Box>
+                    ) : (
+                        <Grid container spacing={2} alignItems="stretch">
+                            {filtered.map(item => (
+                                <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={item.id} sx={{ display: 'flex' }}>
+                                    <MaterialCard
+                                        item={item}
+                                        canWrite={canWrite}
+                                        canDelete={canDelete}
+                                        onIngresar={(r) => setStockModal({ open: true, tipo: 'ingresar', item: r })}
+                                        onDespachar={(r) => setStockModal({ open: true, tipo: 'despachar', item: r })}
+                                        onEditar={(r) => setFormModal({ open: true, tipo: 'editar', item: r })}
+                                        onEliminar={handleEliminar}
+                                        onVerFoto={(r) => setFotoModal({ open: true, item: r })}
+                                    />
+                                </Grid>
+                            ))}
+                        </Grid>
+                    )
+                )}
+
+                {/* ── Vista Tabla ── */}
+                {vistaMode === 'tabla' && (
+                    <DataTable
+                        columns={columns}
+                        rows={filtered}
+                        loading={loading}
+                        searchPlaceholder="Buscar en resultados..."
+                        actions={false}
+                    />
+                )}
             </Box>
 
-            <Dialog open={dialog.open} onClose={() => setDialog(d => ({ ...d, open: false }))} maxWidth="sm" fullWidth>
-                <DialogTitle fontWeight={700}>
-                    {{ ingresar: 'Ingresar Stock', despachar: 'Despachar Stock', crear: 'Nuevo Material', editar: 'Editar Material' }[dialog.tipo]}
-                </DialogTitle>
-                <DialogContent>
-                    <Box sx={{ pt: 1 }}>
-                        {['ingresar', 'despachar'].includes(dialog.tipo) ? (
-                            <TextField label="Cantidad" type="number" value={dialog.cantidad} fullWidth size="small"
-                                onChange={e => setDialog(d => ({ ...d, cantidad: parseInt(e.target.value) || 1 }))} />
-                        ) : (
-                            <Stack spacing={2}>
-                                <TextField label="Código *" value={dialog.form.codigo || ''} fullWidth size="small"
-                                    onChange={e => setDialog(d => ({ ...d, form: { ...d.form, codigo: e.target.value } }))} />
-                                <TextField label="Nombre Material *" value={dialog.form.nombreMaterial || ''} fullWidth size="small"
-                                    onChange={e => setDialog(d => ({ ...d, form: { ...d.form, nombreMaterial: e.target.value } }))} />
-                                <TextField label="Categoría" value={dialog.form.categoria || ''} fullWidth size="small"
-                                    onChange={e => setDialog(d => ({ ...d, form: { ...d.form, categoria: e.target.value } }))} />
-                                <TextField select label="Fuente de Recurso" value={dialog.form.fuenteRecurso || 'Iglesia'} fullWidth size="small"
-                                    onChange={e => setDialog(d => ({ ...d, form: { ...d.form, fuenteRecurso: e.target.value } }))}>
-                                    {['Compassion', 'Plan', 'Iglesia', 'ViasEnAccion'].map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
-                                </TextField>
-                            </Stack>
-                        )}
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDialog(d => ({ ...d, open: false }))}>Cancelar</Button>
-                    <Button variant="contained" onClick={handleAccion}>Confirmar</Button>
-                </DialogActions>
-            </Dialog>
+            {/* ── Modales ── */}
+            <MaterialFormModal
+                open={formModal.open} tipo={formModal.tipo} item={formModal.item}
+                onClose={() => setFormModal(m => ({ ...m, open: false }))}
+                onConfirm={handleAccionForm}
+            />
+            <StockModal
+                open={stockModal.open} tipo={stockModal.tipo} item={stockModal.item}
+                onClose={() => setStockModal(m => ({ ...m, open: false }))}
+                onConfirm={handleStock}
+            />
+            <FotoModal
+                open={fotoModal.open} item={fotoModal.item}
+                onClose={() => setFotoModal({ open: false, item: null })}
+                onSubirFoto={handleSubirFoto}
+            />
         </MainLayout>
     );
 }

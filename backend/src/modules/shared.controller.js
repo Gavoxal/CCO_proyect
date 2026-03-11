@@ -1,5 +1,5 @@
-import { ok, created, noContent, notFound, paginated } from '../../utils/response.js'
-import { getPagination } from '../../utils/pagination.js'
+import { ok, created, noContent, notFound, paginated } from '../utils/response.js'
+import { getPagination } from '../utils/pagination.js'
 
 // CRUD genérico reusable para Miembros, Casas de Paz y Eventos
 

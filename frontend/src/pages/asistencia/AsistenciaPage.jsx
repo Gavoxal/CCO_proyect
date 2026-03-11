@@ -5,14 +5,17 @@ import {
     ToggleButtonGroup, Grid, TextField, Alert, Stack, Avatar,
     Paper, Tooltip, alpha, useTheme, IconButton, InputAdornment,
     Tab, Tabs, Table, TableBody, TableCell, TableHead, TableRow,
-    TablePagination, Badge, LinearProgress, Divider,
+    TablePagination, LinearProgress, Divider,
+    Dialog, DialogTitle, DialogContent, DialogActions, MenuItem,
 } from '@mui/material';
 import {
     Save as SaveIcon, ChecklistRtl as AsistenciaIcon,
     Search as SearchIcon, History as HistoryIcon,
-    PhotoCamera as PhotoIcon, Today as TodayIcon,
-    BarChart as ChartIcon,
+    Today as TodayIcon, BarChart as ChartIcon,
+    FileDownload as ExportIcon, Close as CloseIcon,
+    Group as GroupIcon, CheckCircle as CheckIcon,
 } from '@mui/icons-material';
+import * as XLSX from 'xlsx';
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
 
@@ -61,6 +64,25 @@ const MOCK_HISTORIAL = generateHistorial();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getInitials = (inf) => `${inf.persona?.nombres?.charAt(0) || ''}${inf.persona?.apellidos?.charAt(0) || ''}`;
 
+// ─── Helpers de exportación ───────────────────────────────────────────────────
+const PERIODOS = [
+    { value: 'mes', label: 'Este mes' },
+    { value: 'trimestre', label: 'Trimestre actual' },
+    { value: 'semestre', label: 'Semestre actual' },
+    { value: 'anual', label: 'Año completo' },
+];
+
+const getFechaInicio = (periodo) => {
+    const hoy = new Date();
+    switch (periodo) {
+        case 'mes': return new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+        case 'trimestre': return new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 3) * 3, 1).toISOString().split('T')[0];
+        case 'semestre': return new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 6) * 6, 1).toISOString().split('T')[0];
+        case 'anual': return new Date(hoy.getFullYear(), 0, 1).toISOString().split('T')[0];
+        default: return new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+    }
+};
+
 // ─── AsistenciaPage ───────────────────────────────────────────────────────────
 const AsistenciaPage = () => {
     const navigate = useNavigate();
@@ -80,6 +102,11 @@ const AsistenciaPage = () => {
         return init;
     });
     const [saving, setSaving] = useState(false);
+
+    // Exportar Excel
+    const [exportModal, setExportModal] = useState(false);
+    const [exportPeriodo, setExportPeriodo] = useState('mes');
+    const [exportando, setExportando] = useState(false);
 
     // Historial state
     const [histFiltroEstado, setHistFiltroEstado] = useState('');
@@ -152,6 +179,63 @@ const AsistenciaPage = () => {
         return { total, p, a, j, pct: Math.round((p / total) * 100) };
     }, []);
 
+    // ── Estadísticas del mes actual ───────────────────────────────────────────
+    const mesActual = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+    const statsDestesMes = useMemo(() => {
+        const registrosMes = MOCK_HISTORIAL.filter(r => r.fecha.startsWith(mesActual));
+        const infantesConAsistencia = new Set(
+            registrosMes.filter(r => r.estado === 'Presente').map(r => r.infanteId)
+        );
+        const diasUnicos = new Set(registrosMes.map(r => r.fecha)).size;
+        const totalPresencias = registrosMes.filter(r => r.estado === 'Presente').length;
+        const totalAusencias = registrosMes.filter(r => r.estado === 'Ausente').length;
+        const totalJustificados = registrosMes.filter(r => r.estado === 'Justificado').length;
+        return {
+            infantesAsistidos: infantesConAsistencia.size,
+            totalInfantes: MOCK_INFANTES.length,
+            pct: MOCK_INFANTES.length > 0 ? Math.round((infantesConAsistencia.size / MOCK_INFANTES.length) * 100) : 0,
+            dias: diasUnicos,
+            presencias: totalPresencias,
+            ausencias: totalAusencias,
+            justificados: totalJustificados,
+        };
+    }, [mesActual]);
+
+    // ── Exportar Excel ────────────────────────────────────────────────────────
+    const handleExportar = async () => {
+        setExportando(true);
+        await new Promise(r => setTimeout(r, 400)); // small delay for UX
+
+        const fechaInicio = getFechaInicio(exportPeriodo);
+        const datos = MOCK_HISTORIAL
+            .filter(r => r.fecha >= fechaInicio)
+            .sort((a, b) => a.fecha.localeCompare(b.fecha))
+            .map(r => ({
+                'Fecha': new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+                'Código': r.infante.codigo,
+                'Nombres': r.infante.persona.nombres,
+                'Apellidos': r.infante.persona.apellidos,
+                'Estado': r.estado,
+            }));
+
+        const ws = XLSX.utils.json_to_sheet(datos);
+
+        // Ancho de columnas
+        ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 14 }];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
+
+        const periodoLabel = PERIODOS.find(p => p.value === exportPeriodo)?.label || exportPeriodo;
+        const nombreArchivo = `Asistencia_${periodoLabel.replace(/ /g, '_')}_${new Date().toLocaleDateString('es-EC').replace(/\//g, '-')}.xlsx`;
+        XLSX.writeFile(wb, nombreArchivo);
+
+        setExportando(false);
+        setExportModal(false);
+        enqueueSnackbar(`Excel exportado: ${nombreArchivo}`, { variant: 'success' });
+    };
+
     return (
         <MainLayout>
             <Box sx={{ p: { xs: 1.5, md: 0 } }}>
@@ -167,6 +251,19 @@ const AsistenciaPage = () => {
                             Registra y consulta la asistencia de todos los infantes
                         </Typography>
                     </Box>
+                    {/* Botón exportar Excel */}
+                    <Button
+                        variant="outlined"
+                        startIcon={<ExportIcon />}
+                        onClick={() => setExportModal(true)}
+                        sx={{
+                            borderRadius: 3, px: 2.5, py: 1.1, fontWeight: 700,
+                            textTransform: 'none', borderColor: '#2e7d32', color: '#2e7d32',
+                            '&:hover': { bgcolor: alpha('#2e7d32', 0.06), borderColor: '#1b5e20' }
+                        }}
+                    >
+                        Exportar Excel
+                    </Button>
                 </Box>
 
                 {/* ── Tabs ─────────────────────────────────────────── */}
@@ -214,36 +311,98 @@ const AsistenciaPage = () => {
                             </Button>
                         </Stack>
 
-                        {/* Resumen / Conteo */}
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
-                            <Card elevation={0} sx={{ flex: 1, border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
-                                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                                    <Stack direction="row" spacing={2} justifyContent="center" alignItems="center">
-                                        {Object.entries(conteo).map(([estado, cnt]) => (
-                                            <Tooltip key={estado} title={`Marcar todos como ${estado}`}>
-                                                <Chip
-                                                    label={`${EMOJI[estado]} ${cnt} ${estado}`}
-                                                    color={ESTADO_COLORS[estado]}
-                                                    variant="outlined"
-                                                    sx={{ fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}
-                                                    onClick={() => marcarTodos(estado)}
-                                                />
-                                            </Tooltip>
-                                        ))}
-                                        <Divider orientation="vertical" flexItem />
-                                        <Chip
-                                            label={`${porcentajeAsist}% asistencia`}
+                        {/* ── Estadísticas del mes actual ── */}
+                        <Card elevation={0} sx={{
+                            border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3,
+                            background: isDark
+                                ? `linear-gradient(135deg, ${alpha(CCO.azul, 0.12)}, ${alpha(CCO.violeta, 0.08)})`
+                                : `linear-gradient(135deg, ${alpha(CCO.azul, 0.04)}, ${alpha(CCO.violeta, 0.03)})`,
+                        }}>
+                            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <GroupIcon fontSize="small" sx={{ color: CCO.azul }} />
+                                    Asistencia del mes · {new Date().toLocaleDateString('es-EC', { month: 'long', year: 'numeric' })}
+                                </Typography>
+                                <Grid container spacing={2} alignItems="center">
+                                    {/* Barra principal infantes */}
+                                    <Grid item xs={12} md={6}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                                            <Typography variant="body2" color="text.secondary">Infantes con asistencia este mes</Typography>
+                                            <Typography variant="body2" fontWeight={800} color={statsDestesMes.pct >= 80 ? 'success.main' : statsDestesMes.pct >= 50 ? 'warning.main' : 'error.main'}>
+                                                {statsDestesMes.infantesAsistidos} / {statsDestesMes.totalInfantes}
+                                            </Typography>
+                                        </Box>
+                                        <LinearProgress
+                                            variant="determinate" value={statsDestesMes.pct}
                                             sx={{
-                                                fontWeight: 700, fontSize: '0.82rem',
-                                                bgcolor: alpha(porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350', 0.1),
-                                                color: porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350',
-                                                border: `1px solid ${alpha(porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350', 0.3)}`,
+                                                height: 12, borderRadius: 6,
+                                                bgcolor: alpha(statsDestesMes.pct >= 80 ? '#4caf50' : statsDestesMes.pct >= 50 ? '#ff9800' : '#ef5350', 0.15),
+                                                '& .MuiLinearProgress-bar': {
+                                                    borderRadius: 6,
+                                                    background: statsDestesMes.pct >= 80
+                                                        ? 'linear-gradient(90deg, #4caf50, #81c784)'
+                                                        : statsDestesMes.pct >= 50
+                                                            ? 'linear-gradient(90deg, #ff9800, #ffb74d)'
+                                                            : 'linear-gradient(90deg, #ef5350, #e57373)',
+                                                }
                                             }}
                                         />
-                                    </Stack>
-                                </CardContent>
-                            </Card>
-                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                            {statsDestesMes.pct}% de participación · {statsDestesMes.dias} día(s) registrado(s)
+                                        </Typography>
+                                    </Grid>
+                                    {/* Mini KPIs del mes */}
+                                    <Grid item xs={12} md={6}>
+                                        <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
+                                            {[
+                                                { label: 'Presencias', value: statsDestesMes.presencias, color: '#4caf50', emoji: '✅' },
+                                                { label: 'Ausencias', value: statsDestesMes.ausencias, color: '#ef5350', emoji: '❌' },
+                                                { label: 'Justificados', value: statsDestesMes.justificados, color: '#ff9800', emoji: '⚠️' },
+                                            ].map(k => (
+                                                <Box key={k.label} sx={{
+                                                    textAlign: 'center', p: 1.5, borderRadius: 2,
+                                                    bgcolor: alpha(k.color, 0.08), minWidth: 80,
+                                                    border: `1px solid ${alpha(k.color, 0.2)}`
+                                                }}>
+                                                    <Typography fontSize={18}>{k.emoji}</Typography>
+                                                    <Typography fontWeight={900} fontSize={20} color={k.color}>{k.value}</Typography>
+                                                    <Typography variant="caption" color="text.secondary" fontWeight={600}>{k.label}</Typography>
+                                                </Box>
+                                            ))}
+                                        </Stack>
+                                    </Grid>
+                                </Grid>
+                            </CardContent>
+                        </Card>
+
+                        {/* ── Conteo del día actual + Marcar todos ── */}
+                        <Card elevation={0} sx={{ flex: 1, border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3 }}>
+                            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                <Stack direction="row" spacing={2} justifyContent="center" alignItems="center" flexWrap="wrap">
+                                    {Object.entries(conteo).map(([estado, cnt]) => (
+                                        <Tooltip key={estado} title={`Marcar todos como ${estado}`}>
+                                            <Chip
+                                                label={`${EMOJI[estado]} ${cnt} ${estado}`}
+                                                color={ESTADO_COLORS[estado]}
+                                                variant="outlined"
+                                                sx={{ fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}
+                                                onClick={() => marcarTodos(estado)}
+                                            />
+                                        </Tooltip>
+                                    ))}
+                                    <Divider orientation="vertical" flexItem />
+                                    <Chip
+                                        label={`${porcentajeAsist}% hoy`}
+                                        sx={{
+                                            fontWeight: 700, fontSize: '0.82rem',
+                                            bgcolor: alpha(porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350', 0.1),
+                                            color: porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350',
+                                            border: `1px solid ${alpha(porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350', 0.3)}`,
+                                        }}
+                                    />
+                                </Stack>
+                            </CardContent>
+                        </Card>
 
                         {/* Tabla de asistencia */}
                         <Paper elevation={0} sx={{ borderRadius: 3, overflow: 'hidden', border: `1px solid ${theme.palette.divider}` }}>
@@ -457,6 +616,73 @@ const AsistenciaPage = () => {
                     </Box>
                 )}
             </Box>
+
+            {/* ── Modal de Exportación Excel ── */}
+            <Dialog open={exportModal} onClose={() => setExportModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ExportIcon sx={{ color: '#2e7d32' }} />
+                        <Typography fontWeight={800}>Exportar Asistencia</Typography>
+                    </Box>
+                    <IconButton size="small" onClick={() => setExportModal(false)}><CloseIcon /></IconButton>
+                </DialogTitle>
+                <Divider />
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, mt: 1 }}>
+                        Selecciona el período de asistencia que deseas exportar al archivo Excel.
+                    </Typography>
+                    <Stack spacing={1.5}>
+                        {PERIODOS.map(p => {
+                            const fechaInicio = getFechaInicio(p.value);
+                            const registros = MOCK_HISTORIAL.filter(r => r.fecha >= fechaInicio).length;
+                            return (
+                                <Box
+                                    key={p.value}
+                                    onClick={() => setExportPeriodo(p.value)}
+                                    sx={{
+                                        p: 1.75, borderRadius: 2.5, cursor: 'pointer',
+                                        border: `2px solid`,
+                                        borderColor: exportPeriodo === p.value ? '#2e7d32' : 'divider',
+                                        bgcolor: exportPeriodo === p.value ? alpha('#2e7d32', 0.06) : 'transparent',
+                                        transition: 'all 0.15s ease',
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        '&:hover': { borderColor: '#2e7d32', bgcolor: alpha('#2e7d32', 0.04) }
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        {exportPeriodo === p.value
+                                            ? <CheckIcon sx={{ color: '#2e7d32', fontSize: 20 }} />
+                                            : <Box sx={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid', borderColor: 'divider' }} />
+                                        }
+                                        <Typography fontWeight={700} fontSize={14}>{p.label}</Typography>
+                                    </Box>
+                                    <Chip label={`${registros} registros`} size="small"
+                                        sx={{ fontWeight: 700, fontSize: 11, bgcolor: alpha('#2e7d32', 0.08), color: '#2e7d32' }} />
+                                </Box>
+                            );
+                        })}
+                    </Stack>
+                    <Box sx={{ mt: 2.5, p: 1.5, borderRadius: 2, bgcolor: alpha('#2e7d32', 0.05) }}>
+                        <Typography variant="caption" color="text.secondary">
+                            📄 Se generará un archivo <strong>.xlsx</strong> con fecha, código, nombre, apellidos y estado de asistencia.
+                        </Typography>
+                    </Box>
+                </DialogContent>
+                <Divider />
+                <DialogActions sx={{ p: 2, gap: 1 }}>
+                    <Button onClick={() => setExportModal(false)} color="inherit" sx={{ borderRadius: 2, fontWeight: 700 }}>Cancelar</Button>
+                    <Button
+                        variant="contained" startIcon={<ExportIcon />}
+                        onClick={handleExportar} disabled={exportando}
+                        sx={{
+                            borderRadius: 3, px: 3, fontWeight: 800, textTransform: 'none',
+                            bgcolor: '#2e7d32', '&:hover': { bgcolor: '#1b5e20' }
+                        }}
+                    >
+                        {exportando ? 'Generando...' : 'Descargar Excel'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </MainLayout>
     );
 };

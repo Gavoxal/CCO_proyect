@@ -87,6 +87,13 @@ export const materialesService = {
     despachar: (id, cantidad) => api.patch(`/inventario/materiales/${id}/despachar`, { cantidad }).then(r => r.data),
     ingresar: (id, cantidad) => api.patch(`/inventario/materiales/${id}/ingresar`, { cantidad }).then(r => r.data),
     alertas: () => api.get('/inventario/materiales/alertas').then(r => r.data),
+    subirFoto: (id, file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return api.post(`/inventario/materiales/${id}/foto`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }).then(r => r.data);
+    },
 };
 
 export const alimentosService = {
