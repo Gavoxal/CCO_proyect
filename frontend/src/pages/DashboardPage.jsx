@@ -241,13 +241,13 @@ const TabMinisterio = ({ d }) => {
                 </Grid>
             </Grid>
 
-            <Grid container spacing={2.5}>
+            <Grid container spacing={2.5} alignItems="stretch">
                 {/* Regalos */}
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
                     <SectionTitle action={<GoBtn to="/regalos" label="Ver regalos" />}>
                         🎁 Regalos y Kits {new Date().getFullYear()}
                     </SectionTitle>
-                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3 }}>
+                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3, flex: 1 }}>
                         <CardContent sx={{ p: 3 }}>
                             <ProgressBar label="Regalos de Navidad" value={d.navEntregados}  total={d.navTotal}  color="#ef5350" />
                             <ProgressBar label="Kits Escolares"     value={d.kitsEntregados} total={d.kitsTotal} color={CCO.azul} />
@@ -258,9 +258,9 @@ const TabMinisterio = ({ d }) => {
                 </Grid>
 
                 {/* Cumpleaños */}
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
                     <SectionTitle>🎂 Cumpleaños este Mes</SectionTitle>
-                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3 }}>
+                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3, flex: 1 }}>
                         <CardContent sx={{ p: 3 }}>
                             {d.cumplesMes.length === 0 ? (
                                 <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
@@ -292,6 +292,58 @@ const TabMinisterio = ({ d }) => {
                                     ))}
                                 </List>
                             )}
+                        </CardContent>
+                    </Card>
+                </Grid>
+
+                {/* Próximos Eventos del Ministerio */}
+                <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <SectionTitle action={<GoBtn to="/calendario" label="Ver calendario" />}>
+                        📅 Próximos Eventos
+                    </SectionTitle>
+                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3, flex: 1 }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <List disablePadding>
+                                {[
+                                    { id: 1, titulo: 'Entrega Kits Escolares',   fecha: '2026-03-27T09:00:00', desc: 'Entrega masiva de kits a infantes' },
+                                    { id: 2, titulo: 'Visitas Domiciliarias',     fecha: '2026-03-30T08:00:00', desc: 'Visitas a familias del ministerio' },
+                                    { id: 3, titulo: 'Día del Niño — Actividad', fecha: '2026-04-05T10:00:00', desc: 'Celebración especial para infantes' },
+                                    { id: 4, titulo: 'Entrega Regalos Navidad',  fecha: '2026-12-15T09:00:00', desc: 'Entrega anual de regalos de Navidad' },
+                                ].map((ev, i, arr) => {
+                                    const f = new Date(ev.fecha);
+                                    return (
+                                        <Box key={ev.id}>
+                                            <ListItem disableGutters sx={{ py: 1.25, alignItems: 'flex-start' }}>
+                                                <ListItemAvatar>
+                                                    <Box sx={{
+                                                        width: 44, height: 44, borderRadius: 2,
+                                                        bgcolor: alpha(CCO.violeta, 0.12),
+                                                        border: `1px solid ${alpha(CCO.violeta, 0.25)}`,
+                                                        display: 'flex', flexDirection: 'column',
+                                                        alignItems: 'center', justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                    }}>
+                                                        <Typography sx={{ fontSize: 14, fontWeight: 900, color: CCO.violeta, lineHeight: 1 }}>
+                                                            {f.getDate()}
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: 8, fontWeight: 700, color: CCO.violeta, lineHeight: 1, mt: 0.25, opacity: 0.85 }}>
+                                                            {f.toLocaleString('es-EC', { month: 'short' }).toUpperCase()}
+                                                        </Typography>
+                                                    </Box>
+                                                </ListItemAvatar>
+                                                <ListItemText
+                                                    primary={ev.titulo}
+                                                    secondary={ev.desc}
+                                                    primaryTypographyProps={{ fontWeight: 800, fontSize: '0.85rem' }}
+                                                    secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                                                    sx={{ pl: 0.5 }}
+                                                />
+                                            </ListItem>
+                                            {i < arr.length - 1 && <Divider />}
+                                        </Box>
+                                    );
+                                })}
+                            </List>
                         </CardContent>
                     </Card>
                 </Grid>

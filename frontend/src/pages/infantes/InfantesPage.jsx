@@ -186,11 +186,38 @@ const InfantesPage = () => {
     const { enqueueSnackbar } = useSnackbar();
     const fileInputRef = useRef(null);
 
-    const [infantes, setInfantes] = useState(MOCK_INFANTES);
+    const getLocalInfantes = () => {
+        try {
+            const s = localStorage.getItem('cco_infantes_v2');
+            if (s) {
+                const parsed = JSON.parse(s);
+                return parsed.length > 0 ? parsed : MOCK_INFANTES;
+            }
+        } catch {}
+        localStorage.setItem('cco_infantes_v2', JSON.stringify(MOCK_INFANTES));
+        return MOCK_INFANTES;
+    };
+
+    const [infantes, setInfantes] = useState(getLocalInfantes);
     const [search, setSearch] = useState('');
     const [filtroPat, setFiltroPat] = useState('');
-    const [filtroProg, setFiltroProg] = useState('');
+    const [filtroTutor, setFiltroTutor] = useState('');
     const [page, setPage] = useState(0);
+
+    const getTutorName = (row) => {
+        if (row.persona?.tutor) return row.persona.tutor;
+        if (row.tutor?.persona) return `${row.tutor.persona.nombres} ${row.tutor.persona.apellidos}`.trim();
+        return '—';
+    };
+
+    const tutoresDisponibles = useMemo(() => {
+        const set = new Set();
+        infantes.forEach(i => {
+            const name = getTutorName(i);
+            if (name && name !== '—') set.add(name);
+        });
+        return Array.from(set).sort();
+    }, [infantes]);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [orderBy, setOrderBy] = useState('');
     const [order, setOrder] = useState('asc');
@@ -217,9 +244,9 @@ const InfantesPage = () => {
         }
         if (filtroPat === 'true') res = res.filter(i => i.esPatrocinado);
         if (filtroPat === 'false') res = res.filter(i => !i.esPatrocinado);
-        if (filtroProg) res = res.filter(i => i.tipoPrograma === filtroProg);
+        if (filtroTutor) res = res.filter(i => getTutorName(i) === filtroTutor);
         return res;
-    }, [infantes, search, filtroPat, filtroProg]);
+    }, [infantes, search, filtroPat, filtroTutor]);
 
     // Ordenamiento
     const sorted = useMemo(() => {
@@ -245,7 +272,9 @@ const InfantesPage = () => {
 
     const handleEliminar = (id) => {
         if (!window.confirm('¿Eliminar este infante? Esta acción no se puede deshacer.')) return;
-        setInfantes(prev => prev.filter(i => i.id !== id));
+        const nuevos = infantes.filter(i => i.id !== id);
+        setInfantes(nuevos);
+        localStorage.setItem('cco_infantes_v2', JSON.stringify(nuevos));
         enqueueSnackbar('Infante eliminado', { variant: 'success' });
     };
 
@@ -376,13 +405,13 @@ const InfantesPage = () => {
                         <MenuItem value="true">Patrocinados</MenuItem>
                         <MenuItem value="false">No patrocinados</MenuItem>
                     </TextField>
-                    <TextField select size="small" label="Programa" value={filtroProg}
-                        onChange={(e) => { setFiltroProg(e.target.value); setPage(0); }}
-                        sx={{ minWidth: 150 }}>
+                    <TextField select size="small" label="Tutor" value={filtroTutor}
+                        onChange={(e) => { setFiltroTutor(e.target.value); setPage(0); }}
+                        sx={{ minWidth: 160 }}>
                         <MenuItem value="">Todos</MenuItem>
-                        <MenuItem value="Ministerio">Ministerio</MenuItem>
-                        <MenuItem value="Comedor">Comedor</MenuItem>
-                        <MenuItem value="Ambos">Ambos</MenuItem>
+                        {tutoresDisponibles.map(t => (
+                            <MenuItem key={t} value={t}>{t}</MenuItem>
+                        ))}
                     </TextField>
                 </Stack>
 
@@ -399,7 +428,6 @@ const InfantesPage = () => {
                                         { id: 'edad', label: 'Edad', sort: true, w: 70 },
                                         { id: 'tutor', label: 'Tutor', sort: false, w: 150 },
                                         { id: 'patrocinado', label: 'Patrocinado', sort: false, w: 110 },
-                                        { id: 'programa', label: 'Programa', sort: false, w: 110 },
                                         { id: 'fotoEstado', label: 'Foto Estado', sort: false, w: 110 },
                                     ].map(col => (
                                         <TableCell key={col.id} sx={{
@@ -474,17 +502,13 @@ const InfantesPage = () => {
                                             {/* Tutor */}
                                             <TableCell>
                                                 <Typography variant="body2" fontSize="0.82rem">
-                                                    {row.tutor ? `${row.tutor.persona.nombres} ${row.tutor.persona.apellidos}` : '—'}
+                                                    {getTutorName(row)}
                                                 </Typography>
                                             </TableCell>
                                             {/* Patrocinado */}
                                             <TableCell>
                                                 <Chip label={row.esPatrocinado ? row.fuentePatrocinio : 'No'} size="small"
                                                     color={row.esPatrocinado ? 'success' : 'default'} variant="outlined" sx={{ fontWeight: 600 }} />
-                                            </TableCell>
-                                            {/* Programa */}
-                                            <TableCell>
-                                                <Chip label={row.tipoPrograma} size="small" color={PROGRAMA_COLORS[row.tipoPrograma] || 'default'} variant="filled" sx={{ fontWeight: 600 }} />
                                             </TableCell>
                                             {/* Foto Estado */}
                                             <TableCell>

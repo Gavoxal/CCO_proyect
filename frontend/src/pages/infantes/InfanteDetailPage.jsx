@@ -12,7 +12,7 @@ import {
     Home as HomeIcon, Badge as BadgeIcon, LocalHospital as MedIcon,
     CalendarMonth as CalIcon, CheckCircle as CheckIcon,
     Cancel as CancelIcon, Warning as WarningIcon,
-    PhotoCamera as PhotoIcon,
+    PhotoCamera as PhotoIcon, Explore as MapIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
@@ -146,9 +146,20 @@ const InfanteDetailPage = () => {
 
     const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
 
-    // Cargar infante (mock)
-    const infante = MOCK_INFANTES[id] || generateBasicDetail(Number(id));
-    const p = infante.persona;
+    // Cargar infante (local storage fallback)
+    const infante = useMemo(() => {
+        try {
+            const s = localStorage.getItem('cco_infantes_v2');
+            if (s) {
+                const arr = JSON.parse(s);
+                const found = arr.find(i => String(i.id) === String(id));
+                if (found) return found;
+            }
+        } catch {}
+        return MOCK_INFANTES[id] || generateBasicDetail(Number(id));
+    }, [id]);
+
+    const p = infante.persona || {};
     const edad = calcEdad(p.fechaNacimiento);
     const anio = new Date().getFullYear();
 
@@ -320,10 +331,10 @@ const InfanteDetailPage = () => {
                             },
                             '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', py: 1.8 },
                         }}>
-                        <Tab label="📋 Datos Personales" />
-                        <Tab label={`📊 Asistencia (${asistStats.total})`} />
-                        <Tab label={`🏠 Visitas (${infante.visitas?.length || 0})`} />
-                        <Tab label={`🎁 Regalos (${infante.regalos?.length || 0})`} />
+                        <Tab label="Datos Personales" icon={<BadgeIcon />} iconPosition="start" />
+                        <Tab label={`Asistencia (${asistStats.total})`} icon={<CalIcon />} iconPosition="start" />
+                        <Tab label={`Visitas (${infante.visitas?.length || 0})`} icon={<HomeIcon />} iconPosition="start" />
+                        <Tab label={`Regalos (${infante.regalos?.length || 0})`} icon={<CakeIcon />} iconPosition="start" />
                     </Tabs>
                 </Paper>
 
@@ -371,6 +382,27 @@ const InfanteDetailPage = () => {
                                 </CardContent>
                             </Card>
                         </Grid>
+
+                        {/* Mapa GPS en ancho completo */}
+                        {p.ubicacionGps && (
+                            <Grid item xs={12}>
+                                <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
+                                    <CardContent sx={{ p: 3 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                            <MapIcon sx={{ color: CCO.azul, fontSize: 20 }} />
+                                            <Typography variant="subtitle1" fontWeight={700}>Ubicación GPS (Google Maps)</Typography>
+                                        </Box>
+                                        <Box sx={{ width: '100%', height: 350, borderRadius: 3, overflow: 'hidden', border: `1px solid ${theme.palette.divider}` }}>
+                                            <iframe
+                                                width="100%" height="100%" style={{ border: 0 }} loading="lazy" allowFullScreen
+                                                src={`https://maps.google.com/maps?q=${encodeURIComponent(p.ubicacionGps)}&hl=es&z=15&output=embed`}
+                                                title="Ubicación GPS"
+                                            />
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        )}
                     </Grid>
                 )}
 
