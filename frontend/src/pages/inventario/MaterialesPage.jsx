@@ -43,6 +43,7 @@ const FUENTE_COLORS = {
 // ─── MOCK DATA (250 items representados en demo) ──────────────
 const MOCK_CATEGORIAS = ['Útiles escolares', 'Limpieza', 'Ropa', 'Calzado', 'Juguetes', 'Tecnología', 'Mobiliario', 'Botiquín', 'Papelería', 'Herramientas'];
 const MOCK_FUENTES = ['Compassion', 'Plan', 'Iglesia', 'ViasEnAccion'];
+const PERTENECE_OPTIONS = ['Iglesia', 'Ministerio'];
 
 const generarMock = () => {
     const items = [
@@ -85,10 +86,12 @@ const generarMock = () => {
             cantidadDisponible: stock,
             stockMinimo: it.stockMin,
             stockBajo: stock < it.stockMin,
-            fotografia: null, // dejado vacío, listo para foto real
+            fotografia: null,
             area: ['Ministerio', 'Administración', 'Cocina'][i % 3],
             marca: '',
             numeroserie: '',
+            fungible: i % 2 === 0 ? 'Fungible' : 'No Fungible',
+            pertenece: PERTENECE_OPTIONS[i % 2],
             fechaUltimaActualizacion: new Date(Date.now() - Math.random() * 60 * 24 * 3600 * 1000).toISOString(),
         };
     });
@@ -208,8 +211,32 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
                             {item.codigo} · {item.categoria}
                         </Typography>
                         {/* Chip fuente — altura fija siempre presente */}
-                        <Box sx={{ mt: 0.75, height: 22, display: 'flex', alignItems: 'center' }}>
+                        <Box sx={{ mt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                             <FuenteChip fuente={item.fuenteRecurso} />
+                            {item.fungible && (
+                                <Chip
+                                    label={item.fungible === 'Fungible' ? '🔄 Fungible' : '🔒 No Fungible'}
+                                    size="small"
+                                    sx={{
+                                        fontSize: 9, fontWeight: 700,
+                                        bgcolor: item.fungible === 'Fungible' ? alpha(CCO.naranja, 0.12) : alpha(CCO.azul, 0.12),
+                                        color: item.fungible === 'Fungible' ? CCO.naranja : CCO.azul,
+                                        border: `1px solid ${alpha(item.fungible === 'Fungible' ? CCO.naranja : CCO.azul, 0.3)}`,
+                                    }}
+                                />
+                            )}
+                            {item.pertenece && (
+                                <Chip
+                                    label={item.pertenece === 'Iglesia' ? '⛪ Iglesia' : '🎵 Ministerio'}
+                                    size="small"
+                                    sx={{
+                                        fontSize: 9, fontWeight: 700,
+                                        bgcolor: item.pertenece === 'Iglesia' ? alpha(CCO.celeste, 0.15) : alpha(CCO.violeta, 0.12),
+                                        color: item.pertenece === 'Iglesia' ? '#2e7d32' : CCO.violeta,
+                                        border: `1px solid ${alpha(item.pertenece === 'Iglesia' ? CCO.celeste : CCO.violeta, 0.35)}`,
+                                    }}
+                                />
+                            )}
                         </Box>
                     </Box>
                 </Box>
@@ -273,7 +300,7 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
 
 // ─── MODAL: FORMULARIO MATERIAL ───────────────────────────────
 function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
-    const EMPTY = { codigo: '', nombreMaterial: '', categoria: '', fuenteRecurso: 'Iglesia', area: '', marca: '', numeroserie: '', stockMinimo: 5 };
+    const EMPTY = { codigo: '', nombreMaterial: '', categoria: '', fuenteRecurso: 'Iglesia', area: '', marca: '', numeroserie: '', stockMinimo: 5, fungible: 'Fungible', pertenece: 'Iglesia' };
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
 
@@ -310,6 +337,34 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
                     <TextField select label="Fuente de Recurso" value={form.fuenteRecurso} onChange={e => set('fuenteRecurso', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
                         {Object.entries(FUENTE_COLORS).map(([k, v]) => <MenuItem key={k} value={k}>{v.label}</MenuItem>)}
                     </TextField>
+
+                    {/* ── Tipo: Fungible / No Fungible ── */}
+                    <Box>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 0.75, display: 'block' }}>Tipo de material</Typography>
+                        <ToggleButtonGroup
+                            exclusive
+                            value={form.fungible}
+                            onChange={(_, v) => v && set('fungible', v)}
+                            size="small"
+                            fullWidth
+                        >
+                            <ToggleButton value="Fungible" sx={{ flex: 1, borderRadius: '8px 0 0 8px', fontWeight: 700, fontSize: 12,
+                                '&.Mui-selected': { bgcolor: alpha(CCO.naranja, 0.15), color: CCO.naranja, borderColor: alpha(CCO.naranja, 0.4) } }}>
+                                🔄 Fungible
+                            </ToggleButton>
+                            <ToggleButton value="No Fungible" sx={{ flex: 1, borderRadius: '0 8px 8px 0', fontWeight: 700, fontSize: 12,
+                                '&.Mui-selected': { bgcolor: alpha(CCO.azul, 0.15), color: CCO.azul, borderColor: alpha(CCO.azul, 0.4) } }}>
+                                🔒 No Fungible
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Box>
+
+                    {/* ── Pertenece: Iglesia / Ministerio ── */}
+                    <TextField select label="Pertenece a" value={form.pertenece || 'Iglesia'} onChange={e => set('pertenece', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
+                        <MenuItem value="Iglesia">⛪ Iglesia</MenuItem>
+                        <MenuItem value="Ministerio">🎵 Ministerio</MenuItem>
+                    </TextField>
+
                     <Box sx={{ display: 'flex', gap: 2 }}>
                         <TextField label="Marca" value={form.marca || ''} onChange={e => set('marca', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                         <TextField label="N° Serie / Código de Barras" value={form.numeroserie || ''} onChange={e => set('numeroserie', e.target.value)} size="small" sx={{ flex: 1.5, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
@@ -490,6 +545,8 @@ export default function MaterialesPage() {
     const [filtroCategoria, setFiltroCategoria] = useState('');
     const [filtroFuente, setFiltroFuente] = useState('');
     const [filtroStock, setFiltroStock] = useState(''); // 'bajo' | 'ok' | ''
+    const [filtroFungible, setFiltroFungible] = useState(''); // 'Fungible' | 'No Fungible' | ''
+    const [filtroPertenece, setFiltroPertenece] = useState(''); // 'Iglesia' | 'Ministerio' | ''
 
     // Vista
     const [vistaMode, setVistaMode] = useState('cards'); // 'cards' | 'tabla'
@@ -532,14 +589,16 @@ export default function MaterialesPage() {
             if (filtroFuente && r.fuenteRecurso !== filtroFuente) return false;
             if (filtroStock === 'bajo' && !r.stockBajo) return false;
             if (filtroStock === 'ok' && r.stockBajo) return false;
+            if (filtroFungible && r.fungible !== filtroFungible) return false;
+            if (filtroPertenece && r.pertenece !== filtroPertenece) return false;
             return true;
         });
-    }, [rows, buscar, filtroCategoria, filtroFuente, filtroStock]);
+    }, [rows, buscar, filtroCategoria, filtroFuente, filtroStock, filtroFungible, filtroPertenece]);
 
     // Categorías únicas para los filtros
     const categorias = useMemo(() => [...new Set(rows.map(r => r.categoria).filter(Boolean))].sort(), [rows]);
 
-    const hayFiltros = buscar || filtroCategoria || filtroFuente || filtroStock;
+    const hayFiltros = buscar || filtroCategoria || filtroFuente || filtroStock || filtroFungible || filtroPertenece;
 
     // ── Handlers ──────────────────────────────────────────────
     const handleAccionForm = async (form) => {
@@ -623,6 +682,36 @@ export default function MaterialesPage() {
         },
         { field: 'fuenteRecurso', headerName: 'Fuente', renderCell: r => <FuenteChip fuente={r.fuenteRecurso} /> },
         { field: 'area', headerName: 'Área', renderCell: r => <Typography variant="caption">{r.area || '—'}</Typography> },
+        {
+            field: 'fungible', headerName: 'Tipo',
+            renderCell: r => r.fungible ? (
+                <Chip
+                    label={r.fungible === 'Fungible' ? '🔄 Fungible' : '🔒 No Fungible'}
+                    size="small"
+                    sx={{
+                        fontSize: 10, fontWeight: 700,
+                        bgcolor: r.fungible === 'Fungible' ? alpha(CCO.naranja, 0.12) : alpha(CCO.azul, 0.12),
+                        color: r.fungible === 'Fungible' ? CCO.naranja : CCO.azul,
+                        border: `1px solid ${alpha(r.fungible === 'Fungible' ? CCO.naranja : CCO.azul, 0.3)}`,
+                    }}
+                />
+            ) : <Typography variant="caption" color="text.secondary">—</Typography>
+        },
+        {
+            field: 'pertenece', headerName: 'Pertenece',
+            renderCell: r => r.pertenece ? (
+                <Chip
+                    label={r.pertenece === 'Iglesia' ? '⛪ Iglesia' : '🎵 Ministerio'}
+                    size="small"
+                    sx={{
+                        fontSize: 10, fontWeight: 700,
+                        bgcolor: r.pertenece === 'Iglesia' ? alpha(CCO.celeste, 0.15) : alpha(CCO.violeta, 0.12),
+                        color: r.pertenece === 'Iglesia' ? '#2e7d32' : CCO.violeta,
+                        border: `1px solid ${alpha(r.pertenece === 'Iglesia' ? CCO.celeste : CCO.violeta, 0.35)}`,
+                    }}
+                />
+            ) : <Typography variant="caption" color="text.secondary">—</Typography>
+        },
         {
             field: 'fechaUltimaActualizacion', headerName: 'Actualizado',
             renderCell: r => (
@@ -771,10 +860,28 @@ export default function MaterialesPage() {
                             <MenuItem value="ok">✅ Stock OK</MenuItem>
                         </TextField>
 
+                        {/* Filtro Fungible */}
+                        <TextField select size="small" label="Tipo" value={filtroFungible}
+                            onChange={e => setFiltroFungible(e.target.value)}
+                            sx={{ minWidth: 140, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
+                            <MenuItem value="">Todos</MenuItem>
+                            <MenuItem value="Fungible">🔄 Fungible</MenuItem>
+                            <MenuItem value="No Fungible">🔒 No Fungible</MenuItem>
+                        </TextField>
+
+                        {/* Filtro Pertenece */}
+                        <TextField select size="small" label="Pertenece" value={filtroPertenece}
+                            onChange={e => setFiltroPertenece(e.target.value)}
+                            sx={{ minWidth: 140, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
+                            <MenuItem value="">Todos</MenuItem>
+                            <MenuItem value="Iglesia">⛪ Iglesia</MenuItem>
+                            <MenuItem value="Ministerio">🎵 Ministerio</MenuItem>
+                        </TextField>
+
                         {/* Limpiar filtros */}
                         {hayFiltros && (
                             <Tooltip title="Limpiar filtros" arrow>
-                                <IconButton onClick={() => { setBuscar(''); setFiltroCategoria(''); setFiltroFuente(''); setFiltroStock(''); }}
+                                <IconButton onClick={() => { setBuscar(''); setFiltroCategoria(''); setFiltroFuente(''); setFiltroStock(''); setFiltroFungible(''); setFiltroPertenece(''); }}
                                     sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                                     <ClearIcon />
                                 </IconButton>
@@ -800,6 +907,8 @@ export default function MaterialesPage() {
                             {filtroCategoria && <Chip label={filtroCategoria} size="small" onDelete={() => setFiltroCategoria('')} sx={{ fontWeight: 700 }} />}
                             {filtroFuente && <Chip label={FUENTE_COLORS[filtroFuente]?.label || filtroFuente} size="small" onDelete={() => setFiltroFuente('')} sx={{ fontWeight: 700 }} />}
                             {filtroStock && <Chip label={filtroStock === 'bajo' ? '⚠️ Stock bajo' : '✅ Stock OK'} size="small" onDelete={() => setFiltroStock('')} sx={{ fontWeight: 700 }} />}
+                            {filtroFungible && <Chip label={filtroFungible === 'Fungible' ? '🔄 Fungible' : '🔒 No Fungible'} size="small" onDelete={() => setFiltroFungible('')} sx={{ fontWeight: 700 }} />}
+                            {filtroPertenece && <Chip label={filtroPertenece === 'Iglesia' ? '⛪ Iglesia' : '🎵 Ministerio'} size="small" onDelete={() => setFiltroPertenece('')} sx={{ fontWeight: 700 }} />}
                             <Chip label={`${filtered.length} resultados`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
                         </Box>
                     )}

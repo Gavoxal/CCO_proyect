@@ -11,7 +11,6 @@ import {
     HomeWork as VisitasIcon,
     Inventory2 as MaterialesIcon,
     Restaurant as AlimentosIcon,
-    SwapHoriz as SolicitudesIcon,
     CardGiftcard as RegalosIcon,
     Church as MiembrosIcon,
     House as CasasPazIcon,
@@ -49,7 +48,6 @@ const menuGroups = [
         items: [
             { text: 'Materiales', icon: <MaterialesIcon />, path: '/inventario/materiales' },
             { text: 'Alimentos', icon: <AlimentosIcon />, path: '/inventario/alimentos', roles: ['admin', 'director', 'secretaria', 'tutor_especial'] },
-            { text: 'Solicitudes', icon: <SolicitudesIcon />, path: '/solicitudes' },
         ],
     },
     {

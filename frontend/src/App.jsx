@@ -17,7 +17,6 @@ import AsistenciaHistorialPage from './pages/asistencia/AsistenciaHistorialPage'
 import VisitasPage from './pages/visitas/VisitasPage';
 import MaterialesPage from './pages/inventario/MaterialesPage';
 import AlimentosPage from './pages/inventario/AlimentosPage';
-import SolicitudesPage from './pages/solicitudes/SolicitudesPage';
 import RegalosPage from './pages/regalos/RegalosPage';
 import MiembrosPage from './pages/miembros/MiembrosPage';
 import CasasDePazPage from './pages/casasDePaz/CasasDePazPage';
@@ -62,7 +61,6 @@ function App() {
               <Route path="/infantes/:id" element={<ProtectedRoute><InfanteDetailPage /></ProtectedRoute>} />
               <Route path="/visitas" element={<ProtectedRoute><VisitasPage /></ProtectedRoute>} />
               <Route path="/inventario/materiales" element={<ProtectedRoute><MaterialesPage /></ProtectedRoute>} />
-              <Route path="/solicitudes" element={<ProtectedRoute><SolicitudesPage /></ProtectedRoute>} />
               <Route path="/regalos" element={<ProtectedRoute><RegalosPage /></ProtectedRoute>} />
 
               {/* ── Escritura (secretaria+) ──────────────────────────────── */}
