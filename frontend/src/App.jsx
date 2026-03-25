@@ -16,12 +16,13 @@ import AsistenciaPage from './pages/asistencia/AsistenciaPage';
 import AsistenciaHistorialPage from './pages/asistencia/AsistenciaHistorialPage';
 import VisitasPage from './pages/visitas/VisitasPage';
 import MaterialesPage from './pages/inventario/MaterialesPage';
-import AlimentosPage from './pages/inventario/AlimentosPage';
 import RegalosPage from './pages/regalos/RegalosPage';
 import MiembrosPage from './pages/miembros/MiembrosPage';
 import CasasDePazPage from './pages/casasDePaz/CasasDePazPage';
 import CalendarioPage from './pages/calendario/CalendarioPage';
 import UsuariosPage from './pages/usuarios/UsuariosPage';
+import IncidentesPage from './pages/incidentes/IncidentesPage';
+import ReportarIncidentePage from './pages/incidentes/ReportarIncidentePage';
 
 // ─── Guards ─────────────────────────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
@@ -39,8 +40,10 @@ const PublicRoute = ({ children }) => {
 };
 
 // Roles para uso frecuente
-const ESCRITURA = ['admin', 'director', 'secretaria', 'tutor_especial'];
-const SOLO_ADMINS = ['admin', 'director'];
+const ESCRITURA = ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial'];
+const SOLO_ADMINS = ['admin', 'director', 'proteccion'];
+const INCIDENTES_VER = ['admin', 'director', 'proteccion', 'secretaria'];
+const INCIDENTES_CREAR = ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial', 'tutor'];
 
 function App() {
   return (
@@ -63,6 +66,19 @@ function App() {
               <Route path="/inventario/materiales" element={<ProtectedRoute><MaterialesPage /></ProtectedRoute>} />
               <Route path="/regalos" element={<ProtectedRoute><RegalosPage /></ProtectedRoute>} />
 
+              {/* ── Reportar incidente (tutores y superiores) */}
+              <Route path="/incidentes/nuevo" element={
+                <ProtectedRoute><RolGuard roles={INCIDENTES_CREAR}><ReportarIncidentePage /></RolGuard></ProtectedRoute>
+              } />
+
+              {/* ── Ver incidentes (solo admin/director/proteccion/secretaria) */}
+              <Route path="/incidentes" element={
+                <ProtectedRoute><RolGuard roles={INCIDENTES_VER}><IncidentesPage /></RolGuard></ProtectedRoute>
+              } />
+              <Route path="/incidentes/:id" element={
+                <ProtectedRoute><RolGuard roles={INCIDENTES_VER}><IncidentesPage /></RolGuard></ProtectedRoute>
+              } />
+
               {/* ── Escritura (secretaria+) ──────────────────────────────── */}
               <Route path="/asistencia" element={
                 <ProtectedRoute><RolGuard roles={ESCRITURA}><AsistenciaPage /></RolGuard></ProtectedRoute>
@@ -73,11 +89,8 @@ function App() {
               <Route path="/infantes/:id/editar" element={
                 <ProtectedRoute><RolGuard roles={ESCRITURA}><InfanteFormPage /></RolGuard></ProtectedRoute>
               } />
-              <Route path="/inventario/alimentos" element={
-                <ProtectedRoute><RolGuard roles={ESCRITURA}><AlimentosPage /></RolGuard></ProtectedRoute>
-              } />
 
-              {/* ── Solo Admin / Director ────────────────────────────────── */}
+              {/* ── Solo Admin / Director / Protección ────────────────────── */}
               <Route path="/miembros" element={
                 <ProtectedRoute><RolGuard roles={SOLO_ADMINS}><MiembrosPage /></RolGuard></ProtectedRoute>
               } />
@@ -85,7 +98,7 @@ function App() {
                 <ProtectedRoute><RolGuard roles={SOLO_ADMINS}><CasasDePazPage /></RolGuard></ProtectedRoute>
               } />
               <Route path="/usuarios" element={
-                <ProtectedRoute><RolGuard roles={['admin']}><UsuariosPage /></RolGuard></ProtectedRoute>
+                <ProtectedRoute><RolGuard roles={SOLO_ADMINS}><UsuariosPage /></RolGuard></ProtectedRoute>
               } />
 
               <Route path="*" element={<Navigate to="/" replace />} />

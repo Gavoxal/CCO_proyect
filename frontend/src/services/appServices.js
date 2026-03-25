@@ -96,20 +96,20 @@ export const materialesService = {
     },
 };
 
-export const alimentosService = {
-    listar: (params) => api.get('/inventario/alimentos', { params }).then(r => r.data),
-    crear: (body) => api.post('/inventario/alimentos', body).then(r => r.data),
-    actualizar: (id, body) => api.put(`/inventario/alimentos/${id}`, body).then(r => r.data),
-    eliminar: (id) => api.delete(`/inventario/alimentos/${id}`).then(r => r.data),
-    despachar: (id, cantidad) => api.patch(`/inventario/alimentos/${id}/despachar`, { cantidad }).then(r => r.data),
-    ingresar: (id, cantidad) => api.patch(`/inventario/alimentos/${id}/ingresar`, { cantidad }).then(r => r.data),
+export const incidentesService = {
+    listar: (params) => api.get('/incidentes', { params }).then(r => r.data),
+    obtener: (id) => api.get(`/incidentes/${id}`).then(r => r.data),
+    crear: (body) => api.post('/incidentes', body).then(r => r.data),
+    eliminar: (id) => api.delete(`/incidentes/${id}`).then(r => r.data),
+    subirFoto: (id, file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return api.post(`/incidentes/${id}/foto`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }).then(r => r.data);
+    },
 };
 
-export const solicitudesService = {
-    listar: (params) => api.get('/solicitudes', { params }).then(r => r.data),
-    crear: (body) => api.post('/solicitudes', body).then(r => r.data),
-    actualizarEstado: (id, estado) => api.patch(`/solicitudes/${id}/estado`, { estado }).then(r => r.data),
-};
 
 export const regalosService = {
     listar: (params) => api.get('/regalos', { params }).then(r => r.data),

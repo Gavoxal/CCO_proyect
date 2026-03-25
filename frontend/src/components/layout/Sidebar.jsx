@@ -10,7 +10,6 @@ import {
     ChecklistRtl as AsistenciaIcon,
     HomeWork as VisitasIcon,
     Inventory2 as MaterialesIcon,
-    Restaurant as AlimentosIcon,
     CardGiftcard as RegalosIcon,
     Church as MiembrosIcon,
     House as CasasPazIcon,
@@ -19,6 +18,7 @@ import {
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
     Logout as LogoutIcon,
+    ReportProblem as IncidentesIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,7 +38,7 @@ const menuGroups = [
         label: 'Ministerio',
         items: [
             { text: 'Infantes', icon: <InfantesIcon />, path: '/infantes' },
-            { text: 'Asistencia', icon: <AsistenciaIcon />, path: '/asistencia', roles: ['admin', 'director', 'secretaria', 'tutor_especial'] },
+            { text: 'Asistencia', icon: <AsistenciaIcon />, path: '/asistencia', roles: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial'] },
             { text: 'Visitas', icon: <VisitasIcon />, path: '/visitas' },
             { text: 'Regalos y Kits', icon: <RegalosIcon />, path: '/regalos' },
         ],
@@ -47,12 +47,20 @@ const menuGroups = [
         label: 'Inventario',
         items: [
             { text: 'Materiales', icon: <MaterialesIcon />, path: '/inventario/materiales' },
-            { text: 'Alimentos', icon: <AlimentosIcon />, path: '/inventario/alimentos', roles: ['admin', 'director', 'secretaria', 'tutor_especial'] },
+        ],
+    },
+    {
+        label: 'Incidentes',
+        items: [
+            // Admin/Director/Proteccion/Secretaria ven la lista completa
+            { text: 'Reportes de Incidentes', icon: <IncidentesIcon />, path: '/incidentes', roles: ['admin', 'director', 'proteccion', 'secretaria'] },
+            // Tutores solo pueden reportar (formulario de creación)
+            { text: 'Reportar Incidente', icon: <IncidentesIcon />, path: '/incidentes/nuevo', roles: ['tutor', 'tutor_especial'] },
         ],
     },
     {
         label: 'Iglesia CCO',
-        roles: ['admin', 'director'],
+        roles: ['admin', 'director', 'proteccion'],
         items: [
             { text: 'Miembros', icon: <MiembrosIcon />, path: '/miembros' },
             { text: 'Casas de Paz', icon: <CasasPazIcon />, path: '/casas-de-paz' },
@@ -60,7 +68,7 @@ const menuGroups = [
     },
     {
         label: 'Administración',
-        roles: ['admin'],
+        roles: ['admin', 'director', 'proteccion'],
         items: [
             { text: 'Usuarios', icon: <UsuariosIcon />, path: '/usuarios' },
         ],
@@ -70,6 +78,7 @@ const menuGroups = [
 const ROL_LABELS = {
     admin: { label: 'Admin', color: '#7c4dff' },
     director: { label: 'Director', color: '#00bcd4' },
+    proteccion: { label: 'Protección', color: '#f44336' },
     secretaria: { label: 'Secretaría', color: '#4caf50' },
     tutor_especial: { label: 'Tutor Esp.', color: '#ff9800' },
     tutor: { label: 'Tutor', color: '#9e9e9e' },
