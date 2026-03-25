@@ -4,6 +4,8 @@ import { authPlugin } from './plugins/auth.js'
 import { corsPlugin } from './plugins/cors.js'
 import { rateLimitPlugin } from './plugins/rateLimit.js'
 import multipart from '@fastify/multipart'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
 
 // Rutas de módulos
 import authRoutes from './modules/auth/auth.routes.js'
@@ -17,6 +19,7 @@ import regalosRoutes from './modules/regalos/regalos.routes.js'
 import miembrosRoutes from './modules/miembros/miembros.routes.js'
 import casasPazRoutes from './modules/casasDePaz/casasDePaz.routes.js'
 import eventosRoutes from './modules/eventos/eventos.routes.js'
+import notificacionesRoutes from './modules/notificaciones/notificaciones.routes.js'
 import importRoutes from './modules/import/import.routes.js'
 
 export async function buildApp() {
@@ -34,6 +37,34 @@ export async function buildApp() {
     await app.register(multipart, {
         limits: {
             fileSize: (parseInt(process.env.MAX_FILE_SIZE_MB || '5')) * 1024 * 1024
+        }
+    })
+
+    // ── Documentación interactiva (Swagger) ─────────────────
+    await app.register(swagger, {
+        openapi: {
+            info: {
+                title: 'CCO KidScam API',
+                description: 'Documentación interactiva de la API (estilo Postman)',
+                version: '1.0.0'
+            },
+            components: {
+                securitySchemes: {
+                    bearerAuth: {
+                        type: 'http',
+                        scheme: 'bearer',
+                        bearerFormat: 'JWT'
+                    }
+                }
+            }
+        }
+    })
+
+    await app.register(swaggerUi, {
+        routePrefix: '/docs',
+        uiConfig: {
+            docExpansion: 'list',
+            deepLinking: false
         }
     })
 
@@ -58,6 +89,7 @@ export async function buildApp() {
     app.register(miembrosRoutes, { prefix: `${API_PREFIX}/miembros` })
     app.register(casasPazRoutes, { prefix: `${API_PREFIX}/casas-de-paz` })
     app.register(eventosRoutes, { prefix: `${API_PREFIX}/eventos` })
+    app.register(notificacionesRoutes, { prefix: `${API_PREFIX}/notificaciones` })
     app.register(importRoutes, { prefix: `${API_PREFIX}/import` })
 
     // ── Manejador de errores global ─────────────────────────

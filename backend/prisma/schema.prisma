@@ -79,6 +79,12 @@ enum TipoEvento {
   Emergencia
 }
 
+enum TipoNotificacion {
+  INFO
+  ALERTA
+  EVENTO
+}
+
 enum RazonVisita {
   Inasistencia
   Enfermedad
@@ -143,8 +149,29 @@ model Usuario {
   updatedAt    DateTime   @updatedAt
 
   reportesCreados ReporteIncidente[]
+  notificaciones  Notificacion[]
 
   @@map("usuarios")
+}
+
+// ============================================================
+// NOTIFICACIONES IN-APP
+// ============================================================
+
+model Notificacion {
+  id            Int              @id @default(autoincrement())
+  usuarioId     Int
+  usuario       Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  titulo        String           @db.VarChar(255)
+  mensaje       String           @db.Text
+  leida         Boolean          @default(false)
+  fechaCreacion DateTime         @default(now())
+  tipo          TipoNotificacion @default(INFO)
+  referenciaId  Int?
+
+  @@index([usuarioId])
+  @@index([fechaCreacion])
+  @@map("notificaciones")
 }
 
 // ============================================================

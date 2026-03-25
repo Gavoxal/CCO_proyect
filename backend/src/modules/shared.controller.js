@@ -1,5 +1,46 @@
 import { ok, created, noContent, notFound, paginated } from '../utils/response.js'
 import { getPagination } from '../utils/pagination.js'
+import { notificationService } from '../services/notification.service.js'
+import { sendEmail } from '../services/email.service.js'
+
+async function notificarEvento(db, evento, esActualizacion = false) {
+    if (!evento.notificar) return;
+
+    const usuarios = await db.usuario.findMany({
+        where: { activo: true },
+        select: { id: true, email: true }
+    });
+    if (usuarios.length === 0) return;
+
+    const titulo = esActualizacion ? `Evento Actualizado: ${evento.titulo}` : `Nuevo Evento: ${evento.titulo}`;
+    const fecha = new Date(evento.fechaInicio);
+    // Simple base string for fallback timezone
+    const fechaFormateada = `${fecha.toLocaleDateString('es-EC')} ${fecha.toLocaleTimeString('es-EC')}`;
+
+    const mensaje = `${evento.descripcion || 'Sin descripción'}\nFecha: ${fechaFormateada}`;
+    const htmlCorreo = `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: #d32f2f;">${titulo}</h2>
+            <p><strong>Fecha y Hora:</strong> ${fechaFormateada}</p>
+            <p><strong>Descripción:</strong><br/>${evento.descripcion || 'Sin descripción detallada'}</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 11px; color: #999;">Este es un mensaje automático del sistema CCO KidScam.</p>
+        </div>
+    `;
+
+    const ids = usuarios.map(u => u.id);
+    const emails = usuarios.map(u => u.email).filter(Boolean);
+
+    // Crear notificaciones en BD (no bloqueante estricto, pero esperamos)
+    try {
+        await notificationService.crearNotificacionMasiva(ids, titulo, mensaje, 'EVENTO', evento.id);
+        if (emails.length > 0) {
+            await sendEmail(emails, titulo, htmlCorreo);
+        }
+    } catch (e) {
+        console.error('Error al notificar evento:', e);
+    }
+}
 
 // CRUD genérico reusable para Miembros, Casas de Paz y Eventos
 
@@ -98,6 +139,7 @@ export async function listarEventos(request, reply) {
 export async function crearEvento(request, reply) {
     const db = request.server.db
     const evento = await db.evento.create({ data: request.body })
+    await notificarEvento(db, evento, false)
     return created(reply, evento)
 }
 
@@ -105,6 +147,7 @@ export async function actualizarEvento(request, reply) {
     const db = request.server.db
     try {
         const e = await db.evento.update({ where: { id: parseInt(request.params.id) }, data: request.body })
+        await notificarEvento(db, e, true)
         return ok(reply, e)
     } catch { return notFound(reply) }
 }

@@ -99,6 +99,34 @@ async function main() {
         }
     })
 
+    // ── Usuario Protección ─────────────────────────────────────────
+    const proPass = await bcrypt.hash('Proteccion2026!', 12)
+
+    const proPersona = await prisma.persona.upsert({
+        where: { cedula: '1100000004' },
+        update: {},
+        create: {
+            nombres: 'Pablo',
+            apellidos: 'Proteccion',
+            cedula: '1100000004',
+            telefono1: '0990000004',
+            email: 'proteccion@cco.org'
+        }
+    })
+
+    await prisma.usuario.upsert({
+        where: { username: 'proteccion' },
+        update: {},
+        create: {
+            username: 'proteccion',
+            email: 'proteccion@cco.org',
+            password: proPass,
+            rol: 'proteccion',
+            activo: true,
+            personaId: proPersona.id
+        }
+    })
+
     // ── Material de inventario de ejemplo ──────────────────────────
     await prisma.inventarioMaterial.upsert({
         where: { codigo: 'MAT-001' },
@@ -118,6 +146,7 @@ async function main() {
     console.log('')
     console.log('Credenciales de acceso:')
     console.log('  Admin:      admin       / Admin2026!')
+    console.log('  Protección: proteccion  / Proteccion2026!')
     console.log('  Secretaría: secretaria  / Secretaria2026!')
     console.log('  Tutor:      tutor1      / Tutor2026!')
 }
