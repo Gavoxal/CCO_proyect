@@ -1,6 +1,6 @@
 /**
  * Middleware factory para autorización por roles.
- * Uso: { preHandler: requireRoles('admin', 'director') }
+ * Uso: { preHandler: [requireRoles('admin', 'director')] }
  */
 export const requireRoles = (...roles) => {
     return async function (request, reply) {
@@ -21,8 +21,21 @@ export const requireRoles = (...roles) => {
 
 // Roles predefinidos para reutilizar en rutas
 export const ROLES = {
-    SOLO_ADMINS: ['admin', 'director'],
-    ESCRITURA: ['admin', 'director', 'secretaria'],
-    TUTORES: ['admin', 'director', 'secretaria', 'tutor_especial', 'tutor'],
-    TODOS: ['admin', 'director', 'secretaria', 'tutor_especial', 'tutor']
+    // Control total del sistema (admin, director, protección)
+    SUPER_ADMINS: ['admin', 'director', 'proteccion'],
+
+    // Pueden leer, crear y editar cualquier registro
+    ESCRITURA: ['admin', 'director', 'proteccion', 'secretaria'],
+
+    // Todos los usuarios autenticados
+    TODOS: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial', 'tutor'],
+
+    // Gestión de inventario de materiales
+    INVENTARIO: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial'],
+
+    // Pueden VER los reportes de incidentes
+    INCIDENTES_VER: ['admin', 'director', 'proteccion', 'secretaria'],
+
+    // Pueden CREAR reportes de incidentes (todos)
+    INCIDENTES_CREAR: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial', 'tutor'],
 }

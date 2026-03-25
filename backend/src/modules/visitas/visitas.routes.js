@@ -3,11 +3,12 @@ import { listar, obtener, crear, eliminar } from './visitas.controller.js'
 
 export default async function visitasRoutes(fastify) {
     const todos = { preHandler: [requireRoles(...ROLES.TODOS)] }
-    const escritura = { preHandler: [requireRoles(...ROLES.ESCRITURA)] }
-    const soloAdmins = { preHandler: [requireRoles(...ROLES.SOLO_ADMINS)] }
+    const superAdmins = { preHandler: [requireRoles(...ROLES.SUPER_ADMINS)] }
 
     fastify.get('/', todos, listar)
     fastify.get('/:id', todos, obtener)
-    fastify.post('/', escritura, crear)
-    fastify.delete('/:id', soloAdmins, eliminar)
+    // Tutores y tutores especiales pueden registrar visitas
+    fastify.post('/', todos, crear)
+    fastify.delete('/:id', superAdmins, eliminar)
 }
+

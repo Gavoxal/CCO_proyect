@@ -6,15 +6,16 @@ import {
 
 export default async function materialesRoutes(fastify) {
     const todos = { preHandler: [requireRoles(...ROLES.TODOS)] }
-    const escritura = { preHandler: [requireRoles(...ROLES.ESCRITURA)] }
-    const soloAdmins = { preHandler: [requireRoles(...ROLES.SOLO_ADMINS)] }
+    const inventario = { preHandler: [requireRoles(...ROLES.INVENTARIO)] }
+    const superAdmins = { preHandler: [requireRoles(...ROLES.SUPER_ADMINS)] }
 
     fastify.get('/', todos, listar)
     fastify.get('/alertas', todos, alertas)
     fastify.get('/:id', todos, obtener)
-    fastify.post('/', escritura, crear)
-    fastify.put('/:id', escritura, actualizar)
-    fastify.patch('/:id/despachar', escritura, despachar)
-    fastify.patch('/:id/ingresar', escritura, ingresar)
-    fastify.delete('/:id', soloAdmins, eliminar)
+    fastify.post('/', inventario, crear)
+    fastify.put('/:id', inventario, actualizar)
+    fastify.patch('/:id/despachar', inventario, despachar)
+    fastify.patch('/:id/ingresar', inventario, ingresar)
+    fastify.delete('/:id', superAdmins, eliminar)
 }
+

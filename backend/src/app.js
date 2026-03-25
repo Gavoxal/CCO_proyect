@@ -12,8 +12,7 @@ import infantesRoutes from './modules/infantes/infantes.routes.js'
 import asistenciaRoutes from './modules/asistencia/asistencia.routes.js'
 import visitasRoutes from './modules/visitas/visitas.routes.js'
 import materialesRoutes from './modules/inventario/materiales/materiales.routes.js'
-import alimentosRoutes from './modules/inventario/alimentos/alimentos.routes.js'
-import solicitudesRoutes from './modules/solicitudes/solicitudes.routes.js'
+import incidentesRoutes from './modules/reporteIncidentes/reporteIncidentes.routes.js'
 import regalosRoutes from './modules/regalos/regalos.routes.js'
 import miembrosRoutes from './modules/miembros/miembros.routes.js'
 import casasPazRoutes from './modules/casasDePaz/casasDePaz.routes.js'
@@ -54,8 +53,7 @@ export async function buildApp() {
     app.register(asistenciaRoutes, { prefix: `${API_PREFIX}/asistencia` })
     app.register(visitasRoutes, { prefix: `${API_PREFIX}/visitas` })
     app.register(materialesRoutes, { prefix: `${API_PREFIX}/inventario/materiales` })
-    app.register(alimentosRoutes, { prefix: `${API_PREFIX}/inventario/alimentos` })
-    app.register(solicitudesRoutes, { prefix: `${API_PREFIX}/solicitudes` })
+    app.register(incidentesRoutes, { prefix: `${API_PREFIX}/incidentes` })
     app.register(regalosRoutes, { prefix: `${API_PREFIX}/regalos` })
     app.register(miembrosRoutes, { prefix: `${API_PREFIX}/miembros` })
     app.register(casasPazRoutes, { prefix: `${API_PREFIX}/casas-de-paz` })

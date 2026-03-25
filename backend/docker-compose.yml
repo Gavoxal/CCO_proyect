@@ -1,0 +1,9 @@
+services:
+  backend:
+    build: ./backend
+    env_file: .env
+    volumes:
+      # Esto mapea la carpeta "data_uploads" de tu PC a "/app/uploads" en el contenedor
+      - ./data_uploads:/app/uploads 
+    ports:
+      - "3000:3000"

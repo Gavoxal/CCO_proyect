@@ -7,15 +7,16 @@ import {
 export default async function infantesRoutes(fastify) {
     const todos = { preHandler: [requireRoles(...ROLES.TODOS)] }
     const escritura = { preHandler: [requireRoles(...ROLES.ESCRITURA)] }
-    const soloAdmins = { preHandler: [requireRoles(...ROLES.SOLO_ADMINS)] }
+    const superAdmins = { preHandler: [requireRoles(...ROLES.SUPER_ADMINS)] }
 
     fastify.get('/', todos, listar)
     fastify.get('/sin-visita-anio', todos, sinVisitaAnio)
     fastify.get('/:id', todos, obtener)
     fastify.post('/', escritura, crear)
     fastify.put('/:id', escritura, actualizar)
-    fastify.delete('/:id', soloAdmins, eliminar)
+    fastify.delete('/:id', superAdmins, eliminar)
 
     // Subida de foto — multipart
     fastify.post('/:id/foto', escritura, subirFoto)
 }
+

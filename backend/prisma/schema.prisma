@@ -18,6 +18,7 @@ datasource db {
 enum RolUsuario {
   admin
   director
+  proteccion
   secretaria
   tutor_especial
   tutor
@@ -46,13 +47,6 @@ enum FuenteRecurso {
   Plan
   Iglesia
   ViasEnAccion
-}
-
-enum EstadoSolicitud {
-  Pendiente
-  Aprobada
-  Rechazada
-  Entregada
 }
 
 enum TipoRegalo {
@@ -85,6 +79,24 @@ enum TipoEvento {
   Emergencia
 }
 
+enum RazonVisita {
+  Inasistencia
+  Enfermedad
+  OtraCausa
+  Seguimiento
+}
+
+enum EstadoVisita {
+  Realizada
+  NoRealizada
+}
+
+enum DecisionVisita {
+  ContinuaMinisterio
+  DarDeBaja
+  Otra
+}
+
 // ============================================================
 // PERSONAS — entidad base para cualquier persona en el sistema
 // ============================================================
@@ -94,7 +106,7 @@ model Persona {
   nombres         String    @db.VarChar(255)
   apellidos       String    @db.VarChar(255)
   cedula          String?   @unique @db.VarChar(20)
-  telefono1       String    @db.VarChar(20)
+  telefono1       String?   @db.VarChar(20)
   telefono2       String?   @db.VarChar(20)
   email           String?   @db.VarChar(255)
   direccion       String?   @db.VarChar(500)
@@ -130,37 +142,39 @@ model Usuario {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  reportesCreados ReporteIncidente[]
+
   @@map("usuarios")
 }
 
 // ============================================================
 // INFANTES — niños del Ministerio y/o Comedor
-// NOTA: patrocinado y no patrocinado son la misma entidad.
-//       La diferencia está en esPatrocinado y fuentePatrocinio.
 // ============================================================
 
 model Infante {
-  id                    Int              @id @default(autoincrement())
-  codigo                String           @unique @db.VarChar(50)
-  enfermedades          String?          @db.Text
-  alergias              String?          @db.Text
-  esPatrocinado         Boolean          @default(false)
-  tipoPrograma          TipoPrograma     @default(Ministerio)
-  fuentePatrocinio      FuentePatrocinio @default(Ninguno)
-  // FOTO del niño (ruta relativa o URL)
-  fotografia            String?          @db.VarChar(500)
+  id                     Int              @id @default(autoincrement())
+  codigo                 String           @unique @db.VarChar(50)
+  enfermedades           String?          @db.Text
+  alergias               String?          @db.Text
+  cuidador               String?          @db.VarChar(255)
+  celular2               String?          @db.VarChar(20)
+  esPatrocinado          Boolean          @default(false)
+  tipoPrograma           TipoPrograma     @default(Ministerio)
+  fuentePatrocinio       FuentePatrocinio @default(Ninguno)
+  fotografia             String?          @db.VarChar(500)
   fechaActualizacionFoto DateTime?        @db.Date
   // Relaciones
-  personaId             Int              @unique
-  persona               Persona          @relation(fields: [personaId], references: [id])
-  tutorId               Int?
-  tutor                 Tutor?           @relation(fields: [tutorId], references: [id])
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  personaId              Int              @unique
+  persona                Persona          @relation(fields: [personaId], references: [id])
+  tutorId                Int?
+  tutor                  Tutor?           @relation(fields: [tutorId], references: [id])
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   asistencias Asistencia[]
   visitas     Visita[]
   regalos     Regalo[]
+  incidentes  ReporteIncidente[] @relation("IncidenteInfantes")
 
   @@map("infantes")
 }
@@ -179,7 +193,6 @@ model Tutor {
   updatedAt DateTime @updatedAt
 
   infantes          Infante[]
-  solicitudes       SolicitudMaterial[]
   visitasRealizadas Visita[]
 
   @@map("tutores")
@@ -209,19 +222,47 @@ model Asistencia {
 // ============================================================
 
 model Visita {
-  id             Int      @id @default(autoincrement())
-  fecha          DateTime @db.Date
-  observaciones  String?  @db.Text
-  archivoAdjunto String?  @db.VarChar(500)
+  id             Int            @id @default(autoincrement())
+  fecha          DateTime       @db.Date
+  estado         EstadoVisita   @default(Realizada)
+  razonVisita    RazonVisita    @default(Seguimiento)
+  decision       DecisionVisita @default(ContinuaMinisterio)
+  resultados     String?        @db.Text
+  observaciones  String?        @db.Text
+  fotoVisita     String?        @db.VarChar(500)
   infanteId      Int
-  infante        Infante  @relation(fields: [infanteId], references: [id])
+  infante        Infante        @relation(fields: [infanteId], references: [id])
   tutorId        Int?
-  tutor          Tutor?   @relation(fields: [tutorId], references: [id])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  tutor          Tutor?         @relation(fields: [tutorId], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@index([infanteId])
   @@map("visitas")
+}
+
+// ============================================================
+// REPORTE DE INCIDENTES — M:N con Infante
+// Solo tutores/especiales pueden CREAR, solo admin/director/proteccion/secretaria pueden VER
+// ============================================================
+
+model ReporteIncidente {
+  id             Int      @id @default(autoincrement())
+  fecha          DateTime @db.Date
+  descripcion    String   @db.Text
+  tipoAbuso      String   @db.VarChar(100)
+  foto           String?  @db.VarChar(500)
+  // FK al usuario que reporta
+  reportadoPorId Int
+  reportadoPor   Usuario  @relation(fields: [reportadoPorId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relación M:N con infantes (un incidente puede involucrar varios infantes)
+  infantes Infante[] @relation("IncidenteInfantes")
+
+  @@index([fecha])
+  @@map("reportes_incidentes")
 }
 
 // ============================================================
@@ -229,58 +270,23 @@ model Visita {
 // ============================================================
 
 model InventarioMaterial {
-  id                      Int           @id @default(autoincrement())
-  codigo                  String        @unique @db.VarChar(50)
-  nombreMaterial          String        @db.VarChar(255)
-  cantidadDisponible      Int           @default(0)
-  stockMinimo             Int           @default(5)
+  id                       Int           @id @default(autoincrement())
+  codigo                   String        @unique @db.VarChar(50)
+  nombreMaterial           String        @db.VarChar(255)
+  cantidadDisponible       Int           @default(0)
+  stockMinimo              Int           @default(5)
   fechaUltimaActualizacion DateTime      @db.Date
-  fuenteRecurso           FuenteRecurso @default(Iglesia)
-  categoria               String?       @db.VarChar(100)
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
-
-  solicitudes SolicitudMaterial[]
+  fuenteRecurso            FuenteRecurso @default(Iglesia)
+  categoria                String?       @db.VarChar(100)
+  area                     String?       @db.VarChar(100)
+  tipo                     String?       @db.VarChar(50)
+  marca                    String?       @db.VarChar(100)
+  numeroSerie              String?       @db.VarChar(100)
+  foto                     String?       @db.VarChar(500)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   @@map("inventario_materiales")
-}
-
-// ============================================================
-// INVENTARIO DE ALIMENTOS (Comedor)
-// ============================================================
-
-model InventarioAlimento {
-  id                      Int      @id @default(autoincrement())
-  codigo                  String   @unique @db.VarChar(50)
-  nombreAlimento          String   @db.VarChar(255)
-  cantidadDisponible      Int      @default(0)
-  stockMinimo             Int      @default(5)
-  categoria               String?  @db.VarChar(100)
-  fechaUltimaActualizacion DateTime @db.Date
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-
-  @@map("inventario_alimentos")
-}
-
-// ============================================================
-// SOLICITUDES DE MATERIALES — flujo tutor → admin → secretaria
-// ============================================================
-
-model SolicitudMaterial {
-  id                 Int                @id @default(autoincrement())
-  cantidadSolicitada Int
-  observacion        String?            @db.Text
-  fechaSolicitud     DateTime           @default(now())
-  estado             EstadoSolicitud    @default(Pendiente)
-  tutorId            Int?
-  tutor              Tutor?             @relation(fields: [tutorId], references: [id])
-  materialId         Int
-  material           InventarioMaterial @relation(fields: [materialId], references: [id])
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-
-  @@map("solicitudes_materiales")
 }
 
 // ============================================================
@@ -293,6 +299,7 @@ model Regalo {
   fechaEntrega  DateTime?    @db.Date
   estado        EstadoRegalo @default(pendiente)
   observaciones String?      @db.Text
+  foto          String?      @db.VarChar(500)
   anio          Int
   infanteId     Int
   infante       Infante      @relation(fields: [infanteId], references: [id])
@@ -316,7 +323,7 @@ model Miembro {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  casasDePazComoLider   CasaDePaz[] @relation("LiderCasaPaz")
+  casasDePazComoLider    CasaDePaz[] @relation("LiderCasaPaz")
   casasDePazComoAsistido CasaDePaz[] @relation("AsistidoCasaPaz")
 
   @@map("miembros")
@@ -327,18 +334,22 @@ model Miembro {
 // ============================================================
 
 model CasaDePaz {
-  id              Int           @id @default(autoincrement())
-  fechaInicio     DateTime      @db.Date
-  fechaFin        DateTime?     @db.Date
-  estado          EstadoCasaPaz @default(EnProgreso)
-  lugar           String?       @db.VarChar(500)
-  diasVisita      String?       @db.VarChar(255)
-  liderId         Int?
-  lider           Miembro?      @relation("LiderCasaPaz", fields: [liderId], references: [id])
+  id                Int           @id @default(autoincrement())
+  codigo            String        @unique @db.VarChar(50)
+  fechaInicio       DateTime      @db.Date
+  fechaFin          DateTime?     @db.Date
+  red               String?       @db.VarChar(50)
+  estado            EstadoCasaPaz @default(EnProgreso)
+  lugar             String?       @db.VarChar(500)
+  diasVisita        String?       @db.VarChar(255)
+  foto              String?       @db.VarChar(500)
+  observaciones     String?       @db.Text
+  liderId           Int?
+  lider             Miembro?      @relation("LiderCasaPaz", fields: [liderId], references: [id])
   personaAsistidaId Int?
-  personaAsistida Miembro?      @relation("AsistidoCasaPaz", fields: [personaAsistidaId], references: [id])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  personaAsistida   Miembro?      @relation("AsistidoCasaPaz", fields: [personaAsistidaId], references: [id])
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@map("casas_de_paz")
 }
