@@ -23,13 +23,6 @@ const CCO = {
     azul: '#4169E1',
 };
 
-// ─── Mock de usuarios para demo (sin backend) ───────────────────────────────
-const MOCK_USERS = [
-    { username: 'admin', password: 'Admin2026!', rol: 'admin', nombre: 'Administrador CCO' },
-    { username: 'secretaria', password: 'Secretaria2026!', rol: 'secretaria', nombre: 'Secretaria CCO' },
-    { username: 'tutor1', password: 'Tutor2026!', rol: 'tutor', nombre: 'Tutor del Ministerio' },
-];
-
 // ─── Slides del carrusel ─────────────────────────────────────────────────────
 const SLIDES = [
     {
@@ -165,10 +158,10 @@ const LoginPage = () => {
                     )}
 
                     <Box component="form" onSubmit={handleSubmit}>
-                        <TextField fullWidth label="Usuario" value={username}
+                        <TextField fullWidth label="Usuario o Correo Electrónico" value={username}
                             onChange={e => setUsername(e.target.value)} sx={{ mb: 2.5 }}
                             InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon sx={{ color: 'text.secondary', fontSize: 20 }} /></InputAdornment> }}
-                            placeholder="ej. admin" autoComplete="username" />
+                            placeholder="ej. admin o admin@cco.org" autoComplete="username" />
 
                         <TextField fullWidth label="Contraseña"
                             type={showPassword ? 'text' : 'password'}
@@ -194,18 +187,6 @@ const LoginPage = () => {
                             }}>
                             {loading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Iniciar Sesión'}
                         </Button>
-                    </Box>
-
-                    {/* Credenciales de demo */}
-                    <Box sx={{ mt: 3, p: 1.5, borderRadius: 2, bgcolor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.03), border: `1px dashed ${alpha(CCO.naranja, 0.3)}` }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center', mb: 0.5, fontWeight: 600 }}>
-                            Credenciales demo
-                        </Typography>
-                        {MOCK_USERS.map(u => (
-                            <Typography key={u.username} variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: 'center' }}>
-                                <strong style={{ color: isDark ? '#ccc' : '#555' }}>{u.username}</strong> / {u.password}
-                            </Typography>
-                        ))}
                     </Box>
                 </Box>
             </Box>

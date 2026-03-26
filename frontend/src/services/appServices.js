@@ -1,38 +1,15 @@
 // Servicio de autenticación — conecta al backend real
 import api from './api';
 
-// ─── Usuarios mock (solo para desarrollo sin backend) ────────────────────────
-const MOCK_USERS = [
-    { id: 1, username: 'admin', password: 'Admin2026!', rol: 'admin', nombre: 'Administrador CCO', email: 'admin@cco.com' },
-    { id: 2, username: 'secretaria', password: 'Secretaria2026!', rol: 'secretaria', nombre: 'Secretaria CCO', email: 'secretaria@cco.com' },
-    { id: 3, username: 'tutor1', password: 'Tutor2026!', rol: 'tutor', nombre: 'Tutor del Ministerio', email: 'tutor1@cco.com' },
-];
-
 export const authService = {
     login: async (username, password) => {
         try {
-            // Intenta con el backend real
             const { data } = await api.post('/auth/login', { username, password });
             return data; // { success, data: { token, usuario } }
         } catch (err) {
-            // Si no hay backend (red caída), usa modo mock
-            const isNetworkError = !err.response;
-            if (!isNetworkError) throw err; // error real del servidor (401, 500, etc.) → propagar
-
-            const found = MOCK_USERS.find(
-                u => (u.username === username || u.email === username) && u.password === password
-            );
-            if (!found) {
-                return { success: false, message: 'Usuario o contraseña incorrectos (modo demo)' };
-            }
-            const { password: _, ...usuario } = found;
-            return {
-                success: true,
-                data: {
-                    token: `mock-token-${Date.now()}`,
-                    usuario: { ...usuario },
-                },
-            };
+            // Error real del servidor (401, 500, etc.) o error de red
+            const message = err.response?.data?.error || 'No se pudo conectar con el servidor';
+            return { success: false, message };
         }
     },
 
@@ -47,6 +24,20 @@ export const authService = {
     },
 };
 
+export const usuariosService = {
+    listar: (params) => api.get('/usuarios', { params }).then(r => r.data),
+    obtener: (id) => api.get(`/usuarios/${id}`).then(r => r.data),
+    crear: (body) => api.post('/usuarios', body).then(r => r.data),
+    actualizar: (id, body) => api.put(`/usuarios/${id}`, body).then(r => r.data),
+    eliminar: (id) => api.delete(`/usuarios/${id}`).then(r => r.data),
+    subirFoto: (id, file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return api.post(`/usuarios/${id}/foto`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        }).then(r => r.data);
+    }
+};
 
 export const infantesService = {
     listar: (params) => api.get('/infantes', { params }).then(r => r.data),
@@ -140,11 +131,10 @@ export const eventosService = {
     eliminar: (id) => api.delete(`/eventos/${id}`).then(r => r.data),
 };
 
-export const usuariosService = {
-    listar: (params) => api.get('/usuarios', { params }).then(r => r.data),
-    crear: (body) => api.post('/usuarios', body).then(r => r.data),
-    actualizar: (id, body) => api.put(`/usuarios/${id}`, body).then(r => r.data),
-    eliminar: (id) => api.delete(`/usuarios/${id}`).then(r => r.data),
+export const notificacionesService = {
+    listar: (params) => api.get('/notificaciones', { params }).then(r => r.data),
+    marcarLeida: (id) => api.put(`/notificaciones/${id}/leida`).then(r => r.data),
+    marcarTodasLeidas: () => api.put('/notificaciones/leidas').then(r => r.data),
 };
 
 export const importService = {

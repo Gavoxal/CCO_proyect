@@ -214,6 +214,9 @@ model Tutor {
   id        Int      @id @default(autoincrement())
   codigo    String   @unique @db.VarChar(50)
   profesion String?  @db.VarChar(255)
+  fotografia             String?  @db.VarChar(500)
+  fechaActualizacionFoto DateTime? @db.Date
+  
   personaId Int      @unique
   persona   Persona  @relation(fields: [personaId], references: [id])
   createdAt DateTime @default(now())

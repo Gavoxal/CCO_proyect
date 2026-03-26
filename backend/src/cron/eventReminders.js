@@ -1,7 +1,8 @@
 import cron from 'node-cron';
-import prisma from '../plugins/prisma.js';
+import { prisma } from '../plugins/prisma.js';
 import { notificationService } from '../services/notification.service.js';
 import { sendEmail } from '../services/email.service.js';
+import { generarHTMLCorreo } from '../modules/shared.controller.js';
 
 export const startEventRemindersCron = () => {
     // Run every day at 8:00 AM server time
@@ -50,16 +51,14 @@ export const startEventRemindersCron = () => {
                 const fechaFormateada = `${fecha.toLocaleDateString('es-EC')} ${fecha.toLocaleTimeString('es-EC')}`;
 
                 const mensaje = `Este evento es en 2 días.\n\n${evento.descripcion || 'Sin descripción'}\nFecha: ${fechaFormateada}`;
-                const htmlCorreo = `
-                    <div style="font-family: sans-serif; color: #333;">
-                        <h2 style="color: #FF8C00;">⏰ ${titulo}</h2>
-                        <p><strong>Faltan 2 días para este evento.</strong></p>
-                        <p><strong>Fecha y Hora:</strong> ${fechaFormateada}</p>
-                        <p><strong>Descripción:</strong><br/>${evento.descripcion || 'Sin descripción detallada'}</p>
-                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                        <p style="font-size: 11px; color: #999;">Este es un mensaje automático del sistema CCO KidScam.</p>
-                    </div>
-                `;
+                const htmlCorreo = generarHTMLCorreo({
+                    titulo: evento.titulo,
+                    subtitulo: '⏰ RECORDATORIO — 2 DÍAS',
+                    fechaFormateada,
+                    descripcion: evento.descripcion,
+                    tipoEvento: evento.tipo,
+                    esRecordatorio: true,
+                });
 
                 // Notificar masivamente en BD
                 await notificationService.crearNotificacionMasiva(ids, titulo, mensaje, 'ALERTA', evento.id);

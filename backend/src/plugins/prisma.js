@@ -15,4 +15,4 @@ async function prismaPlugin(fastify) {
 }
 
 export default fp(prismaPlugin, { name: 'prisma' })
-export { prismaPlugin }
+export { prismaPlugin, prisma }

@@ -3,6 +3,93 @@ import { getPagination } from '../utils/pagination.js'
 import { notificationService } from '../services/notification.service.js'
 import { sendEmail } from '../services/email.service.js'
 
+// ─── Plantilla de correo con diseño CCO ───────────────────────────────────────
+export function generarHTMLCorreo({ titulo, subtitulo, fechaFormateada, descripcion, tipoEvento, esRecordatorio = false }) {
+    const iconoTipo = { Iglesia: '⛪', Ministerio: '🤝', Emergencia: '🚨' };
+    const icono = iconoTipo[tipoEvento] || '📅';
+    const badgeColor = esRecordatorio ? '#FF8C00' : '#6A5ACD';
+    const badgeText = esRecordatorio ? '⏰ RECORDATORIO' : (subtitulo || '📢 NUEVO EVENTO');
+
+    return `
+    <div style="margin:0;padding:0;background-color:#f4f4f7;font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:32px 0;">
+        <tr><td align="center">
+          <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+            <!-- Header con gradiente CCO -->
+            <tr>
+              <td style="background:linear-gradient(135deg,#FF8C00 0%,#6A5ACD 100%);padding:32px 40px;text-align:center;">
+                <div style="font-size:28px;margin-bottom:8px;">⛪</div>
+                <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-0.3px;">
+                  Centro Cristiano Obrapía
+                </h1>
+                <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;font-weight:500;">
+                  Sistema KidScam · Ministerio Vías en Acción
+                </p>
+              </td>
+            </tr>
+
+            <!-- Badge de tipo -->
+            <tr>
+              <td style="padding:24px 40px 0;text-align:center;">
+                <span style="display:inline-block;background:${badgeColor};color:#fff;font-size:11px;font-weight:700;padding:6px 16px;border-radius:20px;letter-spacing:0.5px;">
+                  ${badgeText}
+                </span>
+              </td>
+            </tr>
+
+            <!-- Título del evento -->
+            <tr>
+              <td style="padding:20px 40px 8px;text-align:center;">
+                <h2 style="margin:0;color:#1a1a2e;font-size:22px;font-weight:800;">
+                  ${icono} ${titulo}
+                </h2>
+              </td>
+            </tr>
+
+            <!-- Tarjeta de información -->
+            <tr>
+              <td style="padding:8px 40px 20px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f7ff;border-radius:12px;border:1px solid #e8e6f0;">
+                  <tr>
+                    <td style="padding:20px 24px;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="padding-bottom:12px;">
+                            <span style="color:#6A5ACD;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📅 Fecha y Hora</span>
+                            <p style="margin:4px 0 0;color:#333;font-size:15px;font-weight:600;">${fechaFormateada}</p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="border-top:1px solid #e8e6f0;padding-top:12px;">
+                            <span style="color:#6A5ACD;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📝 Descripción</span>
+                            <p style="margin:4px 0 0;color:#555;font-size:14px;line-height:1.6;">${descripcion || 'Sin descripción detallada'}</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="background:#f8f7ff;padding:20px 40px;text-align:center;border-top:1px solid #e8e6f0;">
+                <p style="margin:0;color:#999;font-size:11px;line-height:1.5;">
+                  Este es un mensaje automático del sistema <strong style="color:#6A5ACD;">CCO KidScam</strong>.<br/>
+                  Centro Cristiano Obrapía · Ministerio Vías en Acción
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+    `;
+}
+
 async function notificarEvento(db, evento, esActualizacion = false) {
     if (!evento.notificar) return;
 
@@ -14,24 +101,21 @@ async function notificarEvento(db, evento, esActualizacion = false) {
 
     const titulo = esActualizacion ? `Evento Actualizado: ${evento.titulo}` : `Nuevo Evento: ${evento.titulo}`;
     const fecha = new Date(evento.fechaInicio);
-    // Simple base string for fallback timezone
     const fechaFormateada = `${fecha.toLocaleDateString('es-EC')} ${fecha.toLocaleTimeString('es-EC')}`;
 
     const mensaje = `${evento.descripcion || 'Sin descripción'}\nFecha: ${fechaFormateada}`;
-    const htmlCorreo = `
-        <div style="font-family: sans-serif; color: #333;">
-            <h2 style="color: #d32f2f;">${titulo}</h2>
-            <p><strong>Fecha y Hora:</strong> ${fechaFormateada}</p>
-            <p><strong>Descripción:</strong><br/>${evento.descripcion || 'Sin descripción detallada'}</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="font-size: 11px; color: #999;">Este es un mensaje automático del sistema CCO KidScam.</p>
-        </div>
-    `;
+
+    const htmlCorreo = generarHTMLCorreo({
+        titulo: evento.titulo,
+        subtitulo: esActualizacion ? '✏️ EVENTO ACTUALIZADO' : '📢 NUEVO EVENTO',
+        fechaFormateada,
+        descripcion: evento.descripcion,
+        tipoEvento: evento.tipo,
+    });
 
     const ids = usuarios.map(u => u.id);
     const emails = usuarios.map(u => u.email).filter(Boolean);
 
-    // Crear notificaciones en BD (no bloqueante estricto, pero esperamos)
     try {
         await notificationService.crearNotificacionMasiva(ids, titulo, mensaje, 'EVENTO', evento.id);
         if (emails.length > 0) {

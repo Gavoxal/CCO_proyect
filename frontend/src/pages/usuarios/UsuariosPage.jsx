@@ -26,42 +26,21 @@ import MainLayout from '../../components/layout/MainLayout';
 import DataTable from '../../components/common/DataTable';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import { usuariosService } from '../../services/appServices';
 
 // ─── Paleta CCO ──────────────────────────────────────────────
 const CCO = { naranja: '#FF6B35', azul: '#004E89', crema: '#EFEFD0', violeta: '#6B2D5C', celeste: '#7BAE7F' };
 
 // ─── Config de Roles ─────────────────────────────────────────
 const ROLES = {
-    admin:         { label: 'Administrador',  color: '#7c4dff', emoji: '👑' },
-    director:      { label: 'Director',        color: '#00bcd4', emoji: '🎯' },
-    secretaria:    { label: 'Secretaría',      color: '#4caf50', emoji: '📋' },
-    tutor_especial:{ label: 'Tutor Especial',  color: '#ff9800', emoji: '⭐' },
-    tutor:         { label: 'Tutor',           color: '#9e9e9e', emoji: '👤' },
+    admin: { label: 'Administrador', color: '#7c4dff', emoji: '👑' },
+    director: { label: 'Director', color: '#00bcd4', emoji: '🎯' },
+    secretaria: { label: 'Secretaría', color: '#4caf50', emoji: '📋' },
+    tutor_especial: { label: 'Tutor Especial', color: '#ff9800', emoji: '⭐' },
+    tutor: { label: 'Tutor', color: '#9e9e9e', emoji: '👤' },
 };
 
-// ─── MOCK DATA ────────────────────────────────────────────────
-const STORAGE_KEY = 'cco_usuarios';
-
-const MOCK_USUARIOS = [
-    { id: 1, nombre: 'Andrea López',    username: 'andrea.lopez',  email: 'andrea@cco.org',  rol: 'admin',          activo: true,  createdAt: '2024-01-15' },
-    { id: 2, nombre: 'Carlos Mendoza',  username: 'c.mendoza',     email: 'carlos@cco.org',  rol: 'director',       activo: true,  createdAt: '2024-02-01' },
-    { id: 3, nombre: 'María García',    username: 'm.garcia',      email: 'maria@cco.org',   rol: 'secretaria',     activo: true,  createdAt: '2024-02-10' },
-    { id: 4, nombre: 'José Ramírez',    username: 'jose.ramirez',  email: 'jose@cco.org',    rol: 'tutor_especial', activo: true,  createdAt: '2024-03-05' },
-    { id: 5, nombre: 'Lucía Torres',    username: 'l.torres',      email: 'lucia@cco.org',   rol: 'tutor',          activo: true,  createdAt: '2024-03-12' },
-    { id: 6, nombre: 'Pedro Salinas',   username: 'p.salinas',     email: 'pedro@cco.org',   rol: 'tutor',          activo: false, createdAt: '2024-04-01' },
-    { id: 7, nombre: 'Ana Flores',      username: 'a.flores',      email: 'ana@cco.org',     rol: 'tutor',          activo: true,  createdAt: '2024-04-15' },
-    { id: 8, nombre: 'Diego Herrera',   username: 'd.herrera',     email: 'diego@cco.org',   rol: 'tutor_especial', activo: true,  createdAt: '2024-05-01' },
-];
-
-let nextId = 9;
-
-const getUsuarios = () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) { try { return JSON.parse(saved); } catch { /**/ } }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_USUARIOS));
-    return [...MOCK_USUARIOS];
-};
-const saveUsuarios = (data) => localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+// ─── Backend Integrado API ────────────────────────────────────────────────
 
 // ─── Chip de Rol ─────────────────────────────────────────────
 function RolChip({ rol, size = 'small' }) {
@@ -94,7 +73,9 @@ function UserAvatar({ nombre, rol, size = 40 }) {
 
 // ─── MODAL: FORMULARIO ───────────────────────────────────────
 const EMPTY_FORM = {
-    nombre: '', username: '', email: '', rol: 'tutor',
+    nombres: '', apellidos: '', cedula: '', telefono1: '', direccion: '',
+    username: '', email: '', rol: 'tutor',
+    profesion: '', fotoFile: null,
     password: '', confirmarPassword: '', activo: true,
 };
 
@@ -107,7 +88,17 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
     useEffect(() => {
         if (open) {
             if (item) {
-                setForm({ ...EMPTY_FORM, ...item, password: '', confirmarPassword: '' });
+                setForm({
+                    ...EMPTY_FORM,
+                    ...item,
+                    nombres: item.persona?.nombres || '',
+                    apellidos: item.persona?.apellidos || '',
+                    cedula: item.persona?.cedula || '',
+                    telefono1: item.persona?.telefono1 || '',
+                    direccion: item.persona?.direccion || '',
+                    profesion: item.persona?.tutor?.profesion || '',
+                    password: '', confirmarPassword: ''
+                });
             } else {
                 setForm(EMPTY_FORM);
             }
@@ -119,7 +110,9 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
 
     const validate = () => {
         const errs = {};
-        if (!form.nombre.trim()) errs.nombre = 'Campo requerido';
+        if (!form.nombres.trim()) errs.nombres = 'Campo requerido';
+        if (!form.apellidos.trim()) errs.apellidos = 'Campo requerido';
+        if (!form.cedula.trim()) errs.cedula = 'Campo requerido';
         if (!form.username.trim()) errs.username = 'Campo requerido';
         if (!form.email.trim()) errs.email = 'Campo requerido';
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email inválido';
@@ -154,14 +147,43 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
             <Divider />
             <DialogContent>
                 <Stack spacing={2} sx={{ pt: 1.5 }}>
-                    {/* Nombre completo */}
+                    {/* Nombres + Apellidos */}
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField
+                            label="Nombres *" value={form.nombres}
+                            onChange={e => set('nombres', e.target.value)}
+                            error={!!errors.nombres} helperText={errors.nombres}
+                            size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                            InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> }}
+                        />
+                        <TextField
+                            label="Apellidos *" value={form.apellidos}
+                            onChange={e => set('apellidos', e.target.value)}
+                            error={!!errors.apellidos} helperText={errors.apellidos}
+                            size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                        />
+                    </Box>
+
+                    {/* Cédula + Teléfono */}
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField
+                            label="Cédula *" value={form.cedula}
+                            onChange={e => set('cedula', e.target.value)}
+                            error={!!errors.cedula} helperText={errors.cedula}
+                            size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                        />
+                        <TextField
+                            label="Teléfono" value={form.telefono1}
+                            onChange={e => set('telefono1', e.target.value)}
+                            size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                        />
+                    </Box>
+
+                    {/* Dirección */}
                     <TextField
-                        label="Nombre completo *" value={form.nombre}
-                        onChange={e => set('nombre', e.target.value)}
-                        error={!!errors.nombre} helperText={errors.nombre}
-                        size="small" fullWidth
-                        InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> }}
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                        label="Dirección" value={form.direccion}
+                        onChange={e => set('direccion', e.target.value)}
+                        size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                     />
 
                     {/* Username + Email */}
@@ -192,6 +214,33 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
                             </MenuItem>
                         ))}
                     </TextField>
+
+                    {/* Campos Condicionales de Tutor */}
+                    {(form.rol === 'tutor' || form.rol === 'tutor_especial') && (
+                        <Box sx={{ bgcolor: alpha(CCO.azul, 0.03), p: 2, borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
+                            <Typography variant="caption" fontWeight={700} color={CCO.azul} display="block" mb={1}>
+                                Opciones Adicionales de Tutor
+                            </Typography>
+                            <Stack spacing={2}>
+                                <TextField
+                                    label="Profesión" value={form.profesion}
+                                    onChange={e => set('profesion', e.target.value)}
+                                    size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.paper' } }}
+                                />
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>Fotografía (Opcional)</Typography>
+                                    <Button variant="outlined" component="label" size="small" fullWidth sx={{ textTransform: 'none', borderRadius: 2, bgcolor: 'background.paper' }}>
+                                        {form.fotoFile ? form.fotoFile.name : 'Subir Imagen de Perfil'}
+                                        <input type="file" hidden accept="image/jpeg, image/png, image/webp"
+                                            onChange={e => {
+                                                if (e.target.files[0]) set('fotoFile', e.target.files[0]);
+                                            }}
+                                        />
+                                    </Button>
+                                </Box>
+                            </Stack>
+                        </Box>
+                    )}
 
                     {/* Estado Activo */}
                     <Box>
@@ -284,10 +333,10 @@ function UsuarioCard({ item, canEdit, onEditar, onEliminar, onToggleActivo }) {
         }}>
             <CardContent sx={{ flex: 1, pb: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                    <UserAvatar nombre={item.nombre} rol={item.rol} size={44} />
+                    <UserAvatar nombre={item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username} rol={item.rol} size={44} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={800} noWrap title={item.nombre}>
-                            {item.nombre}
+                        <Typography variant="body2" fontWeight={800} noWrap title={item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username}>
+                            {item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" noWrap display="block">
                             @{item.username}
@@ -363,20 +412,25 @@ export default function UsuariosPage() {
     const [formModal, setFormModal] = useState({ open: false, tipo: null, item: null });
 
     // ── Carga ─────────────────────────────────────────────────
-    const cargar = useCallback(() => {
+    const cargar = useCallback(async () => {
         setLoading(true);
-        setTimeout(() => {
-            setRows(getUsuarios());
+        try {
+            const res = await usuariosService.listar({ limit: 100 });
+            setRows(res.data || []);
+        } catch (error) {
+            enqueueSnackbar('Error cargando usuarios', { variant: 'error' });
+        } finally {
             setLoading(false);
-        }, 200);
-    }, []);
+        }
+    }, [enqueueSnackbar]);
 
     useEffect(() => { cargar(); }, [cargar]);
 
     // ── Filtrado ──────────────────────────────────────────────
     const filtered = useMemo(() => {
         return rows.filter(r => {
-            const txt = `${r.nombre} ${r.username} ${r.email}`.toLowerCase();
+            const nombreCompleto = r.persona ? `${r.persona.nombres} ${r.persona.apellidos}` : '';
+            const txt = `${nombreCompleto} ${r.username} ${r.email}`.toLowerCase();
             if (buscar && !txt.includes(buscar.toLowerCase())) return false;
             if (filtroRol && r.rol !== filtroRol) return false;
             if (filtroActivo === 'activo' && !r.activo) return false;
@@ -389,52 +443,64 @@ export default function UsuariosPage() {
     const limpiarFiltros = () => { setBuscar(''); setFiltroRol(''); setFiltroActivo(''); };
 
     // ── Handlers ──────────────────────────────────────────────
-    const handleConfirm = (form) => {
-        const usuarios = getUsuarios();
-        if (formModal.tipo === 'crear') {
-            const nuevo = {
-                ...form,
-                id: nextId++,
-                createdAt: new Date().toISOString().split('T')[0],
+    const handleConfirm = async (form) => {
+        try {
+            const formData = {
+                username: form.username,
+                email: form.email,
+                rol: form.rol,
+                activo: form.activo,
+                password: form.password,
+                profesion: form.profesion || undefined,
+                persona: {
+                    nombres: form.nombres,
+                    apellidos: form.apellidos,
+                    cedula: form.cedula,
+                    telefono1: form.telefono1,
+                    direccion: form.direccion,
+                }
             };
-            delete nuevo.confirmarPassword;
-            usuarios.push(nuevo);
-            saveUsuarios(usuarios);
-            enqueueSnackbar('Usuario creado correctamente', { variant: 'success' });
-        } else {
-            const idx = usuarios.findIndex(u => u.id === formModal.item.id);
-            if (idx >= 0) {
-                const updated = { ...usuarios[idx], ...form };
-                if (!updated.password) delete updated.password;
-                delete updated.confirmarPassword;
-                usuarios[idx] = updated;
-                saveUsuarios(usuarios);
+
+            if (formModal.tipo === 'crear') {
+                const res = await usuariosService.crear(formData);
+                if (form.fotoFile && res.data?.id) {
+                    await usuariosService.subirFoto(res.data.id, form.fotoFile);
+                }
+                enqueueSnackbar('Usuario creado correctamente', { variant: 'success' });
+            } else {
+                const res = await usuariosService.actualizar(formModal.item.id, formData);
+                if (form.fotoFile) {
+                    await usuariosService.subirFoto(formModal.item.id, form.fotoFile);
+                }
                 enqueueSnackbar('Usuario actualizado', { variant: 'success' });
             }
-        }
-        setFormModal(m => ({ ...m, open: false }));
-        cargar();
-    };
-
-    const handleEliminar = (id) => {
-        if (!window.confirm('¿Eliminar este usuario permanentemente?')) return;
-        const usuarios = getUsuarios().filter(u => u.id !== id);
-        saveUsuarios(usuarios);
-        enqueueSnackbar('Usuario eliminado', { variant: 'success' });
-        cargar();
-    };
-
-    const handleToggleActivo = (item) => {
-        const usuarios = getUsuarios();
-        const idx = usuarios.findIndex(u => u.id === item.id);
-        if (idx >= 0) {
-            usuarios[idx] = { ...usuarios[idx], activo: !usuarios[idx].activo };
-            saveUsuarios(usuarios);
-            enqueueSnackbar(
-                `Cuenta ${usuarios[idx].activo ? 'activada' : 'desactivada'}`,
-                { variant: usuarios[idx].activo ? 'success' : 'warning' }
-            );
+            setFormModal(m => ({ ...m, open: false }));
             cargar();
+        } catch (error) {
+            enqueueSnackbar(error.response?.data?.error || 'Error al guardar', { variant: 'error' });
+        }
+    };
+
+    const handleEliminar = async (id) => {
+        if (!window.confirm('¿Eliminar este usuario permanentemente?')) return;
+        try {
+            await usuariosService.eliminar(id);
+            enqueueSnackbar('Usuario eliminado', { variant: 'success' });
+            cargar();
+        } catch (error) {
+            enqueueSnackbar('Error al eliminar', { variant: 'error' });
+        }
+    };
+
+    const handleToggleActivo = async (item) => {
+        try {
+            await usuariosService.actualizar(item.id, { activo: !item.activo });
+            enqueueSnackbar(`Cuenta ${!item.activo ? 'activada' : 'desactivada'}`, {
+                variant: !item.activo ? 'success' : 'warning'
+            });
+            cargar();
+        } catch (error) {
+            enqueueSnackbar('Error actualizando estado', { variant: 'error' });
         }
     };
 
@@ -449,15 +515,18 @@ export default function UsuariosPage() {
     const columns = [
         {
             field: 'nombre', headerName: 'Usuario',
-            renderCell: r => (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <UserAvatar nombre={r.nombre} rol={r.rol} size={34} />
-                    <Box>
-                        <Typography variant="body2" fontWeight={700}>{r.nombre}</Typography>
-                        <Typography variant="caption" color="text.secondary">@{r.username} · {r.email}</Typography>
+            renderCell: r => {
+                const nombreCompleto = r.persona ? `${r.persona.nombres} ${r.persona.apellidos}` : r.username;
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <UserAvatar nombre={nombreCompleto} rol={r.rol} size={34} />
+                        <Box>
+                            <Typography variant="body2" fontWeight={700}>{nombreCompleto}</Typography>
+                            <Typography variant="caption" color="text.secondary">@{r.username} · {r.email}</Typography>
+                        </Box>
                     </Box>
-                </Box>
-            )
+                )
+            }
         },
         { field: 'rol', headerName: 'Rol', renderCell: r => <RolChip rol={r.rol} /> },
         {
