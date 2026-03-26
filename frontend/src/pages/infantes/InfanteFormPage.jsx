@@ -7,6 +7,7 @@ import {
 import { ArrowBack as BackIcon, Save as SaveIcon, PersonAdd as AddPersonIcon, PhotoCamera as CameraIcon, Delete as DeleteIcon, AssignmentInd as IdIcon, ChildCare as ChildIcon, ContactPhone as ContactIcon, CheckCircle as CheckedIcon, RadioButtonUnchecked as UncheckedIcon, Explore as MapIcon } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
+import { infantesService, usuariosService } from '../../services/appServices';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -24,33 +25,21 @@ const CCO = { amarillo: '#FFD700', naranja: '#FF8C00', violeta: '#6A5ACD', azul:
 
 
 
-// ─── Auto-generador de código ──────────────────────────
-// Formato: EC080200001, EC080200002, ...
-const PREFIX = 'EC0802';
-const generarCodigo = () => {
-    const leer = (k, d) => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : d; } catch { return d; } };
-    const infantes = leer('cco_infantes_v2', []);
-    // Busca el mayor número secuencial ya usado
-    let max = 0;
-    infantes.forEach(inf => {
-        if (inf.codigo && inf.codigo.startsWith(PREFIX)) {
-            const num = parseInt(inf.codigo.slice(PREFIX.length), 10);
-            if (!isNaN(num) && num > max) max = num;
-        }
-    });
-    return `${PREFIX}${String(max + 1).padStart(5, '0')}`;
-};
+// Generador simplificado
+const generarCodigo = () => `INF-${Math.floor(Date.now() / 1000)}`;
 
 const EMPTY_FORM = {
     codigo: '',
     foto: '',
     esPatrocinado: false,
+    tipoPrograma: 'Ministerio',
+    fuentePatrocinio: 'Ninguno',
     enfermedades: '',
     alergias: '',
+    tutorId: '',
     persona: {
         nombres: '', apellidos: '',
         fechaNacimiento: '',
-        tutor: '',
         cuidador: '',
         telefono: '',
         telefono2: '',
@@ -58,21 +47,6 @@ const EMPTY_FORM = {
         direccion: '',
         ubicacionGps: '',
         cedula: '',
-    },
-};
-
-// ─── Datos mock para edición ───────────────────────────
-const MOCK = {
-    1: {
-        codigo: 'EC080200001', foto: '', esPatrocinado: true,
-        enfermedades: 'Ninguna conocida', alergias: 'Ninguna',
-        persona: {
-            nombres: 'María Fernanda', apellidos: 'Chamba Condo',
-            fechaNacimiento: '2012-03-31', tutor: 'Fisma',
-            cuidador: 'María Magdalene Condo Sinalima',
-            telefono: '098 563 3054', telefono2: '', email: '',
-            direccion: 'Antofagasta, Menfi Central', ubicacionGps: '-4.0041,-79.2084', cedula: '',
-        },
     },
 };
 
@@ -117,11 +91,33 @@ const InfanteFormPage = () => {
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
     const [obteniendoGps, setObteniendoGps] = useState(false);
+    const [tutores, setTutores] = useState([]);
+    const [archivoFoto, setArchivoFoto] = useState(null);
     const fotoRef = useRef();
+
+    useEffect(() => {
+        const fetchTutores = async () => {
+            try {
+                const res = await usuariosService.listar({ limit: 500 });
+                const tutoresActivos = res.data.filter(u =>
+                    (u.rol === 'tutor' || u.rol === 'tutor_especial') && u.activo && u.persona?.tutor?.id
+                ).map(u => ({
+                    id: u.persona.tutor.id,
+                    nombres: u.persona.nombres,
+                    apellidos: u.persona.apellidos
+                }));
+                setTutores(tutoresActivos);
+            } catch (err) {
+                console.error("Error obteniendo tutores", err);
+            }
+        };
+        fetchTutores();
+    }, []);
 
     const handleFoto = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        setArchivoFoto(file);
         const reader = new FileReader();
         reader.onload = (ev) => set('foto', ev.target.result);
         reader.readAsDataURL(file);
@@ -150,54 +146,88 @@ const InfanteFormPage = () => {
 
     useEffect(() => {
         if (isEditing) {
-            const data = MOCK[id];
-            if (data) { setForm(data); return; }
-            // fallback genérico
-            setForm({
-                ...EMPTY_FORM,
-                codigo: `${PREFIX}${String(id).padStart(5, '0')}`,
-                esPatrocinado: Number(id) % 2 === 0,
-                persona: {
-                    ...EMPTY_FORM.persona,
-                    nombres: ['Camila', 'Sebastián', 'Valentina'][Number(id) % 3],
-                    apellidos: ['Torres', 'Morales', 'Cedeño'][Number(id) % 3],
-                    fechaNacimiento: '2018-06-15',
-                    tutor: 'Tutor ejemplo',
-                    cuidador: 'Representante ejemplo',
-                    telefono: '0987654321',
-                    direccion: 'Guayaquil',
-                    cedula: `095${id}234567`,
-                },
-            });
+            const cargar = async () => {
+                try {
+                    const res = await infantesService.obtener(id);
+                    const db = res.data;
+                    setForm({
+                        codigo: db.codigo || '',
+                        tutorId: db.tutorId || '',
+                        foto: db.fotografia || '',
+                        esPatrocinado: db.esPatrocinado || false,
+                        tipoPrograma: db.tipoPrograma || 'Ministerio',
+                        fuentePatrocinio: db.fuentePatrocinio || 'Ninguno',
+                        enfermedades: db.enfermedades || '',
+                        alergias: db.alergias || '',
+                        persona: {
+                            nombres: db.persona?.nombres || '',
+                            apellidos: db.persona?.apellidos || '',
+                            fechaNacimiento: db.persona?.fechaNacimiento ? db.persona.fechaNacimiento.split('T')[0] : '',
+                            telefono: db.persona?.telefono1 || '',
+                            telefono2: db.persona?.telefono2 || '',
+                            email: db.persona?.email || '',
+                            direccion: db.persona?.direccion || '',
+                            ubicacionGps: db.persona?.ubicacionGps || '',
+                            cedula: db.persona?.cedula || '',
+                        }
+                    });
+                } catch (err) {
+                    enqueueSnackbar('Error al cargar datos del infante', { variant: 'error' });
+                }
+            };
+            cargar();
         } else {
-            // Nuevo: auto-generar código
             setForm(f => ({ ...f, codigo: generarCodigo() }));
         }
-    }, [id, isEditing]);
+    }, [id, isEditing, enqueueSnackbar]);
 
-    const set  = (field, val) => setForm(f => ({ ...f, [field]: val }));
+    const set = (field, val) => setForm(f => ({ ...f, [field]: val }));
     const setP = (field, val) => setForm(f => ({ ...f, persona: { ...f.persona, [field]: val } }));
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSaving(true);
+        try {
+            const payload = {
+                codigo: form.codigo,
+                tipoPrograma: form.tipoPrograma,
+                esPatrocinado: form.esPatrocinado,
+                fuentePatrocinio: form.esPatrocinado ? form.fuentePatrocinio : 'Ninguno',
+                enfermedades: form.enfermedades,
+                alergias: form.alergias,
+                tutorId: form.tutorId || null,
+                persona: {
+                    nombres: form.persona.nombres || 'Sin nombre',
+                    apellidos: form.persona.apellidos,
+                    cedula: form.persona.cedula,
+                    telefono1: form.persona.telefono,
+                    telefono2: form.persona.telefono2,
+                    email: form.persona.email,
+                    direccion: form.persona.direccion,
+                    ubicacionGps: form.persona.ubicacionGps,
+                    ...(form.persona.fechaNacimiento ? { fechaNacimiento: new Date(form.persona.fechaNacimiento).toISOString() } : {})
+                }
+            };
+            let responseId = id;
+            if (isEditing) {
+                await infantesService.actualizar(id, payload);
+            } else {
+                const res = await infantesService.crear(payload);
+                responseId = res.data.id;
+            }
 
-        // Guardar en localStorage (mock persistence)
-        const leer = (k, d) => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : d; } catch { return d; } };
-        const infantes = leer('cco_infantes_v2', []);
-        if (isEditing) {
-            const idx = infantes.findIndex(i => String(i.id) === String(id) || i.codigo === form.codigo);
-            if (idx >= 0) infantes[idx] = { ...infantes[idx], ...form };
-            else infantes.push({ id: Number(id), ...form });
-        } else {
-            infantes.push({ id: Date.now(), ...form });
+            if (archivoFoto) {
+                await infantesService.subirFoto(responseId, archivoFoto);
+            }
+
+            enqueueSnackbar(isEditing ? 'Infante actualizado' : 'Infante creado', { variant: 'success' });
+            navigate(`/infantes/${responseId}`);
+        } catch (err) {
+            const errMessage = err.response?.data?.error || err.message;
+            enqueueSnackbar(`Error: ${errMessage}`, { variant: 'error' });
+        } finally {
+            setSaving(false);
         }
-        localStorage.setItem('cco_infantes_v2', JSON.stringify(infantes));
-
-        await new Promise(r => setTimeout(r, 500));
-        setSaving(false);
-        enqueueSnackbar(isEditing ? 'Infante actualizado' : 'Infante creado', { variant: 'success' });
-        navigate(isEditing ? `/infantes/${id}` : '/infantes');
     };
 
     // Calcular edad automáticamente
@@ -247,8 +277,8 @@ const InfanteFormPage = () => {
                         </Box>
                         <Grid container spacing={2.5}>
 
-                            {/* Código del infante — siempre editable */}
-                            <Grid item xs={12} sm={6}>
+                            {/* Código del infante */}
+                            <Grid item xs={12} sm={6} md={3}>
                                 <TextField fullWidth label="Código del Infante" value={form.codigo}
                                     onChange={e => set('codigo', e.target.value)}
                                     size="small"
@@ -257,9 +287,19 @@ const InfanteFormPage = () => {
                                 />
                             </Grid>
 
+                            {/* Tipo Programa */}
+                            <Grid item xs={12} sm={6} md={3}>
+                                <TextField fullWidth select label="Tipo de Programa" value={form.tipoPrograma || 'Ministerio'}
+                                    onChange={e => set('tipoPrograma', e.target.value)} size="small"
+                                    SelectProps={{ displayEmpty: true }}>
+                                    <MenuItem value="Ministerio">Ministerio</MenuItem>
+                                    <MenuItem value="Comedor">Comedor</MenuItem>
+                                    <MenuItem value="Ambos">Ambos</MenuItem>
+                                </TextField>
+                            </Grid>
 
                             {/* Patrocinio — switch simple */}
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={6} md={3}>
                                 <Box sx={{
                                     border: `1.5px solid`,
                                     borderColor: form.esPatrocinado ? alpha('#4caf50', 0.5) : theme.palette.divider,
@@ -283,6 +323,18 @@ const InfanteFormPage = () => {
                                     </Box>
                                     <Switch checked={form.esPatrocinado} onChange={e => { e.stopPropagation(); set('esPatrocinado', e.target.checked); }} color="success" />
                                 </Box>
+                            </Grid>
+
+                            {/* Fuente Patrocinio */}
+                            <Grid item xs={12} sm={6} md={3}>
+                                <TextField fullWidth select label="Fuente de Patrocinio" value={form.esPatrocinado ? (form.fuentePatrocinio || 'Compassion') : 'Ninguno'}
+                                    onChange={e => set('fuentePatrocinio', e.target.value)} size="small"
+                                    disabled={!form.esPatrocinado}
+                                    SelectProps={{ displayEmpty: true }}>
+                                    <MenuItem value="Ninguno" disabled><em>Ninguno</em></MenuItem>
+                                    <MenuItem value="Compassion">Compassion</MenuItem>
+                                    <MenuItem value="Plan">Plan Global</MenuItem>
+                                </TextField>
                             </Grid>
 
                             {/* Foto del infante */}
@@ -369,9 +421,14 @@ const InfanteFormPage = () => {
                                     onChange={e => setP('cedula', e.target.value)} size="small" placeholder="0900000000" />
                             </Grid>
                             <Grid item xs={12} sm={4}>
-                                <TextField fullWidth label="Tutor" value={form.persona.tutor}
-                                    onChange={e => setP('tutor', e.target.value)} size="small"
-                                    placeholder="Nombre del tutor" />
+                                <TextField fullWidth select label="Tutor" value={form.tutorId || ''}
+                                    onChange={e => set('tutorId', e.target.value ? Number(e.target.value) : '')} size="small"
+                                    SelectProps={{ displayEmpty: true }}>
+                                    <MenuItem value=""><em>Sin tutor asignado</em></MenuItem>
+                                    {tutores.map(t => (
+                                        <MenuItem key={t.id} value={t.id}>{t.nombres} {t.apellidos}</MenuItem>
+                                    ))}
+                                </TextField>
                             </Grid>
                         </Grid>
                     </CardContent>
@@ -415,7 +472,7 @@ const InfanteFormPage = () => {
                             <Grid item xs={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                                     <Typography variant="body2" fontWeight={700}>Ubicación Interactiva (Pincha en el mapa)</Typography>
-                                    <Button variant="outlined" size="small" startIcon={<MapIcon />} 
+                                    <Button variant="outlined" size="small" startIcon={<MapIcon />}
                                         onClick={obtenerUbicacion} disabled={obteniendoGps}
                                         sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}>
                                         {obteniendoGps ? 'Ubicando...' : 'Obtener mi ubicación'}
@@ -425,14 +482,14 @@ const InfanteFormPage = () => {
                                     onChange={e => setP('ubicacionGps', e.target.value)} size="small"
                                     placeholder="Da clic en el mapa para generar coordenadas, o pega un link"
                                     sx={{ mb: 2 }} />
-                                
+
                                 <Box sx={{ width: '100%', height: 320, borderRadius: 3, overflow: 'hidden', border: `1px solid ${theme.palette.divider}`, position: 'relative', zIndex: 0 }}>
-                                    <MapContainer 
+                                    <MapContainer
                                         center={
                                             form.persona.ubicacionGps && form.persona.ubicacionGps.includes(',') && !isNaN(parseFloat(form.persona.ubicacionGps.split(',')[0]))
-                                            ? { lat: parseFloat(form.persona.ubicacionGps.split(',')[0]), lng: parseFloat(form.persona.ubicacionGps.split(',')[1]) }
-                                            : { lat: -3.997809, lng: -79.222595 } // Loja, Ecuador por defecto
-                                        } 
+                                                ? { lat: parseFloat(form.persona.ubicacionGps.split(',')[0]), lng: parseFloat(form.persona.ubicacionGps.split(',')[1]) }
+                                                : { lat: -3.997809, lng: -79.222595 } // Loja, Ecuador por defecto
+                                        }
                                         zoom={14} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }}>
                                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
                                         <MapUpdater positionStr={form.persona.ubicacionGps} />

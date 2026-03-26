@@ -1,10 +1,11 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Grid, Card, CardContent, Avatar, Chip,
     Tab, Tabs, Button, IconButton, Tooltip, Table, TableBody,
     TableCell, TableHead, TableRow, Alert, alpha, useTheme,
     LinearProgress, Paper, Divider, Stack, CircularProgress, Badge,
+    Dialog
 } from '@mui/material';
 import {
     Edit as EditIcon, CameraAlt as CameraIcon, ArrowBack as BackIcon,
@@ -13,10 +14,12 @@ import {
     CalendarMonth as CalIcon, CheckCircle as CheckIcon,
     Cancel as CancelIcon, Warning as WarningIcon,
     PhotoCamera as PhotoIcon, Explore as MapIcon,
+    Close as CloseIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import { infantesService } from '../../services/appServices';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { amarillo: '#FFD700', naranja: '#FF8C00', violeta: '#6A5ACD', azul: '#4169E1' };
@@ -28,87 +31,7 @@ const ESTADO_ICON = {
     Justificado: <WarningIcon sx={{ fontSize: 16 }} />,
 };
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_INFANTES = {
-    1: {
-        id: 1, codigo: 'INF-001', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: 'Ninguna conocida', alergias: 'Ninguna',
-        persona: { nombres: 'María Gabriela', apellidos: 'López Mendoza', cedula: '0951234567', telefono1: '0987654321', telefono2: '042345678', email: 'contacto.maria@gmail.com', direccion: 'Av. 9 de Octubre y Malecón, Guayaquil', fechaNacimiento: '2018-03-12' },
-        tutor: { persona: { nombres: 'Ana María', apellidos: 'Mendoza Cedeño' } },
-        fotografia: '/mock-fotos/inf001.png', fechaActualizacionFoto: '2025-12-15',
-        asistencias: [
-            { id: 1, fecha: '2026-03-01', estado: 'Presente' },
-            { id: 2, fecha: '2026-02-22', estado: 'Presente' },
-            { id: 3, fecha: '2026-02-15', estado: 'Ausente' },
-            { id: 4, fecha: '2026-02-08', estado: 'Presente' },
-            { id: 5, fecha: '2026-02-01', estado: 'Justificado' },
-            { id: 6, fecha: '2026-01-25', estado: 'Presente' },
-            { id: 7, fecha: '2026-01-18', estado: 'Presente' },
-            { id: 8, fecha: '2026-01-11', estado: 'Presente' },
-        ],
-        visitas: [
-            { id: 1, fecha: '2026-01-20', observaciones: 'Familia estable, madre muy colaboradora. Hogar limpio y organizado. La niña está al día con tareas escolares.', archivoAdjunto: null },
-            { id: 2, fecha: '2025-07-15', observaciones: 'Visita semestral. Todo en orden, la niña avanza bien en la escuela.', archivoAdjunto: null },
-            { id: 3, fecha: '2025-01-10', observaciones: 'Primera visita del año. La familia reporta buena salud general.', archivoAdjunto: null },
-        ],
-        regalos: [
-            { id: 1, anio: 2025, tipo: 'navidad', estado: 'entregado', fechaEntrega: '2025-12-20' },
-            { id: 2, anio: 2025, tipo: 'kit_escolar', estado: 'entregado', fechaEntrega: '2025-03-15' },
-            { id: 3, anio: 2026, tipo: 'kit_escolar', estado: 'entregado', fechaEntrega: '2026-03-01' },
-            { id: 4, anio: 2026, tipo: 'navidad', estado: 'pendiente', fechaEntrega: null },
-        ],
-    },
-    2: {
-        id: 2, codigo: 'INF-002', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: 'Asma leve', alergias: 'Polvo',
-        persona: { nombres: 'José Andrés', apellidos: 'Pérez Villao', cedula: '0952345678', telefono1: '0998765432', telefono2: '042567890', email: '', direccion: 'Sauces 8, Mz 124 V5, Guayaquil', fechaNacimiento: '2020-07-18' },
-        tutor: { persona: { nombres: 'Carmen Rosa', apellidos: 'Villao Suárez' } },
-        fotografia: '/mock-fotos/inf002.png', fechaActualizacionFoto: '2026-01-20',
-        asistencias: [
-            { id: 10, fecha: '2026-03-01', estado: 'Presente' },
-            { id: 11, fecha: '2026-02-22', estado: 'Presente' },
-            { id: 12, fecha: '2026-02-15', estado: 'Presente' },
-            { id: 13, fecha: '2026-02-08', estado: 'Ausente' },
-            { id: 14, fecha: '2026-02-01', estado: 'Presente' },
-        ],
-        visitas: [
-            { id: 10, fecha: '2026-02-10', observaciones: 'Se recomienda chequeo médico por asma. Niño activo y alegre.', archivoAdjunto: null },
-        ],
-        regalos: [
-            { id: 10, anio: 2025, tipo: 'navidad', estado: 'entregado', fechaEntrega: '2025-12-20' },
-            { id: 11, anio: 2026, tipo: 'kit_escolar', estado: 'pendiente', fechaEntrega: null },
-        ],
-    },
-};
-
-// Generar datos básicos para IDs sin detalle completo
-const generateBasicDetail = (id) => ({
-    id,
-    codigo: `INF-${String(id).padStart(3, '0')}`,
-    tipoPrograma: ['Ministerio', 'Comedor', 'Ambos'][id % 3],
-    esPatrocinado: id % 2 === 0,
-    fuentePatrocinio: id % 2 === 0 ? 'Compassion' : 'Ninguno',
-    enfermedades: '', alergias: '',
-    persona: {
-        nombres: ['Camila Sofía', 'Sebastián', 'Valentina', 'Daniel', 'Isabella', 'Matías', 'Luciana', 'Nicolás', 'Emilia', 'Santiago'][id % 10],
-        apellidos: ['Torres', 'Morales', 'Cedeño', 'Ramírez', 'Vélez', 'Suárez', 'Mera', 'Castro', 'Figueroa', 'Quishpe'][id % 10],
-        cedula: `095${id}234567`, telefono1: `09${id}7654321`, telefono2: '', email: '', direccion: 'Guayaquil',
-        fechaNacimiento: `201${7 + (id % 4)}-${String((id % 12) + 1).padStart(2, '0')}-${String((id % 28) + 1).padStart(2, '0')}`,
-    },
-    tutor: { persona: { nombres: 'Tutor', apellidos: `del Niño ${id}` } },
-    fotografia: null,
-    asistencias: Array.from({ length: 6 }, (_, i) => ({
-        id: id * 100 + i, fecha: `2026-0${3 - Math.floor(i / 4)}-${String(Math.max(1, 28 - i * 7)).padStart(2, '0')}`,
-        estado: ['Presente', 'Presente', 'Ausente', 'Presente', 'Justificado', 'Presente'][i],
-    })),
-    visitas: id % 3 === 0 ? [] : [
-        { id: id * 10, fecha: '2026-01-15', observaciones: 'Visita de rutina. Todo en orden.', archivoAdjunto: null },
-    ],
-    regalos: [
-        { id: id * 10, anio: 2025, tipo: 'navidad', estado: 'entregado', fechaEntrega: '2025-12-20' },
-        { id: id * 10 + 1, anio: 2026, tipo: 'kit_escolar', estado: id % 2 === 0 ? 'entregado' : 'pendiente', fechaEntrega: id % 2 === 0 ? '2026-03-01' : null },
-    ],
-});
+// MOCK y generator eliminados
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const calcEdad = (fechaNac) => {
@@ -143,29 +66,35 @@ const InfanteDetailPage = () => {
     const [uploadingFoto, setUploadingFoto] = useState(false);
     const [fotoPreview, setFotoPreview] = useState(null);
     const [fotoFecha, setFotoFecha] = useState(null);
+    const [visorFoto, setVisorFoto] = useState(false);
 
     const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
 
-    // Cargar infante (local storage fallback)
-    const infante = useMemo(() => {
-        try {
-            const s = localStorage.getItem('cco_infantes_v2');
-            if (s) {
-                const arr = JSON.parse(s);
-                const found = arr.find(i => String(i.id) === String(id));
-                if (found) return found;
-            }
-        } catch {}
-        return MOCK_INFANTES[id] || generateBasicDetail(Number(id));
-    }, [id]);
+    const [infante, setInfante] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    const p = infante.persona || {};
-    const edad = calcEdad(p.fechaNacimiento);
+    useEffect(() => {
+        const cargar = async () => {
+            try {
+                setLoading(true);
+                const res = await infantesService.obtener(id);
+                setInfante(res.data);
+            } catch (err) {
+                enqueueSnackbar('Error al cargar datos del infante', { variant: 'error' });
+            } finally {
+                setLoading(false);
+            }
+        };
+        cargar();
+    }, [id, enqueueSnackbar]);
+
+    const p = infante?.persona || {};
+    const edad = p.fechaNacimiento ? calcEdad(p.fechaNacimiento) : 0;
     const anio = new Date().getFullYear();
 
     // Foto actual (con preview si se subió una nueva)
-    const currentFoto = fotoPreview || infante.fotografia;
-    const currentFotoFecha = fotoFecha || infante.fechaActualizacionFoto;
+    const currentFoto = fotoPreview || infante?.fotografia;
+    const currentFotoFecha = fotoFecha || infante?.fechaActualizacionFoto;
 
     // Color de la fecha de foto
     const getFotoFreshness = (fecha) => {
@@ -179,30 +108,36 @@ const InfanteDetailPage = () => {
 
     const fotoInfo = getFotoFreshness(currentFotoFecha);
 
-    // Subir foto (mock)
     const handleFotoChange = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         setUploadingFoto(true);
-        // Simular upload
-        await new Promise(r => setTimeout(r, 800));
-        const url = URL.createObjectURL(file);
-        setFotoPreview(url);
-        setFotoFecha(new Date().toISOString().split('T')[0]);
-        setUploadingFoto(false);
-        enqueueSnackbar('Foto actualizada correctamente', { variant: 'success' });
+        try {
+            await infantesService.subirFoto(id, file);
+            const url = URL.createObjectURL(file);
+            setFotoPreview(url);
+            setFotoFecha(new Date().toISOString().split('T')[0]);
+            enqueueSnackbar('Foto actualizada correctamente', { variant: 'success' });
+        } catch (error) {
+            enqueueSnackbar('Error al actualizar foto', { variant: 'error' });
+        } finally {
+            setUploadingFoto(false);
+        }
     };
 
     // Estadísticas de asistencia
     const asistStats = useMemo(() => {
-        const total = infante.asistencias?.length || 0;
-        const presentes = infante.asistencias?.filter(a => a.estado === 'Presente').length || 0;
-        const ausentes = infante.asistencias?.filter(a => a.estado === 'Ausente').length || 0;
-        const justificados = infante.asistencias?.filter(a => a.estado === 'Justificado').length || 0;
+        const total = infante?.asistencias?.length || 0;
+        const presentes = infante?.asistencias?.filter(a => a.estado === 'Presente').length || 0;
+        const ausentes = infante?.asistencias?.filter(a => a.estado === 'Ausente').length || 0;
+        const justificados = infante?.asistencias?.filter(a => a.estado === 'Justificado').length || 0;
         return { total, presentes, ausentes, justificados, porcentaje: total > 0 ? Math.round((presentes / total) * 100) : 0 };
     }, [infante]);
 
-    const visitadoEsteAnio = infante.visitas?.some(v => new Date(v.fecha).getFullYear() === anio);
+    const visitadoEsteAnio = infante?.visitas?.some(v => new Date(v.fecha).getFullYear() === anio);
+
+    if (loading) return <MainLayout><Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box></MainLayout>;
+    if (!infante) return <MainLayout><Alert severity="error" sx={{ m: 3 }}>Infante no encontrado</Alert></MainLayout>;
 
     return (
         <MainLayout>
@@ -259,11 +194,13 @@ const InfanteDetailPage = () => {
                                 >
                                     <Avatar
                                         src={currentFoto || undefined}
+                                        onClick={() => currentFoto && setVisorFoto(true)}
                                         sx={{
                                             width: 110, height: 110, fontSize: '2.2rem', fontWeight: 800,
                                             bgcolor: AVATAR_COLORS[infante.id % AVATAR_COLORS.length],
                                             boxShadow: `0 4px 20px ${alpha(AVATAR_COLORS[infante.id % AVATAR_COLORS.length], 0.4)}`,
                                             border: `3px solid ${fotoInfo.color}`,
+                                            cursor: currentFoto ? 'pointer' : 'default',
                                         }}
                                     >
                                         {p.nombres?.charAt(0)}{p.apellidos?.charAt(0)}
@@ -287,7 +224,7 @@ const InfanteDetailPage = () => {
                                     <Chip label={`Código: ${infante.codigo}`} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
                                     <Chip label={infante.tipoPrograma} size="small" color="primary" sx={{ fontWeight: 600 }} />
                                     <Chip
-                                        label={infante.esPatrocinado ? `Patrocinado · ${infante.fuentePatrocinio}` : 'No patrocinado'}
+                                        label={infante.esPatrocinado ? (infante.fuentePatrocinio && infante.fuentePatrocinio !== 'Ninguno' ? `Patrocinado · ${infante.fuentePatrocinio}` : 'Patrocinado') : 'Sin patrocinio'}
                                         size="small"
                                         color={infante.esPatrocinado ? 'success' : 'default'}
                                         sx={{ fontWeight: 600 }}
@@ -546,6 +483,20 @@ const InfanteDetailPage = () => {
                         </Table>
                     </Paper>
                 )}
+
+                {/* Modal para ver foto en grande */}
+                <Dialog open={visorFoto} onClose={() => setVisorFoto(false)} maxWidth="sm" fullWidth>
+                    <Box sx={{ position: 'relative', bgcolor: '#000' }}>
+                        <IconButton
+                            onClick={() => setVisorFoto(false)}
+                            sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                        <img src={currentFoto} alt="Foto del Infante" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
+                    </Box>
+                </Dialog>
+
             </Box>
         </MainLayout>
     );

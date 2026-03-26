@@ -31,7 +31,8 @@ export async function listar(request, reply) {
             where, skip, take: limit,
             include: {
                 persona: true,
-                tutor: { include: { persona: true } }
+                tutor: { include: { persona: true } },
+                visitas: { take: 1, orderBy: { fecha: 'desc' } }
             },
             orderBy: [{ persona: { apellidos: 'asc' } }]
         })

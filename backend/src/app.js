@@ -4,8 +4,14 @@ import { authPlugin } from './plugins/auth.js'
 import { corsPlugin } from './plugins/cors.js'
 import { rateLimitPlugin } from './plugins/rateLimit.js'
 import multipart from '@fastify/multipart'
+import fastifyStatic from '@fastify/static'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // Rutas de módulos
 import authRoutes from './modules/auth/auth.routes.js'
@@ -38,6 +44,12 @@ export async function buildApp() {
         limits: {
             fileSize: (parseInt(process.env.MAX_FILE_SIZE_MB || '5')) * 1024 * 1024
         }
+    })
+
+    // ── Servir archivos estáticos (uploads) ─────────────────
+    await app.register(fastifyStatic, {
+        root: path.join(process.cwd(), 'uploads'),
+        prefix: '/uploads/',
     })
 
     // ── Documentación interactiva (Swagger) ─────────────────

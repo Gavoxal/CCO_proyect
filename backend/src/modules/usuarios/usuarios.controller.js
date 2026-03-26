@@ -18,7 +18,7 @@ export async function listar(request, reply) {
             select: {
                 id: true, username: true, email: true,
                 rol: true, activo: true, ultimoAcceso: true,
-                persona: { select: { nombres: true, apellidos: true, telefono1: true } }
+                persona: { select: { nombres: true, apellidos: true, telefono1: true, tutor: { select: { id: true } } } }
             },
             orderBy: { createdAt: 'desc' }
         })

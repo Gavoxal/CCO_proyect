@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Button, Chip, Avatar, TextField, MenuItem,
@@ -18,6 +18,7 @@ import {
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import { infantesService } from '../../services/appServices';
 import * as XLSX from 'xlsx';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
@@ -27,93 +28,7 @@ const PROGRAMA_COLORS = { Ministerio: 'primary', Comedor: 'warning', Ambos: 'suc
 const ROL_ESCRITURA = ['admin', 'director', 'secretaria', 'tutor_especial'];
 const AVATAR_COLORS = ['#7c4dff', '#00bcd4', '#ff5722', '#4caf50', '#ff9800', '#e91e63', '#3f51b5', '#009688'];
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_INFANTES = [
-    {
-        id: 1, codigo: 'INF-001', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: '', alergias: 'Ninguna',
-        fotografia: '/mock-fotos/inf001.png', fechaActualizacionFoto: '2025-12-15',
-        persona: { nombres: 'María Gabriela', apellidos: 'López Mendoza', cedula: '0951234567', telefono1: '0987654321', telefono2: '', email: '', direccion: 'Av. 9 de Octubre y Malecón', fechaNacimiento: '2018-03-12' },
-        tutor: { persona: { nombres: 'Ana María', apellidos: 'Mendoza Cedeño' } },
-    },
-    {
-        id: 2, codigo: 'INF-002', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: 'Asma leve', alergias: 'Polvo',
-        fotografia: '/mock-fotos/inf002.png', fechaActualizacionFoto: '2026-01-20',
-        persona: { nombres: 'José Andrés', apellidos: 'Pérez Villao', cedula: '0952345678', telefono1: '0998765432', telefono2: '042567890', email: '', direccion: 'Sauces 8, Mz 124 V5', fechaNacimiento: '2020-07-18' },
-        tutor: { persona: { nombres: 'Carmen Rosa', apellidos: 'Villao Suárez' } },
-    },
-    {
-        id: 3, codigo: 'INF-003', tipoPrograma: 'Ambos', esPatrocinado: false, fuentePatrocinio: 'Ninguno',
-        enfermedades: '', alergias: '',
-        fotografia: '/mock-fotos/inf003.png', fechaActualizacionFoto: '2025-06-10',
-        persona: { nombres: 'Camila Sofía', apellidos: 'Torres Aragundi', cedula: '0953456789', telefono1: '0961234567', telefono2: '', email: '', direccion: 'Bastión Popular Blq 1A', fechaNacimiento: '2016-11-24' },
-        tutor: { persona: { nombres: 'Luis Alberto', apellidos: 'Torres Gómez' } },
-    },
-    {
-        id: 4, codigo: 'INF-004', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Plan',
-        enfermedades: '', alergias: 'Mariscos',
-        fotografia: '/mock-fotos/inf004.png', fechaActualizacionFoto: '2026-02-28',
-        persona: { nombres: 'Sebastián', apellidos: 'Morales Intriago', cedula: '0954567890', telefono1: '0976543210', telefono2: '', email: '', direccion: 'Guasmo Sur Coop. Cristo Vive', fechaNacimiento: '2019-01-05' },
-        tutor: { persona: { nombres: 'Gloria', apellidos: 'Intriago Palma' } },
-    },
-    {
-        id: 5, codigo: 'INF-005', tipoPrograma: 'Comedor', esPatrocinado: false, fuentePatrocinio: 'Ninguno',
-        enfermedades: 'Rinitis', alergias: '',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Valentina', apellidos: 'Cedeño Bravo', cedula: '0955678901', telefono1: '0945678901', telefono2: '', email: '', direccion: 'Isla Trinitaria Coop. Independencia', fechaNacimiento: '2017-05-30' },
-        tutor: { persona: { nombres: 'Marta', apellidos: 'Bravo Moreira' } },
-    },
-    {
-        id: 6, codigo: 'INF-006', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: '', alergias: '',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Daniel Alejandro', apellidos: 'Ramírez Loor', cedula: '0956789012', telefono1: '0934567890', telefono2: '', email: '', direccion: 'Flor de Bastión Blq 7', fechaNacimiento: '2018-09-14' },
-        tutor: { persona: { nombres: 'Patricia', apellidos: 'Loor Zambrano' } },
-    },
-    {
-        id: 7, codigo: 'INF-007', tipoPrograma: 'Ambos', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: 'Dermatitis atópica', alergias: 'Lácteos',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Isabella', apellidos: 'Vélez Zambrano', cedula: '0957890123', telefono1: '0923456789', telefono2: '', email: '', direccion: 'Paraíso de la Flor Etapa 2', fechaNacimiento: '2019-12-01' },
-        tutor: { persona: { nombres: 'Rosa', apellidos: 'Zambrano Quiñónez' } },
-    },
-    {
-        id: 8, codigo: 'INF-008', tipoPrograma: 'Ministerio', esPatrocinado: false, fuentePatrocinio: 'Ninguno',
-        enfermedades: '', alergias: '',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Matías', apellidos: 'Suárez Pincay', cedula: '0958901234', telefono1: '0912345678', telefono2: '', email: '', direccion: 'Sergio Toral Sec. 3', fechaNacimiento: '2020-04-22' },
-        tutor: { persona: { nombres: 'Jorge', apellidos: 'Suárez Reyes' } },
-    },
-    {
-        id: 9, codigo: 'INF-009', tipoPrograma: 'Comedor', esPatrocinado: false, fuentePatrocinio: 'Ninguno',
-        enfermedades: '', alergias: 'Gluten',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Luciana', apellidos: 'Mera Chávez', cedula: '0959012345', telefono1: '0901234567', telefono2: '', email: '', direccion: 'Monte Sinaí Coop. Realidad', fechaNacimiento: '2017-08-10' },
-        tutor: { persona: { nombres: 'Elena', apellidos: 'Chávez Ponce' } },
-    },
-    {
-        id: 10, codigo: 'INF-010', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Plan',
-        enfermedades: '', alergias: '',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Nicolás Emilio', apellidos: 'Castro Bone', cedula: '0950123456', telefono1: '0890123456', telefono2: '042345678', email: '', direccion: 'Vergeles Sector 1 Mz 20', fechaNacimiento: '2018-06-28' },
-        tutor: { persona: { nombres: 'Sandra', apellidos: 'Bone Espinoza' } },
-    },
-    {
-        id: 11, codigo: 'INF-011', tipoPrograma: 'Ministerio', esPatrocinado: true, fuentePatrocinio: 'Compassion',
-        enfermedades: '', alergias: '',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Emilia', apellidos: 'Figueroa Palacios', cedula: '0961234500', telefono1: '0967891234', telefono2: '', email: '', direccion: 'Coop. Nueva Prosperina', fechaNacimiento: '2019-02-15' },
-        tutor: { persona: { nombres: 'María', apellidos: 'Palacios Vera' } },
-    },
-    {
-        id: 12, codigo: 'INF-012', tipoPrograma: 'Ambos', esPatrocinado: false, fuentePatrocinio: 'Ninguno',
-        enfermedades: 'Anemia leve', alergias: '',
-        fotografia: null, fechaActualizacionFoto: null,
-        persona: { nombres: 'Santiago', apellidos: 'Quishpe Yagual', cedula: '0962345600', telefono1: '0956782345', telefono2: '', email: '', direccion: 'Pascuales Coop. El Fortín', fechaNacimiento: '2016-10-03' },
-        tutor: { persona: { nombres: 'Pedro', apellidos: 'Quishpe Llumiquinga' } },
-    },
-];
+// MOCK_INFANTES eliminado: ahora se usa el backend real
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const calcEdad = (fechaNac) => {
@@ -186,22 +101,31 @@ const InfantesPage = () => {
     const { enqueueSnackbar } = useSnackbar();
     const fileInputRef = useRef(null);
 
-    const getLocalInfantes = () => {
-        try {
-            const s = localStorage.getItem('cco_infantes_v2');
-            if (s) {
-                const parsed = JSON.parse(s);
-                return parsed.length > 0 ? parsed : MOCK_INFANTES;
-            }
-        } catch {}
-        localStorage.setItem('cco_infantes_v2', JSON.stringify(MOCK_INFANTES));
-        return MOCK_INFANTES;
-    };
+    const [infantes, setInfantes] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
-    const [infantes, setInfantes] = useState(getLocalInfantes);
+    const cargarInfantes = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await infantesService.listar({ limit: 500 }); // Cargamos gran parte de corrido
+            setInfantes(res.data || []);
+        } catch (error) {
+            enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
+            setInfantes([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [enqueueSnackbar]);
+
+    useEffect(() => {
+        cargarInfantes();
+    }, [cargarInfantes]);
+
     const [search, setSearch] = useState('');
     const [filtroPat, setFiltroPat] = useState('');
     const [filtroTutor, setFiltroTutor] = useState('');
+    const [filtroVisita, setFiltroVisita] = useState('');
     const [page, setPage] = useState(0);
 
     const getTutorName = (row) => {
@@ -245,8 +169,15 @@ const InfantesPage = () => {
         if (filtroPat === 'true') res = res.filter(i => i.esPatrocinado);
         if (filtroPat === 'false') res = res.filter(i => !i.esPatrocinado);
         if (filtroTutor) res = res.filter(i => getTutorName(i) === filtroTutor);
+        if (filtroVisita !== '') {
+            const currYear = new Date().getFullYear();
+            res = res.filter(i => {
+                const visited = !!i.visitas?.some(v => new Date(v.fecha).getFullYear() === currYear);
+                return filtroVisita === 'true' ? visited : !visited;
+            });
+        }
         return res;
-    }, [infantes, search, filtroPat, filtroTutor]);
+    }, [infantes, search, filtroPat, filtroTutor, filtroVisita]);
 
     // Ordenamiento
     const sorted = useMemo(() => {
@@ -270,12 +201,15 @@ const InfantesPage = () => {
         setOrderBy(field);
     };
 
-    const handleEliminar = (id) => {
+    const handleEliminar = async (id) => {
         if (!window.confirm('¿Eliminar este infante? Esta acción no se puede deshacer.')) return;
-        const nuevos = infantes.filter(i => i.id !== id);
-        setInfantes(nuevos);
-        localStorage.setItem('cco_infantes_v2', JSON.stringify(nuevos));
-        enqueueSnackbar('Infante eliminado', { variant: 'success' });
+        try {
+            await infantesService.eliminar(id);
+            setInfantes(prev => prev.filter(i => i.id !== id));
+            enqueueSnackbar('Infante eliminado', { variant: 'success' });
+        } catch (error) {
+            enqueueSnackbar('Error al eliminar infante', { variant: 'error' });
+        }
     };
 
     // ── Excel Import ──────────────────────────────────────────────────────────
@@ -308,38 +242,62 @@ const InfantesPage = () => {
         e.target.value = '';
     };
 
-    const handleImportConfirm = () => {
-        const maxId = Math.max(...infantes.map(i => i.id), 0);
-        const newInfantes = importData.map((row, idx) => {
-            const mapped = mapExcelRow(row);
-            return {
-                id: maxId + idx + 1,
-                codigo: mapped.codigo || `INF-${String(maxId + idx + 1).padStart(3, '0')}`,
-                tipoPrograma: mapped.tipoPrograma || 'Ministerio',
-                esPatrocinado: mapped.esPatrocinado || false,
-                fuentePatrocinio: mapped.fuentePatrocinio || 'Ninguno',
-                enfermedades: mapped.enfermedades || '',
-                alergias: mapped.alergias || '',
-                fotografia: null,
-                fechaActualizacionFoto: null,
-                persona: {
-                    nombres: mapped.persona.nombres || '',
-                    apellidos: mapped.persona.apellidos || '',
-                    cedula: mapped.persona.cedula || '',
-                    telefono1: mapped.persona.telefono1 || '',
-                    telefono2: mapped.persona.telefono2 || '',
-                    email: mapped.persona.email || '',
-                    direccion: mapped.persona.direccion || '',
-                    fechaNacimiento: mapped.persona.fechaNacimiento || '',
-                },
-                tutor: mapped.tutor ? { persona: { nombres: mapped.tutor, apellidos: '' } } : null,
-            };
-        });
+    const handleImportConfirm = async () => {
+        setSaving(true);
+        let importadosOk = 0;
+        let erroresDuplicados = 0;
+        let erroresOtros = 0;
 
-        setInfantes(prev => [...prev, ...newInfantes]);
+        for (const [idx, row] of importData.entries()) {
+            const mapped = mapExcelRow(row);
+            try {
+                const payload = {
+                    codigo: mapped.codigo || `INF-${Date.now() + idx}`,
+                    tipoPrograma: mapped.tipoPrograma || 'Ministerio',
+                    esPatrocinado: mapped.esPatrocinado || false,
+                    fuentePatrocinio: mapped.fuentePatrocinio || 'Ninguno',
+                    enfermedades: mapped.enfermedades || '',
+                    alergias: mapped.alergias || '',
+                    persona: {
+                        nombres: mapped.persona.nombres || 'Sin nombre',
+                        apellidos: mapped.persona.apellidos || '',
+                        cedula: mapped.persona.cedula || undefined,
+                        telefono1: mapped.persona.telefono1 || '',
+                        telefono2: mapped.persona.telefono2 || '',
+                        email: mapped.persona.email || '',
+                        direccion: mapped.persona.direccion || '',
+                        // Formateamos fecha manual si existe pero suele no valer si viene de Excel sin un convertidor riguroso
+                        ...(mapped.persona.fechaNacimiento ? { fechaNacimiento: new Date(mapped.persona.fechaNacimiento).toISOString() } : {})
+                    }
+                };
+
+                await infantesService.crear(payload);
+                importadosOk++;
+            } catch (error) {
+                const msg = error.response?.data?.error || '';
+                if (msg.toLowerCase().includes('existe') || msg.toLowerCase().includes('código') || msg.toLowerCase().includes('cédula')) {
+                    erroresDuplicados++;
+                } else {
+                    erroresOtros++;
+                }
+                console.error('Error importando fila', idx, msg || error.message);
+            }
+        }
+
+        setSaving(false);
         setImportOpen(false);
         setImportData([]);
-        enqueueSnackbar(`${newInfantes.length} infantes importados correctamente. Completa los datos faltantes manualmente.`, { variant: 'success' });
+
+        if (importadosOk > 0) {
+            enqueueSnackbar(`${importadosOk} infantes importados correctamente.`, { variant: 'success' });
+            cargarInfantes(); // Recargar de la API
+        }
+        if (erroresDuplicados > 0) {
+            enqueueSnackbar(`${erroresDuplicados} infante(s) ya estaba(n) dentro del sistema (código o cédula repetida).`, { variant: 'warning' });
+        }
+        if (erroresOtros > 0) {
+            enqueueSnackbar(`Ocurrieron ${erroresOtros} error(es) inesperados al importar. Revisa la consola.`, { variant: 'error' });
+        }
     };
 
     const handleDownloadTemplate = () => {
@@ -412,6 +370,13 @@ const InfantesPage = () => {
                         {tutoresDisponibles.map(t => (
                             <MenuItem key={t} value={t}>{t}</MenuItem>
                         ))}
+                    </TextField>
+                    <TextField select size="small" label="Visita Anual" value={filtroVisita}
+                        onChange={(e) => { setFiltroVisita(e.target.value); setPage(0); }}
+                        sx={{ minWidth: 140 }}>
+                        <MenuItem value="">Todos</MenuItem>
+                        <MenuItem value="true">Visitados este año</MenuItem>
+                        <MenuItem value="false">Faltan por visitar</MenuItem>
                     </TextField>
                 </Stack>
 
@@ -507,7 +472,7 @@ const InfantesPage = () => {
                                             </TableCell>
                                             {/* Patrocinado */}
                                             <TableCell>
-                                                <Chip label={row.esPatrocinado ? row.fuentePatrocinio : 'No'} size="small"
+                                                <Chip label={row.esPatrocinado ? 'Patrocinado' : 'Sin patrocinio'} size="small"
                                                     color={row.esPatrocinado ? 'success' : 'default'} variant="outlined" sx={{ fontWeight: 600 }} />
                                             </TableCell>
                                             {/* Foto Estado */}
@@ -644,8 +609,9 @@ const InfantesPage = () => {
                         </Button>
                         <Button variant="contained" startIcon={<SuccessIcon />}
                             onClick={handleImportConfirm}
+                            disabled={saving}
                             sx={{ borderRadius: 3, px: 3, fontWeight: 700 }}>
-                            Importar {importData.length} Infante{importData.length !== 1 ? 's' : ''}
+                            {saving ? 'Importando...' : `Importar ${importData.length} Infante${importData.length !== 1 ? 's' : ''}`}
                         </Button>
                     </DialogActions>
                 </Dialog>
