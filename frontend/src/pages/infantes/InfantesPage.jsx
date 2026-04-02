@@ -19,6 +19,7 @@ import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { infantesService } from '../../services/appServices';
+import api from '../../services/api';
 import * as XLSX from 'xlsx';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
@@ -151,6 +152,7 @@ const InfantesPage = () => {
     const [importData, setImportData] = useState([]);
     const [importColumns, setImportColumns] = useState([]);
     const [importFileName, setImportFileName] = useState('');
+    const [lastSelectedFile, setLastSelectedFile] = useState(null);
 
     const canWrite = ROL_ESCRITURA.includes(user?.rol);
     const canDelete = ['admin', 'director'].includes(user?.rol);
@@ -217,6 +219,7 @@ const InfantesPage = () => {
         const file = e.target.files?.[0];
         if (!file) return;
         setImportFileName(file.name);
+        setLastSelectedFile(file);
 
         const reader = new FileReader();
         reader.onload = (evt) => {
@@ -244,59 +247,48 @@ const InfantesPage = () => {
 
     const handleImportConfirm = async () => {
         setSaving(true);
-        let importadosOk = 0;
-        let erroresDuplicados = 0;
-        let erroresOtros = 0;
-
-        for (const [idx, row] of importData.entries()) {
-            const mapped = mapExcelRow(row);
-            try {
-                const payload = {
-                    codigo: mapped.codigo || `INF-${Date.now() + idx}`,
-                    tipoPrograma: mapped.tipoPrograma || 'Ministerio',
-                    esPatrocinado: mapped.esPatrocinado || false,
-                    fuentePatrocinio: mapped.fuentePatrocinio || 'Ninguno',
-                    enfermedades: mapped.enfermedades || '',
-                    alergias: mapped.alergias || '',
-                    persona: {
-                        nombres: mapped.persona.nombres || 'Sin nombre',
-                        apellidos: mapped.persona.apellidos || '',
-                        cedula: mapped.persona.cedula || undefined,
-                        telefono1: mapped.persona.telefono1 || '',
-                        telefono2: mapped.persona.telefono2 || '',
-                        email: mapped.persona.email || '',
-                        direccion: mapped.persona.direccion || '',
-                        // Formateamos fecha manual si existe pero suele no valer si viene de Excel sin un convertidor riguroso
-                        ...(mapped.persona.fechaNacimiento ? { fechaNacimiento: new Date(mapped.persona.fechaNacimiento).toISOString() } : {})
-                    }
-                };
-
-                await infantesService.crear(payload);
-                importadosOk++;
-            } catch (error) {
-                const msg = error.response?.data?.error || '';
-                if (msg.toLowerCase().includes('existe') || msg.toLowerCase().includes('código') || msg.toLowerCase().includes('cédula')) {
-                    erroresDuplicados++;
-                } else {
-                    erroresOtros++;
-                }
-                console.error('Error importando fila', idx, msg || error.message);
+        try {
+            // Usar el endpoint de importación masiva que maneja duplicados
+            const file = fileInputRef.current?.files?.[0] || lastSelectedFile;
+            if (!file) {
+                enqueueSnackbar('No se encontró el archivo. Por favor, selecciónalo de nuevo.', { variant: 'error' });
+                setSaving(false);
+                return;
             }
-        }
 
-        setSaving(false);
-        setImportOpen(false);
-        setImportData([]);
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await api.post('/import/infantes', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 120000, // 2 minutos para archivos grandes
+            });
 
-        if (importadosOk > 0) {
-            enqueueSnackbar(`${importadosOk} infantes importados correctamente.`, { variant: 'success' });
-            cargarInfantes(); // Recargar de la API
-        }
-        if (erroresDuplicados > 0) {
-            enqueueSnackbar(`${erroresDuplicados} infante(s) ya estaba(n) dentro del sistema (código o cédula repetida).`, { variant: 'warning' });
-        }
-        if (erroresOtros > 0) {
-            enqueueSnackbar(`Ocurrieron ${erroresOtros} error(es) inesperados al importar. Revisa la consola.`, { variant: 'error' });
+            const resultado = res.data?.data || res.data;
+            const { exitosos = 0, actualizados = 0, errores = [] } = resultado;
+
+            if (exitosos > 0) {
+                enqueueSnackbar(`${exitosos} infante(s) importado(s) correctamente.`, { variant: 'success' });
+            }
+            if (actualizados > 0) {
+                enqueueSnackbar(`${actualizados} infante(s) actualizado(s) (ya existían).`, { variant: 'info' });
+            }
+            if (errores.length > 0) {
+                enqueueSnackbar(`${errores.length} fila(s) con errores. Revisa la consola.`, { variant: 'warning' });
+                console.warn('Errores de importación:', errores);
+            }
+            if (exitosos === 0 && actualizados === 0 && errores.length === 0) {
+                enqueueSnackbar('No se procesaron registros. Verifica el formato del archivo.', { variant: 'warning' });
+            }
+
+            cargarInfantes(); // Recargar datos
+        } catch (error) {
+            const msg = error.response?.data?.error || error.message || 'Error desconocido';
+            enqueueSnackbar(`Error al importar: ${msg}`, { variant: 'error' });
+            console.error('Error de importación:', error);
+        } finally {
+            setSaving(false);
+            setImportOpen(false);
+            setImportData([]);
         }
     };
 

@@ -1,4 +1,4 @@
-import { ok, created, noContent, notFound, paginated } from '../../utils/response.js'
+import { ok, created, noContent, notFound, paginated, badRequest } from '../../utils/response.js'
 import { getPagination } from '../../utils/pagination.js'
 import path from 'path'
 import fs from 'fs/promises'
@@ -25,20 +25,29 @@ export async function listar(request, reply) {
         }
     }
 
-    const [total, infantes] = await Promise.all([
-        db.infante.count({ where }),
-        db.infante.findMany({
-            where, skip, take: limit,
-            include: {
-                persona: true,
-                tutor: { include: { persona: true } },
-                visitas: { take: 1, orderBy: { fecha: 'desc' } }
-            },
-            orderBy: [{ persona: { apellidos: 'asc' } }]
-        })
-    ])
+    try {
+        const [total, infantes] = await Promise.all([
+            db.infante.count({ where }),
+            db.infante.findMany({
+                where, skip, take: limit,
+                include: {
+                    persona: true,
+                    tutor: { include: { persona: true } },
+                    visitas: { take: 1, orderBy: { fecha: 'desc' } }
+                },
+                orderBy: [{ persona: { apellidos: 'asc' } }]
+            })
+        ])
 
-    return paginated(reply, infantes, total, page, limit)
+        return paginated(reply, infantes, total, page, limit)
+    } catch (error) {
+        request.server.log.error('Error al listar infantes:', error)
+        return reply.status(500).send({
+            success: false,
+            error: 'Error interno al listar infantes',
+            message: error.message
+        })
+    }
 }
 
 // GET /infantes/:id
@@ -63,16 +72,30 @@ export async function crear(request, reply) {
     const { persona, tutorId, ...infanteData } = request.body
     const db = request.server.db
 
-    const infante = await db.infante.create({
-        data: {
-            ...infanteData,
-            persona: { create: persona },
-            tutor: tutorId ? { connect: { id: tutorId } } : undefined
-        },
-        include: { persona: true }
-    })
+    try {
+        const infante = await db.infante.create({
+            data: {
+                ...infanteData,
+                persona: { create: persona },
+                tutor: tutorId ? { connect: { id: tutorId } } : undefined
+            },
+            include: { persona: true }
+        })
 
-    return created(reply, infante)
+        return created(reply, infante)
+    } catch (error) {
+        // Manejar errores de unicidad (código o cédula duplicados)
+        if (error.code === 'P2002') {
+            const campo = error.meta?.target?.join(', ') || 'campo único'
+            return badRequest(reply, `Ya existe un registro con ese valor de ${campo}`)
+        }
+        request.server.log.error('Error al crear infante:', error)
+        return reply.status(500).send({
+            success: false,
+            error: 'Error interno del servidor',
+            message: error.message
+        })
+    }
 }
 
 // PUT /infantes/:id

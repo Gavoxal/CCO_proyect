@@ -36,7 +36,10 @@ export const notificationService = {
      * Get recent notifications for a specific user.
      */
     obtenerMisNotificaciones: async (usuarioId, soloNoLeidas = false) => {
-        const where = { usuarioId: parseInt(usuarioId) };
+        const id = parseInt(usuarioId);
+        if (isNaN(id)) return []; // Si no hay ID válido, no hay notificaciones
+
+        const where = { usuarioId: id };
         if (soloNoLeidas) where.leida = false;
 
         return await prisma.notificacion.findMany({

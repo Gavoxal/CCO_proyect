@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Card, CardContent, Button, Chip, ToggleButton,
-    ToggleButtonGroup, Grid, TextField, Alert, Stack, Avatar,
+    ToggleButtonGroup, Grid, TextField, Stack, Avatar,
     Paper, Tooltip, alpha, useTheme, IconButton, InputAdornment,
     Tab, Tabs, Table, TableBody, TableCell, TableHead, TableRow,
-    TablePagination, LinearProgress, Divider,
-    Dialog, DialogTitle, DialogContent, DialogActions, MenuItem,
+    TablePagination, LinearProgress, Divider, CircularProgress,
+    Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import {
     Save as SaveIcon, ChecklistRtl as AsistenciaIcon,
@@ -14,52 +14,23 @@ import {
     Today as TodayIcon, BarChart as ChartIcon,
     FileDownload as ExportIcon, Close as CloseIcon,
     Group as GroupIcon, CheckCircle as CheckIcon,
+    Cancel as CancelIcon, WatchLater as PendingIcon,
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
+import infanteService from '../../services/infanteService';
+import asistenciaService from '../../services/asistenciaService';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { amarillo: '#FFD700', naranja: '#FF8C00', violeta: '#6A5ACD', azul: '#4169E1' };
 const AVATAR_COLORS = ['#7c4dff', '#00bcd4', '#ff5722', '#4caf50', '#ff9800', '#e91e63', '#3f51b5', '#009688'];
 const ESTADO_COLORS = { Presente: 'success', Ausente: 'error', Justificado: 'warning' };
-const EMOJI = { Presente: '✅', Ausente: '❌', Justificado: '⚠️' };
-
-// ─── Mock Infantes ────────────────────────────────────────────────────────────
-const MOCK_INFANTES = [
-    { id: 1, codigo: 'INF-001', fotografia: '/mock-fotos/inf001.png', persona: { nombres: 'María Gabriela', apellidos: 'López Mendoza' } },
-    { id: 2, codigo: 'INF-002', fotografia: '/mock-fotos/inf002.png', persona: { nombres: 'José Andrés', apellidos: 'Pérez Villao' } },
-    { id: 3, codigo: 'INF-003', fotografia: '/mock-fotos/inf003.png', persona: { nombres: 'Camila Sofía', apellidos: 'Torres Aragundi' } },
-    { id: 4, codigo: 'INF-004', fotografia: '/mock-fotos/inf004.png', persona: { nombres: 'Sebastián', apellidos: 'Morales Intriago' } },
-    { id: 5, codigo: 'INF-005', fotografia: null, persona: { nombres: 'Valentina', apellidos: 'Cedeño Bravo' } },
-    { id: 6, codigo: 'INF-006', fotografia: null, persona: { nombres: 'Daniel Alejandro', apellidos: 'Ramírez Loor' } },
-    { id: 7, codigo: 'INF-007', fotografia: null, persona: { nombres: 'Isabella', apellidos: 'Vélez Zambrano' } },
-    { id: 8, codigo: 'INF-008', fotografia: null, persona: { nombres: 'Matías', apellidos: 'Suárez Pincay' } },
-    { id: 9, codigo: 'INF-009', fotografia: null, persona: { nombres: 'Luciana', apellidos: 'Mera Chávez' } },
-    { id: 10, codigo: 'INF-010', fotografia: null, persona: { nombres: 'Nicolás Emilio', apellidos: 'Castro Bone' } },
-    { id: 11, codigo: 'INF-011', fotografia: null, persona: { nombres: 'Emilia', apellidos: 'Figueroa Palacios' } },
-    { id: 12, codigo: 'INF-012', fotografia: null, persona: { nombres: 'Santiago', apellidos: 'Quishpe Yagual' } },
-];
-
-// ─── Mock Historial ───────────────────────────────────────────────────────────
-const generateHistorial = () => {
-    const records = [];
-    const fechas = [
-        '2026-03-08', '2026-03-01', '2026-02-22', '2026-02-15',
-        '2026-02-08', '2026-02-01', '2026-01-25', '2026-01-18',
-    ];
-    const estados = ['Presente', 'Presente', 'Presente', 'Ausente', 'Presente', 'Justificado', 'Presente', 'Presente'];
-    let rid = 1;
-    fechas.forEach((fecha, fi) => {
-        MOCK_INFANTES.forEach((inf, ii) => {
-            // Vary attendance patterns per infante
-            const eIdx = (fi + ii) % estados.length;
-            records.push({ id: rid++, fecha, infanteId: inf.id, infante: inf, estado: estados[eIdx] });
-        });
-    });
-    return records;
+const ESTADO_ICONS = { 
+    Presente: <CheckIcon fontSize="small" />, 
+    Ausente: <CancelIcon fontSize="small" />, 
+    Justificado: <PendingIcon fontSize="small" /> 
 };
-const MOCK_HISTORIAL = generateHistorial();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getInitials = (inf) => `${inf.persona?.nombres?.charAt(0) || ''}${inf.persona?.apellidos?.charAt(0) || ''}`;
@@ -92,15 +63,15 @@ const AsistenciaPage = () => {
 
     const hoy = new Date().toISOString().split('T')[0];
 
-    const [tabIndex, setTabIndex] = useState(0);  // 0 = Toma, 1 = Historial
+    const [tabIndex, setTabIndex] = useState(0); 
     const [fecha, setFecha] = useState(hoy);
     const [searchToma, setSearchToma] = useState('');
     const [searchHist, setSearchHist] = useState('');
-    const [estados, setEstados] = useState(() => {
-        const init = {};
-        MOCK_INFANTES.forEach(i => { init[i.id] = 'Ausente'; });
-        return init;
-    });
+    
+    const [infantes, setInfantes] = useState([]);
+    const [estados, setEstados] = useState({});
+    const [historial, setHistorial] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     // Exportar Excel
@@ -113,16 +84,77 @@ const AsistenciaPage = () => {
     const [histFiltroFecha, setHistFiltroFecha] = useState('');
     const [histPage, setHistPage] = useState(0);
     const [histRowsPerPage, setHistRowsPerPage] = useState(15);
+    const [totalHist, setTotalHist] = useState(0);
+
+    // Cargar Infantes
+    useEffect(() => {
+        const cargarDatosBase = async () => {
+            setLoading(true);
+            try {
+                const res = await infanteService.listar({ limit: 500 });
+                setInfantes(res.data || []);
+            } catch (error) {
+                enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
+            } finally {
+                setLoading(false);
+            }
+        };
+        cargarDatosBase();
+    }, [enqueueSnackbar]);
+
+    // Cargar asistencia de la fecha seleccionada
+    const cargarTomaFecha = useCallback(async () => {
+        if (!fecha) return;
+        try {
+            const res = await asistenciaService.listar({ fecha });
+            const data = res.data || [];
+            const mapping = {};
+            // Inicializar todos con 'Ausente' por defecto si no tienen registro
+            infantes.forEach(i => mapping[i.id] = 'Ausente');
+            // Sobrescribir con los reales
+            data.forEach(r => mapping[r.infanteId] = r.estado);
+            setEstados(mapping);
+        } catch (error) {
+            console.error('Error cargando asistencia de fecha:', error);
+        }
+    }, [fecha, infantes]);
+
+    useEffect(() => {
+        if (infantes.length > 0) {
+            cargarTomaFecha();
+        }
+    }, [infantes, cargarTomaFecha]);
+
+    // Cargar Historial
+    const cargarHistorial = useCallback(async () => {
+        try {
+            const res = await asistenciaService.listar({
+                page: histPage + 1,
+                limit: histRowsPerPage,
+                estado: histFiltroEstado || undefined,
+                fecha: histFiltroFecha || undefined,
+                search: searchHist || undefined
+            });
+            setHistorial(res.data || []);
+            setTotalHist(res.total || 0);
+        } catch (error) {
+            console.error('Error cargando historial:', error);
+        }
+    }, [histPage, histRowsPerPage, histFiltroEstado, histFiltroFecha, searchHist]);
+
+    useEffect(() => {
+        if (tabIndex === 1) cargarHistorial();
+    }, [tabIndex, cargarHistorial]);
 
     // ── Toma de asistencia ────────────────────────────────────────────────────
     const filteredInfantes = useMemo(() => {
-        if (!searchToma) return MOCK_INFANTES;
+        if (!searchToma) return infantes;
         const s = searchToma.toLowerCase();
-        return MOCK_INFANTES.filter(i =>
-            `${i.persona.nombres} ${i.persona.apellidos}`.toLowerCase().includes(s) ||
+        return infantes.filter(i =>
+            `${i.persona?.nombres} ${i.persona?.apellidos}`.toLowerCase().includes(s) ||
             i.codigo.toLowerCase().includes(s)
         );
-    }, [searchToma]);
+    }, [searchToma, infantes]);
 
     const conteo = useMemo(() =>
         Object.values(estados).reduce(
@@ -131,8 +163,8 @@ const AsistenciaPage = () => {
         ), [estados]
     );
 
-    const totalInf = MOCK_INFANTES.length;
-    const porcentajeAsist = Math.round((conteo.Presente / totalInf) * 100);
+    const totalInf = infantes.length;
+    const porcentajeAsist = totalInf > 0 ? Math.round((conteo.Presente / totalInf) * 100) : 0;
 
     const handleEstado = (infanteId, nuevoEstado) => {
         if (!nuevoEstado) return;
@@ -141,21 +173,31 @@ const AsistenciaPage = () => {
 
     const marcarTodos = (estado) => {
         const updated = {};
-        MOCK_INFANTES.forEach(i => { updated[i.id] = estado; });
+        infantes.forEach(i => { updated[i.id] = estado; });
         setEstados(updated);
     };
 
     const guardar = async () => {
         setSaving(true);
-        await new Promise(r => setTimeout(r, 700));
-        setSaving(false);
-        const fechaStr = new Date(fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
-        enqueueSnackbar(`Asistencia del ${fechaStr} guardada correctamente`, { variant: 'success' });
+        try {
+            const payload = Object.entries(estados).map(([id, st]) => ({
+                infanteId: parseInt(id),
+                estado: st
+            }));
+            await asistenciaService.registrarBulk(fecha, payload);
+            const fechaStr = new Date(fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
+            enqueueSnackbar(`Asistencia del ${fechaStr} guardada correctamente`, { variant: 'success' });
+            if (tabIndex === 1) cargarHistorial();
+        } catch (error) {
+            enqueueSnackbar('Error al guardar asistencia', { variant: 'error' });
+        } finally {
+            setSaving(false);
+        }
     };
 
     // ── Historial ─────────────────────────────────────────────────────────────
     const filteredHistorial = useMemo(() => {
-        let res = MOCK_HISTORIAL;
+        let res = historial;
         if (histFiltroEstado) res = res.filter(r => r.estado === histFiltroEstado);
         if (histFiltroFecha) res = res.filter(r => r.fecha === histFiltroFecha);
         if (searchHist) {
@@ -172,18 +214,18 @@ const AsistenciaPage = () => {
 
     // Estadísticas del historial global
     const histStats = useMemo(() => {
-        const total = MOCK_HISTORIAL.length;
-        const p = MOCK_HISTORIAL.filter(r => r.estado === 'Presente').length;
-        const a = MOCK_HISTORIAL.filter(r => r.estado === 'Ausente').length;
-        const j = MOCK_HISTORIAL.filter(r => r.estado === 'Justificado').length;
-        return { total, p, a, j, pct: Math.round((p / total) * 100) };
-    }, []);
+        const total = historial.length;
+        const p = historial.filter(r => r.estado === 'Presente').length;
+        const a = historial.filter(r => r.estado === 'Ausente').length;
+        const j = historial.filter(r => r.estado === 'Justificado').length;
+        return { total, p, a, j, pct: total > 0 ? Math.round((p / total) * 100) : 0 };
+    }, [historial]);
 
     // ── Estadísticas del mes actual ───────────────────────────────────────────
     const mesActual = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
 
     const statsDestesMes = useMemo(() => {
-        const registrosMes = MOCK_HISTORIAL.filter(r => r.fecha.startsWith(mesActual));
+        const registrosMes = historial.filter(r => r.fecha.startsWith(mesActual));
         const infantesConAsistencia = new Set(
             registrosMes.filter(r => r.estado === 'Presente').map(r => r.infanteId)
         );
@@ -193,47 +235,51 @@ const AsistenciaPage = () => {
         const totalJustificados = registrosMes.filter(r => r.estado === 'Justificado').length;
         return {
             infantesAsistidos: infantesConAsistencia.size,
-            totalInfantes: MOCK_INFANTES.length,
-            pct: MOCK_INFANTES.length > 0 ? Math.round((infantesConAsistencia.size / MOCK_INFANTES.length) * 100) : 0,
+            totalInfantes: infantes.length,
+            pct: infantes.length > 0 ? Math.round((infantesConAsistencia.size / infantes.length) * 100) : 0,
             dias: diasUnicos,
             presencias: totalPresencias,
             ausencias: totalAusencias,
             justificados: totalJustificados,
         };
-    }, [mesActual]);
+    }, [mesActual, historial, infantes]);
 
     // ── Exportar Excel ────────────────────────────────────────────────────────
     const handleExportar = async () => {
         setExportando(true);
-        await new Promise(r => setTimeout(r, 400)); // small delay for UX
+        try {
+            const fechaInicio = getFechaInicio(exportPeriodo);
+            // Obtener todos los registros del periodo
+            const res = await asistenciaService.listar({ 
+                fechaInicio, 
+                limit: 5000 
+            });
+            
+            const datos = (res.data || [])
+                .sort((a, b) => a.fecha.localeCompare(b.fecha))
+                .map(r => ({
+                    'Fecha': new Date(r.fecha).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+                    'Código': r.infante?.codigo,
+                    'Nombres': r.infante?.persona?.nombres,
+                    'Apellidos': r.infante?.persona?.apellidos,
+                    'Estado': r.estado,
+                }));
 
-        const fechaInicio = getFechaInicio(exportPeriodo);
-        const datos = MOCK_HISTORIAL
-            .filter(r => r.fecha >= fechaInicio)
-            .sort((a, b) => a.fecha.localeCompare(b.fecha))
-            .map(r => ({
-                'Fecha': new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-                'Código': r.infante.codigo,
-                'Nombres': r.infante.persona.nombres,
-                'Apellidos': r.infante.persona.apellidos,
-                'Estado': r.estado,
-            }));
+            const ws = XLSX.utils.json_to_sheet(datos);
+            ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 14 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
 
-        const ws = XLSX.utils.json_to_sheet(datos);
-
-        // Ancho de columnas
-        ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 14 }];
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
-
-        const periodoLabel = PERIODOS.find(p => p.value === exportPeriodo)?.label || exportPeriodo;
-        const nombreArchivo = `Asistencia_${periodoLabel.replace(/ /g, '_')}_${new Date().toLocaleDateString('es-EC').replace(/\//g, '-')}.xlsx`;
-        XLSX.writeFile(wb, nombreArchivo);
-
-        setExportando(false);
-        setExportModal(false);
-        enqueueSnackbar(`Excel exportado: ${nombreArchivo}`, { variant: 'success' });
+            const periodoLabel = PERIODOS.find(p => p.value === exportPeriodo)?.label || exportPeriodo;
+            const nombreArchivo = `Asistencia_${periodoLabel.replace(/ /g, '_')}_${new Date().toLocaleDateString('es-EC').replace(/\//g, '-')}.xlsx`;
+            XLSX.writeFile(wb, nombreArchivo);
+            enqueueSnackbar(`Excel exportado: ${nombreArchivo}`, { variant: 'success' });
+        } catch (error) {
+            enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
+        } finally {
+            setExportando(false);
+            setExportModal(false);
+        }
     };
 
     return (
@@ -280,7 +326,7 @@ const AsistenciaPage = () => {
                             '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', py: 1.8 },
                         }}>
                         <Tab icon={<TodayIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Toma de Asistencia" />
-                        <Tab icon={<HistoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Historial (${MOCK_HISTORIAL.length})`} />
+                        <Tab icon={<HistoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Historial (${totalHist})`} />
                     </Tabs>
                 </Paper>
 
@@ -382,17 +428,18 @@ const AsistenciaPage = () => {
                                     {Object.entries(conteo).map(([estado, cnt]) => (
                                         <Tooltip key={estado} title={`Marcar todos como ${estado}`}>
                                             <Chip
-                                                label={`${EMOJI[estado]} ${cnt} ${estado}`}
+                                                icon={ESTADO_ICONS[estado]}
+                                                label={`${cnt} ${estado}`}
                                                 color={ESTADO_COLORS[estado]}
                                                 variant="outlined"
-                                                sx={{ fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}
+                                                sx={{ fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem', '& .MuiChip-icon': { ml: 1 } }}
                                                 onClick={() => marcarTodos(estado)}
                                             />
                                         </Tooltip>
                                     ))}
                                     <Divider orientation="vertical" flexItem />
                                     <Chip
-                                        label={`${porcentajeAsist}% hoy`}
+                                        label={`${porcentajeAsist || 0}% hoy`}
                                         sx={{
                                             fontWeight: 700, fontSize: '0.82rem',
                                             bgcolor: alpha(porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350', 0.1),
@@ -416,14 +463,16 @@ const AsistenciaPage = () => {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {filteredInfantes.length === 0 ? (
+                                    {loading ? (
+                                        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress size={24} /></TableCell></TableRow>
+                                    ) : filteredInfantes.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
                                                 <Typography color="text.secondary">No se encontraron infantes</Typography>
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredInfantes.map((inf, idx) => {
-                                        const estado = estados[inf.id];
+                                        const estado = estados[inf.id] || 'Ausente';
                                         const accentColor = estado === 'Presente' ? '#4caf50' : estado === 'Ausente' ? '#ef5350' : '#ff9800';
                                         return (
                                             <TableRow key={inf.id} sx={{
@@ -438,7 +487,7 @@ const AsistenciaPage = () => {
                                                 <TableCell>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                                         <Avatar
-                                                            src={inf.fotografia || undefined}
+                                                            src={inf.fotografia ? `http://localhost:3000${inf.fotografia}` : undefined}
                                                             sx={{
                                                                 width: 36, height: 36, fontSize: '0.78rem', fontWeight: 700,
                                                                 bgcolor: AVATAR_COLORS[inf.id % AVATAR_COLORS.length],
@@ -460,9 +509,9 @@ const AsistenciaPage = () => {
                                                         onChange={(_, val) => handleEstado(inf.id, val)}
                                                         sx={{ '& .MuiToggleButton-root': { px: 1.5, py: 0.4, fontSize: '0.72rem', fontWeight: 700 } }}
                                                     >
-                                                        <ToggleButton value="Presente" color="success">✅ Presente</ToggleButton>
-                                                        <ToggleButton value="Ausente" color="error">❌ Ausente</ToggleButton>
-                                                        <ToggleButton value="Justificado" color="warning">⚠️ Justif.</ToggleButton>
+                                                        <ToggleButton value="Presente" color="success">{ESTADO_ICONS.Presente} &nbsp; Presente</ToggleButton>
+                                                        <ToggleButton value="Ausente" color="error">{ESTADO_ICONS.Ausente} &nbsp; Ausente</ToggleButton>
+                                                        <ToggleButton value="Justificado" color="warning">{ESTADO_ICONS.Justificado} &nbsp; Justif.</ToggleButton>
                                                     </ToggleButtonGroup>
                                                 </TableCell>
                                             </TableRow>
@@ -560,23 +609,23 @@ const AsistenciaPage = () => {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {histPaginado.length === 0 ? (
+                                    {historial.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                                                 <Typography color="text.secondary">No se encontraron registros</Typography>
                                             </TableCell>
                                         </TableRow>
-                                    ) : histPaginado.map(r => (
+                                    ) : historial.map(r => (
                                         <TableRow key={r.id} hover sx={{ cursor: 'pointer' }}
                                             onClick={() => navigate(`/infantes/${r.infanteId}`)}>
                                             <TableCell>
                                                 <Typography variant="body2" fontWeight={500} sx={{ textTransform: 'capitalize' }}>
-                                                    {new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                                    {new Date(r.fecha).toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' })}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>
                                                 <Avatar
-                                                    src={r.infante.fotografia || undefined}
+                                                    src={r.infante?.fotografia ? `http://localhost:3000${r.infante.fotografia}` : undefined}
                                                     sx={{
                                                         width: 32, height: 32, fontSize: '0.72rem', fontWeight: 700,
                                                         bgcolor: AVATAR_COLORS[r.infanteId % AVATAR_COLORS.length],
@@ -587,23 +636,27 @@ const AsistenciaPage = () => {
                                             </TableCell>
                                             <TableCell>
                                                 <Typography variant="body2" fontWeight={600}>
-                                                    {r.infante.persona.nombres} {r.infante.persona.apellidos}
+                                                    {r.infante?.persona?.nombres} {r.infante?.persona?.apellidos}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>
-                                                <Chip label={r.infante.codigo} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
+                                                <Chip label={r.infante?.codigo} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
                                             </TableCell>
                                             <TableCell>
-                                                <Chip label={`${EMOJI[r.estado]} ${r.estado}`} size="small"
-                                                    color={ESTADO_COLORS[r.estado]} variant="outlined"
-                                                    sx={{ fontWeight: 600 }} />
+                                                <Chip 
+                                                    label={r.estado} 
+                                                    size="small"
+                                                    color={ESTADO_COLORS[r.estado]} 
+                                                    variant="outlined"
+                                                    sx={{ fontWeight: 600 }} 
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
                             <TablePagination
-                                component="div" count={filteredHistorial.length}
+                                component="div" count={totalHist}
                                 page={histPage} onPageChange={(_, p) => setHistPage(p)}
                                 rowsPerPage={histRowsPerPage}
                                 onRowsPerPageChange={e => { setHistRowsPerPage(parseInt(e.target.value, 10)); setHistPage(0); }}
@@ -633,8 +686,6 @@ const AsistenciaPage = () => {
                     </Typography>
                     <Stack spacing={1.5}>
                         {PERIODOS.map(p => {
-                            const fechaInicio = getFechaInicio(p.value);
-                            const registros = MOCK_HISTORIAL.filter(r => r.fecha >= fechaInicio).length;
                             return (
                                 <Box
                                     key={p.value}
@@ -656,8 +707,6 @@ const AsistenciaPage = () => {
                                         }
                                         <Typography fontWeight={700} fontSize={14}>{p.label}</Typography>
                                     </Box>
-                                    <Chip label={`${registros} registros`} size="small"
-                                        sx={{ fontWeight: 700, fontSize: 11, bgcolor: alpha('#2e7d32', 0.08), color: '#2e7d32' }} />
                                 </Box>
                             );
                         })}
