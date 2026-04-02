@@ -86,6 +86,10 @@ const AsistenciaPage = () => {
     const [histRowsPerPage, setHistRowsPerPage] = useState(15);
     const [totalHist, setTotalHist] = useState(0);
 
+    // Toma de asistencia pagination
+    const [tomaPage, setTomaPage] = useState(0);
+    const [tomaRowsPerPage, setTomaRowsPerPage] = useState(25);
+
     // Cargar Infantes
     useEffect(() => {
         const cargarDatosBase = async () => {
@@ -155,6 +159,10 @@ const AsistenciaPage = () => {
             i.codigo.toLowerCase().includes(s)
         );
     }, [searchToma, infantes]);
+
+    const infantesPaginados = useMemo(() => {
+        return filteredInfantes.slice(tomaPage * tomaRowsPerPage, tomaPage * tomaRowsPerPage + tomaRowsPerPage);
+    }, [filteredInfantes, tomaPage, tomaRowsPerPage]);
 
     const conteo = useMemo(() =>
         Object.values(estados).reduce(
@@ -244,38 +252,90 @@ const AsistenciaPage = () => {
         };
     }, [mesActual, historial, infantes]);
 
-    // ── Exportar Excel ────────────────────────────────────────────────────────
+    // ── Exportar Excel (Formato Matriz Avanzada) ──────────────────────────────
     const handleExportar = async () => {
         setExportando(true);
         try {
             const fechaInicio = getFechaInicio(exportPeriodo);
-            // Obtener todos los registros del periodo
+            // 1. Obtener todos los registros del periodo
             const res = await asistenciaService.listar({ 
                 fechaInicio, 
-                limit: 5000 
+                limit: 10000 // Aumentar límite para reporte completo
             });
-            
-            const datos = (res.data || [])
-                .sort((a, b) => a.fecha.localeCompare(b.fecha))
-                .map(r => ({
-                    'Fecha': new Date(r.fecha).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-                    'Código': r.infante?.codigo,
-                    'Nombres': r.infante?.persona?.nombres,
-                    'Apellidos': r.infante?.persona?.apellidos,
-                    'Estado': r.estado,
-                }));
+            const registros = res.data || [];
 
-            const ws = XLSX.utils.json_to_sheet(datos);
-            ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 14 }];
+            // 2. Identificar fechas únicas y ordenarlas
+            const fechasUnicas = [...new Set(registros.map(r => r.fecha.split('T')[0]))].sort();
+            
+            // 3. Organizar datos por infante
+            const asistenciaMap = {}; // { infanteId: { fecha: estado } }
+            registros.forEach(r => {
+                if (!asistenciaMap[r.infanteId]) asistenciaMap[r.infanteId] = {};
+                asistenciaMap[r.infanteId][r.fecha.split('T')[0]] = r.estado;
+            });
+
+            // 4. Construir filas para Excel
+            // Fila de Cabecera Personalizada
+            const headerRow = ['Código', 'Nombres', 'Apellidos'];
+            fechasUnicas.forEach(f => {
+                const dateObj = new Date(f + 'T12:00:00');
+                headerRow.push(`${dateObj.getDate()}/${dateObj.getMonth() + 1}`);
+            });
+            headerRow.push('Total Pres.', '% Asist.');
+
+            const sheetData = [];
+
+            // Filas de Datos
+            infantes.forEach(inf => {
+                const row = [inf.codigo, inf.persona?.nombres, inf.persona?.apellidos];
+                let presencias = 0;
+                let diasConRegistro = 0;
+
+                fechasUnicas.forEach(f => {
+                    const estado = asistenciaMap[inf.id]?.[f] || '-';
+                    row.push(estado === 'Presente' ? 'SI' : estado === 'Ausente' ? 'NO' : estado === 'Justificado' ? 'J' : '-');
+                    if (estado !== '-') diasConRegistro++;
+                    if (estado === 'Presente') presencias++;
+                });
+
+                const pct = diasConRegistro > 0 ? Math.round((presencias / diasConRegistro) * 100) : 0;
+                row.push(presencias, `${pct}%`);
+                sheetData.push(row);
+            });
+
+            // 5. Agregar Estadísticas Globales al inicio
+            const statsRows = [
+                ['REPORTE DE ASISTENCIA CCO'],
+                [`Periodo: ${PERIODOS.find(p => p.value === exportPeriodo)?.label}`],
+                [`Fecha de Generación: ${new Date().toLocaleString()}`],
+                [],
+                [`Total Infantes: ${infantes.length}`],
+                [`Promedio Asistencia Grupal: ${statsDestesMes.pct}%`],
+                [],
+                headerRow
+            ];
+
+            const finalData = [...statsRows, ...sheetData];
+            const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+            // Ajustes de diseño básico
+            ws['!cols'] = [
+                { wch: 12 }, { wch: 25 }, { wch: 25 }, 
+                ...fechasUnicas.map(() => ({ wch: 6 })),
+                { wch: 10 }, { wch: 10 }
+            ];
+
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
+            XLSX.utils.book_append_sheet(wb, ws, 'Reporte Matriz');
 
             const periodoLabel = PERIODOS.find(p => p.value === exportPeriodo)?.label || exportPeriodo;
-            const nombreArchivo = `Asistencia_${periodoLabel.replace(/ /g, '_')}_${new Date().toLocaleDateString('es-EC').replace(/\//g, '-')}.xlsx`;
+            const nombreArchivo = `Reporte_Asistencia_${periodoLabel.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
             XLSX.writeFile(wb, nombreArchivo);
-            enqueueSnackbar(`Excel exportado: ${nombreArchivo}`, { variant: 'success' });
+            enqueueSnackbar(`Reporte exportado correctamente`, { variant: 'success' });
+
         } catch (error) {
-            enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
+            console.error('Error export:', error);
+            enqueueSnackbar('Error al generar el reporte detallado', { variant: 'error' });
         } finally {
             setExportando(false);
             setExportModal(false);
@@ -465,14 +525,15 @@ const AsistenciaPage = () => {
                                 <TableBody>
                                     {loading ? (
                                         <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress size={24} /></TableCell></TableRow>
-                                    ) : filteredInfantes.length === 0 ? (
+                                    ) : infantesPaginados.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
                                                 <Typography color="text.secondary">No se encontraron infantes</Typography>
                                             </TableCell>
                                         </TableRow>
-                                    ) : filteredInfantes.map((inf, idx) => {
+                                    ) : infantesPaginados.map((inf, idx) => {
                                         const estado = estados[inf.id] || 'Ausente';
+                                        const actualIdx = (tomaPage * tomaRowsPerPage) + idx;
                                         const accentColor = estado === 'Presente' ? '#4caf50' : estado === 'Ausente' ? '#ef5350' : '#ff9800';
                                         return (
                                             <TableRow key={inf.id} sx={{
@@ -482,7 +543,7 @@ const AsistenciaPage = () => {
                                                 '&:hover': { bgcolor: alpha(accentColor, 0.07) },
                                             }}>
                                                 <TableCell>
-                                                    <Typography variant="body2" fontWeight={600} color="text.secondary">{idx + 1}</Typography>
+                                                    <Typography variant="body2" fontWeight={600} color="text.secondary">{actualIdx + 1}</Typography>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -519,6 +580,16 @@ const AsistenciaPage = () => {
                                     })}
                                 </TableBody>
                             </Table>
+                            <TablePagination
+                                component="div" count={filteredInfantes.length}
+                                page={tomaPage} onPageChange={(_, p) => setTomaPage(p)}
+                                rowsPerPage={tomaRowsPerPage}
+                                onRowsPerPageChange={e => { setTomaRowsPerPage(parseInt(e.target.value, 10)); setTomaPage(0); }}
+                                rowsPerPageOptions={[25, 50, 100]}
+                                labelRowsPerPage="Mostrando:"
+                                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                                sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
+                            />
                         </Paper>
                     </Box>
                 )}
