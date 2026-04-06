@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     Box, Typography, Grid, Card, CardContent, Button, Chip, Avatar,
     Alert, Divider, Dialog, DialogTitle, DialogContent,
@@ -6,20 +6,28 @@ import {
     Tabs, Tab, Table, TableBody, TableCell, TableHead, TableRow,
     TablePagination, IconButton, Tooltip, alpha, useTheme,
     FormControl, RadioGroup, FormControlLabel, Radio,
-    Autocomplete, MenuItem, InputAdornment,
+    Autocomplete, MenuItem, InputAdornment, Avatar as MuiAvatar,
+    ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
+import { useLocation } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import {
     Add as AddIcon, HomeWork as VisitaIcon, History as HistoryIcon,
     Search as SearchIcon, FilterAlt as FilterIcon,
     CheckCircle as SuccessIcon, Cancel as ErrorIcon,
     Person as PersonIcon, CalendarMonth as CalendarIcon,
     Assignment as FormIcon, Download as DownloadIcon,
-    FileDownload as ExcelIcon,
+    FileDownload as ExcelIcon, PhotoCamera as PhotoIcon,
+    Print as PrintIcon, Close as CloseIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import * as XLSX from 'xlsx';
+import visitaService from '../../services/visitaService';
+import infanteService from '../../services/infanteService';
+import { getSchoolYearRange, formatLongDate } from '../../utils/dateUtils';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { naranja: '#FF8C00', violeta: '#6A5ACD', azul: '#4169E1' };
@@ -38,102 +46,12 @@ const MESES = [
 
 const ANIOS = [2024, 2025, 2026, 2027];
 
-// ─── Mock Infantes ────────────────────────────────────────────────────────────
-const MOCK_INFANTES = [
-    { id: 1, codigo: 'INF-001', persona: { nombres: 'María Gabriela', apellidos: 'López Mendoza' } },
-    { id: 2, codigo: 'INF-002', persona: { nombres: 'José Andrés', apellidos: 'Pérez Villao' } },
-    { id: 3, codigo: 'INF-003', persona: { nombres: 'Camila Sofía', apellidos: 'Torres Aragundi' } },
-    { id: 4, codigo: 'INF-004', persona: { nombres: 'Sebastián', apellidos: 'Morales Intriago' } },
-    { id: 5, codigo: 'INF-005', persona: { nombres: 'Valentina', apellidos: 'Cedeño Bravo' } },
-    { id: 6, codigo: 'INF-006', persona: { nombres: 'Daniel Alejandro', apellidos: 'Ramírez Loor' } },
-    { id: 7, codigo: 'INF-007', persona: { nombres: 'Isabella', apellidos: 'Vélez Zambrano' } },
-    { id: 8, codigo: 'INF-008', persona: { nombres: 'Matías', apellidos: 'Suárez Pincay' } },
-    { id: 9, codigo: 'INF-009', persona: { nombres: 'Luciana', apellidos: 'Mera Chávez' } },
-    { id: 10, codigo: 'INF-010', persona: { nombres: 'Nicolás Emilio', apellidos: 'Castro Bone' } },
-    { id: 11, codigo: 'INF-011', persona: { nombres: 'Emilia', apellidos: 'Figueroa Palacios' } },
-    { id: 12, codigo: 'INF-012', persona: { nombres: 'Santiago', apellidos: 'Quishpe Yagual' } },
-];
-
-// ─── Mock Visitas ─────────────────────────────────────────────────────────────
-const MOCK_VISITAS = [
-    {
-        id: 1,
-        infanteId: 1,
-        infante: MOCK_INFANTES[0],
-        tutor: 'Juan Pérez',
-        tutorId: 'tutor_1',
-        fecha: '2026-03-05',
-        visitaExitosa: 'SI',
-        razon: 'Seguimiento',
-        resultados: 'Familia comprometida con el programa. La niña muestra avances en sus estudios.',
-        situacion: 'Continuación en el Ministerio',
-        observaciones: 'Se recomienda apoyo en refuerzo escolar de matemáticas.',
-    },
-    {
-        id: 2,
-        infanteId: 2,
-        infante: MOCK_INFANTES[1],
-        tutor: 'Ana García',
-        tutorId: 'tutor_2',
-        fecha: '2026-03-02',
-        visitaExitosa: 'SI',
-        razon: 'Inasistencia',
-        resultados: 'El niño faltó por enfermedad estacional.',
-        situacion: 'Continuación en el Ministerio',
-        observaciones: 'Ya se encuentra recuperado.',
-    },
-    {
-        id: 3,
-        infanteId: 3,
-        infante: MOCK_INFANTES[2],
-        tutor: 'Juan Pérez',
-        tutorId: 'tutor_1',
-        fecha: '2026-02-25',
-        visitaExitosa: 'SI',
-        razon: 'Enfermedad',
-        resultados: 'Madre informa sobre tratamiento médico actual.',
-        situacion: 'Continuación en el Ministerio',
-        observaciones: 'Se visitará nuevamente en 15 días.',
-    },
-    {
-        id: 4,
-        infanteId: 4,
-        infante: MOCK_INFANTES[3],
-        tutor: 'Carlos Ruiz',
-        tutorId: 'tutor_3',
-        fecha: '2026-02-20',
-        visitaExitosa: 'NO',
-        razon: 'Otra Causa',
-        resultados: 'No se encontró a nadie en el domicilio.',
-        situacion: 'Otra',
-        observaciones: 'Se intentará contacto telefónico.',
-    },
-];
-
-// Generar más datos mock para el historial
-for (let i = 5; i <= 30; i++) {
-    const randomInf = MOCK_INFANTES[i % MOCK_INFANTES.length];
-    const randomMonth = Math.floor(Math.random() * 3) + 1; // Ene a Mar
-    MOCK_VISITAS.push({
-        id: i,
-        infanteId: randomInf.id,
-        infante: randomInf,
-        tutor: i % 3 === 0 ? 'Juan Pérez' : (i % 3 === 1 ? 'Ana García' : 'Carlos Ruiz'),
-        tutorId: i % 3 === 0 ? 'tutor_1' : (i % 3 === 1 ? 'tutor_2' : 'tutor_3'),
-        fecha: `2026-0${randomMonth}-${Math.floor(Math.random() * 28) + 1}`.replace('-1-', '-01-').replace('-2-', '-02-').replace('-3-', '-03-'),
-        visitaExitosa: Math.random() > 0.1 ? 'SI' : 'NO',
-        razon: ['Inasistencia', 'Enfermedad', 'Otra Causa', 'Seguimiento'][Math.floor(Math.random() * 4)],
-        resultados: 'Proceso de seguimiento estándar realizado con éxito.',
-        situacion: 'Continuación en el Ministerio',
-        observaciones: 'Sin observaciones adicionales.',
-    });
-}
-
 const RAZONES = ['Inasistencia', 'Enfermedad', 'Otra Causa', 'Seguimiento'];
 const SITUACIONES = ['Continuación en el Ministerio', 'Dar de Baja', 'Otra'];
 
 export default function VisitasPage() {
     const { user } = useAuth();
+    const location = useLocation();
     const { enqueueSnackbar } = useSnackbar();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
@@ -144,16 +62,113 @@ export default function VisitasPage() {
     const [tabIndex, setTabIndex] = useState(0);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [visitas, setVisitas] = useState([]);
+    const [pendientes, setPendientes] = useState([]);
+    const [infantes, setInfantes] = useState([]);
+    const [total, setTotal] = useState(0);
+    const [totalPendientes, setTotalPendientes] = useState(0);
 
     // Filtros Historial
+    const currentYear = new Date().getFullYear();
     const [searchHist, setSearchHist] = useState('');
     const [filtroTutor, setFiltroTutor] = useState('');
-    const [filtroMes, setFiltroMes] = useState(new Date().getMonth().toString());
-    const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear());
+    const [filtroAnio, setFiltroAnio] = useState(currentYear);
     const [histPage, setHistPage] = useState(0);
     const [histRowsPerPage, setHistRowsPerPage] = useState(10);
+    const [pendPage, setPendPage] = useState(0);
+    const [pendRowsPerPage, setPendRowsPerPage] = useState(10);
 
-    // Formulario Registro
+    const schoolYear = useMemo(() => getSchoolYearRange(filtroAnio), [filtroAnio]);
+
+    const cargarVisitas = async () => {
+        setLoading(true);
+        try {
+            const res = await visitaService.listar({
+                fechaInicio: schoolYear.start.toISOString(),
+                fechaFin: schoolYear.end.toISOString(),
+                search: searchHist,
+                tutorId: filtroTutor,
+                page: histPage + 1,
+                limit: histRowsPerPage
+            });
+            setVisitas(res.data);
+            setTotal(res.total);
+        } catch (error) {
+            enqueueSnackbar('Error al cargar visitas', { variant: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const cargarPendientes = async () => {
+        setLoading(true);
+        try {
+            const res = await visitaService.listarPendientes({
+                anio: filtroAnio,
+                page: pendPage + 1,
+                limit: pendRowsPerPage
+            });
+            setPendientes(res.data);
+            setTotalPendientes(res.total);
+        } catch (error) {
+            enqueueSnackbar('Error al cargar pendientes', { variant: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const cargarInfantes = async () => {
+        try {
+            const res = await infanteService.listar({ limit: 1000 });
+            setInfantes(res.data);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    useEffect(() => {
+        cargarInfantes();
+        // Revisar si venimos desde el detalle de un infante
+        if (location.state?.registrarVisitaPara) {
+            setForm(f => ({ ...f, infanteId: location.state.registrarVisitaPara }));
+            setTabIndex(2); // Ir a la pestaña de registro
+        }
+    }, [location.state]);
+
+    useEffect(() => {
+        if (tabIndex === 0) cargarVisitas();
+        if (tabIndex === 1) cargarPendientes();
+    }, [tabIndex, filtroAnio, searchHist, filtroTutor, histPage, histRowsPerPage, pendPage, pendRowsPerPage]);
+
+    const handleExportExcel = () => {
+        try {
+            const dataToExport = visitas.map(v => ({
+                Fecha: new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                Código: v.infante.codigo,
+                Infante: `${v.infante.persona.nombres} ${v.infante.persona.apellidos}`,
+                Tutor: v.tutor?.nombre || 'N/A',
+                Razón: v.razon,
+                Realizada: v.visitaExitosa,
+                Situación: v.situacion,
+                Resultados: v.resultados,
+                Observaciones: v.observaciones
+            }));
+
+            if (dataToExport.length === 0) {
+                enqueueSnackbar('No hay datos para exportar', { variant: 'info' });
+                return;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Visitas");
+            XLSX.writeFile(wb, `Reporte_Visitas_${filtroAnio}.xlsx`);
+            enqueueSnackbar('Excel exportado correctamente', { variant: 'success' });
+        } catch (error) {
+            enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
+        }
+    };
+
     const [form, setForm] = useState({
         infanteId: null,
         fecha: new Date().toISOString().split('T')[0],
@@ -163,121 +178,159 @@ export default function VisitasPage() {
         situacion: 'Continuación en el Ministerio',
         observaciones: '',
     });
-
-    const filteredVisitas = useMemo(() => {
-        let res = [...MOCK_VISITAS];
-
-        if (searchHist) {
-            const s = searchHist.toLowerCase();
-            res = res.filter(v =>
-                `${v.infante.persona.nombres} ${v.infante.persona.apellidos}`.toLowerCase().includes(s) ||
-                v.infante.codigo.toLowerCase().includes(s)
-            );
-        }
-
-        if (filtroTutor) {
-            res = res.filter(v => v.tutor === filtroTutor);
-        }
-
-        if (filtroMes !== 'all') {
-            res = res.filter(v => {
-                const d = new Date(v.fecha + 'T12:00:00');
-                return d.getMonth().toString() === filtroMes && d.getFullYear() === filtroAnio;
-            });
-        } else {
-            res = res.filter(v => {
-                const d = new Date(v.fecha + 'T12:00:00');
-                return d.getFullYear() === filtroAnio;
-            });
-        }
-
-        return res.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    }, [searchHist, filtroTutor, filtroMes, filtroAnio]);
-
-    const tutoresMeta = useMemo(() => {
-        const set = new Set(MOCK_VISITAS.map(v => v.tutor));
-        return Array.from(set);
-    }, []);
-
-    const handleExportExcel = () => {
-        try {
-            // Agrupar datos por tutor para el reporte
-            const dataToExport = filteredVisitas.map(v => ({
-                Fecha: new Date(v.fecha + 'T12:00:00').toLocaleDateString('es-EC'),
-                Código: v.infante.codigo,
-                Infante: `${v.infante.persona.nombres} ${v.infante.persona.apellidos}`,
-                Tutor: v.tutor,
-                Razón: v.razon,
-                Realizada: v.visitaExitosa,
-                Situación: v.situacion,
-                Resultados: v.resultados,
-                Observaciones: v.observaciones
-            }));
-
-            if (dataToExport.length === 0) {
-                enqueueSnackbar('No hay datos para exportar con los filtros actuales', { variant: 'info' });
-                return;
-            }
-
-            const wb = XLSX.utils.book_new();
-
-            // Si es admin, podemos separar por hojas por tutor
-            if (isAdmin && !filtroTutor) {
-                const tutores = [...new Set(dataToExport.map(d => d.Tutor))];
-                tutores.forEach(tutor => {
-                    const tutorData = dataToExport.filter(d => d.Tutor === tutor);
-                    const ws = XLSX.utils.json_to_sheet(tutorData);
-                    XLSX.utils.book_append_sheet(wb, ws, tutor.substring(0, 31)); // Max 31 chars for sheet name
-                });
-
-                // También una hoja general
-                const wsGeneral = XLSX.utils.json_to_sheet(dataToExport);
-                XLSX.utils.book_append_sheet(wb, wsGeneral, "General");
-            } else {
-                const ws = XLSX.utils.json_to_sheet(dataToExport);
-                XLSX.utils.book_append_sheet(wb, ws, "Visitas");
-            }
-
-            const fileName = `Reporte_Visitas_${filtroAnio}_${filtroMes !== 'all' ? MESES.find(m => m.value === filtroMes).label : 'Completo'}.xlsx`;
-            XLSX.writeFile(wb, fileName);
-            enqueueSnackbar('Excel exportado correctamente', { variant: 'success' });
-        } catch (error) {
-            console.error("Error exporting excel:", error);
-            enqueueSnackbar('Error al exportar el archivo Excel', { variant: 'error' });
-        }
-    };
+    const [fotoVisita, setFotoVisita] = useState(null);
+    const [fotoPreview, setFotoPreview] = useState(null);
 
     const guardar = async () => {
         if (!form.infanteId || !form.fecha || !form.razon) {
-            enqueueSnackbar('Por favor complete todos los campos obligatorios', { variant: 'warning' });
+            enqueueSnackbar('Complete los campos obligatorios', { variant: 'warning' });
             return;
         }
         setSaving(true);
-        await new Promise(r => setTimeout(r, 1000));
+        try {
+            const formData = new FormData();
+            Object.keys(form).forEach(key => {
+                if (form[key] !== null) formData.append(key, form[key]);
+            });
+            if (fotoVisita) {
+                formData.append('archivo', fotoVisita);
+            }
 
-        const nuevoId = MOCK_VISITAS.length + 1;
-        const infante = MOCK_INFANTES.find(i => i.id === form.infanteId);
+            await visitaService.crear(formData);
+            enqueueSnackbar('Visita registrada correctamente', { variant: 'success' });
+            setTabIndex(0);
+            cargarVisitas();
+            setForm({
+                infanteId: null,
+                fecha: new Date().toISOString().split('T')[0],
+                visitaExitosa: 'SI',
+                razon: '',
+                resultados: '',
+                situacion: 'Continuación en el Ministerio',
+                observaciones: '',
+            });
+            setFotoVisita(null);
+            setFotoPreview(null);
+        } catch (error) {
+            enqueueSnackbar('Error al guardar visita', { variant: 'error' });
+        } finally {
+            setSaving(false);
+        }
+    };
 
-        MOCK_VISITAS.unshift({
-            ...form,
-            id: nuevoId,
-            infante,
-            tutor: user?.nombre || 'Tutor Actual',
-            tutorId: user?.id || 'current_user'
+    const generarPDF = async (v) => {
+        const doc = new jsPDF();
+        const primaryColor = [65, 105, 225]; // CCO Azul
+        
+        // Membrete/Título
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, 210, 40, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('HOJA DE VISITA DOMICILIARIA', 105, 20, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text('CENTRO DE CUIDADO Y ORIENTACIÓN (CCO)', 105, 30, { align: 'center' });
+
+        // Información General
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INFORMACIÓN DEL INFANTE', 20, 55);
+        doc.setLineWidth(0.5);
+        doc.line(20, 57, 190, 57);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`Nombre: ${v.infante.persona.nombres} ${v.infante.persona.apellidos}`, 20, 65);
+        doc.text(`Código: ${v.infante.codigo}`, 20, 72);
+        doc.text(`Fecha de Visita: ${new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' })}`, 120, 65);
+        doc.text(`Tutor Responsable: ${v.tutor?.nombre || 'N/A'}`, 120, 72);
+
+        // Detalles de la Visita
+        doc.setFont('helvetica', 'bold');
+        doc.text('DETALLES DE LA VISITA', 20, 85);
+        doc.setLineWidth(0.5);
+        doc.line(20, 87, 190, 87);
+
+        doc.autoTable({
+            startY: 90,
+            head: [['Campo', 'Descripción']],
+            body: [
+                ['Razón de Visita', v.razon],
+                ['Visita Exitosa', v.visitaExitosa],
+                ['Situación Post-Visita', v.situacion],
+                ['Observaciones', v.observaciones || 'Sin observaciones adicionales']
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: primaryColor }
         });
 
-        enqueueSnackbar('Visita registrada correctamente', { variant: 'success' });
-        setSaving(false);
-        setTabIndex(0); // Volver al historial
-        setForm({
-            infanteId: null,
-            fecha: new Date().toISOString().split('T')[0],
-            visitaExitosa: 'SI',
-            razon: '',
-            resultados: '',
-            situacion: 'Continuación en el Ministerio',
-            observaciones: '',
-        });
+        const finalY = doc.lastAutoTable.finalY + 10;
+        
+        // Resultados
+        doc.setFont('helvetica', 'bold');
+        doc.text('RESULTADOS Y NOVEDADES:', 20, finalY);
+        doc.setFont('helvetica', 'normal');
+        const splitResultados = doc.splitTextToSize(v.resultados || 'No se registraron resultados específicos.', 170);
+        doc.text(splitResultados, 20, finalY + 7);
+
+        let currentY = finalY + (splitResultados.length * 5) + 15;
+
+        // Foto (si existe)
+        if (v.fotoVisita) {
+            try {
+                // El fotoVisita es una URL relativa, necesitamos la absoluta para jsPDF
+                const imgUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${v.fotoVisita}`;
+                
+                // Cargar imagen
+                const img = await new Promise((resolve, reject) => {
+                    const i = new Image();
+                    i.crossOrigin = 'Anonymous';
+                    i.onload = () => resolve(i);
+                    i.onerror = reject;
+                    i.src = imgUrl;
+                });
+
+                // Calcular dimensiones para que quepa (max 100x70)
+                const ratio = img.width / img.height;
+                let imgW = 100;
+                let imgH = imgW / ratio;
+                if (imgH > 70) {
+                    imgH = 70;
+                    imgW = imgH * ratio;
+                }
+
+                if (currentY + imgH > 250) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+
+                doc.setFont('helvetica', 'bold');
+                doc.text('EVIDENCIA FOTOGRÁFICA:', 20, currentY);
+                doc.addImage(img, 'JPEG', 55, currentY + 5, imgW, imgH);
+                currentY += imgH + 20;
+            } catch (e) {
+                console.error("Error cargando imagen para PDF", e);
+            }
+        }
+
+        // Espacio para firmas
+        if (currentY > 240) {
+            doc.addPage();
+            currentY = 40;
+        } else {
+            currentY = Math.max(currentY, 240);
+        }
+
+        doc.setLineWidth(0.5);
+        doc.line(30, currentY, 90, currentY);
+        doc.line(120, currentY, 180, currentY);
+        doc.setFontSize(9);
+        doc.text('Firma del Director/a', 60, currentY + 5, { align: 'center' });
+        doc.text('Firma del Tutor/Familia', 150, currentY + 5, { align: 'center' });
+
+        doc.save(`Visita_${v.infante.codigo}_${new Date(v.fecha).toISOString().split('T')[0]}.pdf`);
     };
 
     return (
@@ -334,6 +387,7 @@ export default function VisitasPage() {
                         }}
                     >
                         <Tab icon={<HistoryIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Historial de Visitas" />
+                        <Tab icon={<ErrorIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Pendientes de Visita" />
                         <Tab icon={<AddIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Registrar Nueva Visita" />
                     </Tabs>
 
@@ -342,7 +396,7 @@ export default function VisitasPage() {
                             /* ─── HISTORIAL ─────────────────────────────────── */
                             <Box>
                                 <Grid container spacing={2.5} sx={{ mb: 4 }} alignItems="center">
-                                    <Grid item xs={12} md={6} lg={4}>
+                                    <Grid item xs={12} md={6}>
                                         <TextField
                                             size="small"
                                             fullWidth
@@ -359,60 +413,32 @@ export default function VisitasPage() {
                                             }}
                                         />
                                     </Grid>
-                                    <Grid item xs={6} md={3} lg={1.5}>
+                                    <Grid item xs={6} md={3}>
                                         <TextField
                                             select
                                             fullWidth
                                             size="small"
-                                            label="Mes"
-                                            value={filtroMes}
-                                            onChange={e => setFiltroMes(e.target.value)}
-                                            InputProps={{ sx: { borderRadius: 2, minWidth: 100 } }}
-                                        >
-                                            {MESES.map(m => (
-                                                <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
-                                            ))}
-                                        </TextField>
-                                    </Grid>
-                                    <Grid item xs={6} md={3} lg={1.5}>
-                                        <TextField
-                                            select
-                                            fullWidth
-                                            size="small"
-                                            label="Año"
+                                            label="Año Lectivo"
                                             value={filtroAnio}
                                             onChange={e => setFiltroAnio(e.target.value)}
-                                            InputProps={{ sx: { borderRadius: 2, minWidth: 80 } }}
+                                            InputProps={{ sx: { borderRadius: 2 } }}
                                         >
                                             {ANIOS.map(a => (
-                                                <MenuItem key={a} value={a}>{a}</MenuItem>
+                                                <MenuItem key={a} value={a}>{a} - {a + 1}</MenuItem>
                                             ))}
                                         </TextField>
                                     </Grid>
-                                    {isAdmin && (
-                                        <Grid item xs={12} md={12} lg={5}>
-                                            <TextField
-                                                select
-                                                fullWidth
-                                                size="small"
-                                                label="Tutor"
-                                                value={filtroTutor}
-                                                onChange={e => setFiltroTutor(e.target.value)}
-                                                InputProps={{ sx: { borderRadius: 2, minWidth: 180 } }}
-                                            >
-                                                <MenuItem value="">Todos los tutores</MenuItem>
-                                                {tutoresMeta.map(t => (
-                                                    <MenuItem key={t} value={t}>{t}</MenuItem>
-                                                ))}
-                                            </TextField>
-                                        </Grid>
-                                    )}
+                                    <Grid item xs={6} md={3}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                            Rango: {formatLongDate(schoolYear.start)} - {formatLongDate(schoolYear.end)}
+                                        </Typography>
+                                    </Grid>
                                 </Grid>
 
                                 <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                                     <Chip
                                         icon={<SuccessIcon sx={{ fontSize: '1rem !important' }} />}
-                                        label={`${filteredVisitas.length} Registros encontrados`}
+                                        label={`${total} Registros encontrados`}
                                         variant="low"
                                         sx={{ bgcolor: alpha(CCO.azul, 0.1), color: isDark ? '#90caf9' : CCO.azul, fontWeight: 700 }}
                                     />
@@ -428,13 +454,14 @@ export default function VisitasPage() {
                                                 <TableCell sx={{ fontWeight: 800, color: CCO.violeta }}>Razón</TableCell>
                                                 <TableCell sx={{ fontWeight: 800, color: CCO.violeta }} align="center">Realizada</TableCell>
                                                 <TableCell sx={{ fontWeight: 800, color: CCO.violeta }}>Estado</TableCell>
+                                                <TableCell sx={{ fontWeight: 800, color: CCO.violeta }} align="center">Acciones</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {filteredVisitas.slice(histPage * histRowsPerPage, histPage * histRowsPerPage + histRowsPerPage).map((v) => (
+                                            {visitas.map((v) => (
                                                 <TableRow key={v.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                                     <TableCell sx={{ fontWeight: 500 }}>
-                                                        {new Date(v.fecha + 'T12:00:00').toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        {new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </TableCell>
                                                     <TableCell>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -451,7 +478,7 @@ export default function VisitasPage() {
                                                             </Box>
                                                         </Box>
                                                     </TableCell>
-                                                    {isAdmin && <TableCell variant="body2">{v.tutor}</TableCell>}
+                                                    {isAdmin && <TableCell variant="body2">{v.tutor?.nombre || 'S/T'}</TableCell>}
                                                     <TableCell>
                                                         <Chip
                                                             label={v.razon}
@@ -478,21 +505,32 @@ export default function VisitasPage() {
                                                     </TableCell>
                                                     <TableCell>
                                                         <Typography variant="caption" fontWeight={600} sx={{
-                                                            color: v.situacion.includes('Baja') ? 'error.main' : 'text.primary',
-                                                            bgcolor: alpha(v.situacion.includes('Baja') ? theme.palette.error.main : theme.palette.divider, 0.1),
+                                                            color: v.situacion?.includes('Baja') ? 'error.main' : 'text.primary',
+                                                            bgcolor: alpha(v.situacion?.includes('Baja') ? theme.palette.error.main : theme.palette.divider, 0.1),
                                                             px: 1, py: 0.5, borderRadius: 1
                                                         }}>
                                                             {v.situacion}
                                                         </Typography>
                                                     </TableCell>
+                                                    <TableCell align="center">
+                                                        <Tooltip title="Imprimir Hoja de Visita">
+                                                            <IconButton 
+                                                                size="small" 
+                                                                onClick={() => generarPDF(v)}
+                                                                sx={{ color: CCO.azul, '&:hover': { bgcolor: alpha(CCO.azul, 0.1) } }}
+                                                            >
+                                                                <PrintIcon fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))}
-                                            {filteredVisitas.length === 0 && (
+                                            {visitas.length === 0 && (
                                                 <TableRow>
                                                     <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
                                                         <Box sx={{ opacity: 0.5 }}>
                                                             <HistoryIcon sx={{ fontSize: 40, mb: 1 }} />
-                                                            <Typography variant="body1">No se encontraron visitas para este periodo.</Typography>
+                                                            <Typography variant="body1">No hay visitas registradas en este periodo.</Typography>
                                                         </Box>
                                                     </TableCell>
                                                 </TableRow>
@@ -503,7 +541,7 @@ export default function VisitasPage() {
 
                                 <TablePagination
                                     component="div"
-                                    count={filteredVisitas.length}
+                                    count={total}
                                     page={histPage}
                                     onPageChange={(_, p) => setHistPage(p)}
                                     rowsPerPage={histRowsPerPage}
@@ -511,177 +549,370 @@ export default function VisitasPage() {
                                     labelRowsPerPage="Filas por página:"
                                 />
                             </Box>
+                        ) : tabIndex === 1 ? (
+                            /* ─── PENDIENTES ───────────────────────────────── */
+                            <Box>
+                                <Alert severity="info" sx={{ mb: 3, borderRadius: 3 }}>
+                                    Listado de infantes que aún <strong>no han recibido una visita exitosa</strong> en el año lectivo seleccionado ({filtroAnio} - {filtroAnio + 1}).
+                                </Alert>
+                                <Box sx={{ overflowX: 'auto' }}>
+                                    <Table>
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell sx={{ fontWeight: 800 }}>Infante</TableCell>
+                                                <TableCell sx={{ fontWeight: 800 }}>Código</TableCell>
+                                                <TableCell sx={{ fontWeight: 800 }} align="right">Acción</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {pendientes.map((inf) => (
+                                                <TableRow key={inf.id} hover>
+                                                    <TableCell>
+                                                        <Typography variant="body2" fontWeight={700}>
+                                                            {inf.persona.apellidos} {inf.persona.nombres}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>{inf.codigo}</TableCell>
+                                                    <TableCell align="right">
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            startIcon={<AddIcon />}
+                                                            onClick={() => {
+                                                                setForm(f => ({ ...f, infanteId: inf.id }));
+                                                                setTabIndex(2);
+                                                            }}
+                                                            sx={{ borderRadius: 2, bgcolor: CCO.naranja }}
+                                                        >
+                                                            Visitar
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {pendientes.length === 0 && !loading && (
+                                                <TableRow>
+                                                    <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
+                                                        ¡Todos los infantes han sido visitados! 🎉
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </Box>
+                                <TablePagination
+                                    component="div"
+                                    count={totalPendientes}
+                                    page={pendPage}
+                                    onPageChange={(_, p) => setPendPage(p)}
+                                    rowsPerPage={pendRowsPerPage}
+                                    onRowsPerPageChange={e => { setPendRowsPerPage(parseInt(e.target.value, 10)); setPendPage(0); }}
+                                    labelRowsPerPage="Filas:"
+                                />
+                            </Box>
                         ) : (
-                            /* ─── REGISTRO ──────────────────────────────────── */
-                            <Box sx={{ maxWidth: 900, mx: 'auto' }}>
+                            /* ─── REGISTRO REDISEÑADO ───────────────────────── */
+                            <Box sx={{ maxWidth: 1200, mx: 'auto', pb: 4 }}>
                                 <Box sx={{ textAlign: 'center', mb: 5 }}>
-                                    <Typography variant="h5" fontWeight={800} sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
-                                        <FormIcon sx={{ color: CCO.naranja }} />
-                                        Nueva Hoja de Visita
+                                    <Typography variant="h4" fontWeight={900} sx={{
+                                        mb: 1,
+                                        background: `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 2
+                                    }}>
+                                        <FormIcon sx={{ fontSize: 45, color: CCO.naranja, WebkitTextFillColor: 'initial' }} />
+                                        Registro de Visita Domiciliaria
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Complete la información detallada de la visita realizada al hogar del infante.
+                                    <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 800, mx: 'auto' }}>
+                                        Documente los detalles de la visita realizada para mantener el seguimiento integral del infante.
                                     </Typography>
-                                    <Divider sx={{ mt: 3, width: 60, mx: 'auto', borderWidth: 2, borderColor: CCO.naranja, borderRadius: 1 }} />
+                                    <Divider sx={{ mt: 3, width: 100, mx: 'auto', borderWidth: 2, borderColor: CCO.naranja, borderRadius: 1, opacity: 0.5 }} />
                                 </Box>
 
-                                <Grid container spacing={4}>
+                                <Grid container spacing={4} justifyContent="center">
+                                    {/* SECCIÓN 1: IDENTIFICACIÓN */}
                                     <Grid item xs={12} md={6}>
-                                        <Card variant="outlined" sx={{ borderRadius: 3, borderStyle: 'dashed', bgcolor: isDark ? alpha(CCO.azul, 0.05) : alpha(CCO.azul, 0.02) }}>
-                                            <CardContent>
-                                                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <PersonIcon fontSize="small" /> Datos del Infante y Fecha
+                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', height: '100%', display: 'flex', flexDirection: 'column', bgcolor: isDark ? alpha('#fff', 0.02) : '#fff' }}>
+                                            <CardContent sx={{ p: 4, flexGrow: 1 }}>
+                                                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 3, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                    <PersonIcon /> 1. Identificación y Fecha
                                                 </Typography>
-                                                <Stack spacing={3}>
+                                                <Stack spacing={4}>
                                                     <Autocomplete
-                                                        options={MOCK_INFANTES}
-                                                        getOptionLabel={(option) => `${option.codigo} - ${option.persona.nombres} ${option.persona.apellidos}`}
-                                                        value={MOCK_INFANTES.find(i => i.id === form.infanteId) || null}
+                                                        options={infantes}
+                                                        getOptionLabel={(option) => `${option.codigo} - ${option.persona?.apellidos} ${option.persona?.nombres}`}
+                                                        value={infantes.find(i => i.id === form.infanteId) || null}
                                                         onChange={(_, newValue) => setForm(f => ({ ...f, infanteId: newValue?.id || null }))}
                                                         renderInput={(params) => (
                                                             <TextField
                                                                 {...params}
-                                                                label="Seleccionar Infante"
-                                                                size="medium"
+                                                                label="Infante a visitar"
                                                                 required
-                                                                placeholder="Ingrese nombre o código"
+                                                                placeholder="Busque por código o nombre"
                                                                 InputProps={{
                                                                     ...params.InputProps,
-                                                                    sx: { borderRadius: 2 }
+                                                                    startAdornment: (
+                                                                        <InputAdornment position="start">
+                                                                            <SearchIcon color="primary" />
+                                                                        </InputAdornment>
+                                                                    ),
                                                                 }}
                                                             />
                                                         )}
                                                     />
                                                     <TextField
+                                                        fullWidth
                                                         label="Fecha de la Visita"
                                                         type="date"
-                                                        fullWidth
                                                         value={form.fecha}
-                                                        onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))}
+                                                        onChange={(e) => setForm(f => ({ ...f, fecha: e.target.value }))}
                                                         InputLabelProps={{ shrink: true }}
                                                         required
-                                                        InputProps={{ sx: { borderRadius: 2 } }}
+                                                        InputProps={{
+                                                            startAdornment: (
+                                                                <InputAdornment position="start">
+                                                                    <CalendarIcon color="primary" />
+                                                                </InputAdornment>
+                                                            ),
+                                                        }}
                                                     />
                                                 </Stack>
                                             </CardContent>
                                         </Card>
                                     </Grid>
 
+                                    {/* SECCIÓN 2: ESTADO */}
                                     <Grid item xs={12} md={6}>
-                                        <Card variant="outlined" sx={{ borderRadius: 3, borderStyle: 'dashed', bgcolor: isDark ? alpha(CCO.violeta, 0.05) : alpha(CCO.violeta, 0.02) }}>
-                                            <CardContent>
-                                                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2, color: CCO.violeta, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <CalendarIcon fontSize="small" /> Estado y Motivo
+                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', height: '100%', bgcolor: isDark ? alpha(CCO.azul, 0.05) : alpha(CCO.azul, 0.02) }}>
+                                            <CardContent sx={{ p: 4 }}>
+                                                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 3, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                    <VisitaIcon /> 2. Resultado y Motivo
                                                 </Typography>
-                                                <Stack spacing={3}>
-                                                    <Box>
-                                                        <Typography variant="body2" gutterBottom fontWeight={700} color="text.secondary">¿Se realizó la visita al hogar?</Typography>
-                                                        <RadioGroup
-                                                            row
-                                                            value={form.visitaExitosa}
-                                                            onChange={e => setForm(f => ({ ...f, visitaExitosa: e.target.value }))}
-                                                            sx={{ mt: 1 }}
-                                                        >
-                                                            <FormControlLabel
-                                                                value="SI"
-                                                                control={<Radio sx={{ color: 'success.main', '&.Mui-checked': { color: 'success.main' } }} />}
-                                                                label={<Typography fontWeight={700} color="success.main">SÍ, EXITOSA</Typography>}
-                                                            />
-                                                            <FormControlLabel
-                                                                value="NO"
-                                                                control={<Radio sx={{ color: 'error.main', '&.Mui-checked': { color: 'error.main' } }} />}
-                                                                label={<Typography fontWeight={700} color="error.main">NO REALIZADA</Typography>}
-                                                            />
-                                                        </RadioGroup>
-                                                    </Box>
-                                                    <TextField
-                                                        select
-                                                        fullWidth
-                                                        label="Razón de Visita"
-                                                        value={form.razon}
-                                                        onChange={e => setForm(f => ({ ...f, razon: e.target.value }))}
-                                                        required
-                                                        InputProps={{ sx: { borderRadius: 2 } }}
-                                                    >
-                                                        {RAZONES.map(r => (
-                                                            <MenuItem key={r} value={r}>{r}</MenuItem>
-                                                        ))}
-                                                    </TextField>
-                                                </Stack>
+                                                <Typography variant="body1" fontWeight={700} gutterBottom sx={{ mb: 2, color: 'text.secondary' }}>
+                                                    ¿Se logró realizar la visita exitosamente?
+                                                </Typography>
+                                                <ToggleButtonGroup
+                                                    value={form.visitaExitosa}
+                                                    exclusive
+                                                    onChange={(_, val) => val && setForm(f => ({ ...f, visitaExitosa: val }))}
+                                                    fullWidth
+                                                    sx={{ mb: 4, height: 64 }}
+                                                >
+                                                    <ToggleButton value="SI" sx={{ 
+                                                        borderRadius: '16px !important', 
+                                                        border: '2px solid transparent',
+                                                        '&.Mui-selected': { 
+                                                            bgcolor: alpha(theme.palette.success.main, 0.15), 
+                                                            color: 'success.main', 
+                                                            fontWeight: 900,
+                                                            borderColor: 'success.main'
+                                                        } 
+                                                    }}>
+                                                        <SuccessIcon sx={{ mr: 1 }} /> SÍ, REALIZADA
+                                                    </ToggleButton>
+                                                    <ToggleButton value="NO" sx={{ 
+                                                        borderRadius: '16px !important',
+                                                        border: '2px solid transparent',
+                                                        '&.Mui-selected': { 
+                                                            bgcolor: alpha(theme.palette.error.main, 0.15), 
+                                                            color: 'error.main', 
+                                                            fontWeight: 900,
+                                                            borderColor: 'error.main'
+                                                        }
+                                                    }}>
+                                                        <ErrorIcon sx={{ mr: 1 }} /> NO REALIZADA
+                                                    </ToggleButton>
+                                                </ToggleButtonGroup>
+                                                <TextField
+                                                    select
+                                                    fullWidth
+                                                    label="Razón o Motivo de la visita"
+                                                    value={form.razon}
+                                                    onChange={(e) => setForm(f => ({ ...f, razon: e.target.value }))}
+                                                    required
+                                                >
+                                                    {RAZONES.map(r => (
+                                                        <MenuItem key={r} value={r}>{r}</MenuItem>
+                                                    ))}
+                                                </TextField>
                                             </CardContent>
                                         </Card>
                                     </Grid>
 
+                                    {/* SECCIÓN 3: NOVEDADES Y FOTO */}
                                     <Grid item xs={12}>
-                                        <TextField
-                                            fullWidth
-                                            label="Resultados Detallados"
-                                            multiline
-                                            rows={4}
-                                            value={form.resultados}
-                                            onChange={e => setForm(f => ({ ...f, resultados: e.target.value }))}
-                                            placeholder="Describa la situación familiar, salud, estudios y cualquier novedad relevante observada..."
-                                            InputProps={{ sx: { borderRadius: 3 } }}
-                                        />
+                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', bgcolor: isDark ? alpha('#fff', 0.02) : '#fff' }}>
+                                            <CardContent sx={{ p: 4 }}>
+                                                <Grid container spacing={4}>
+                                                    <Grid item xs={12} md={8}>
+                                                        <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                            <FormIcon /> 3. Hallazgos y Resultados
+                                                        </Typography>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Descripción detallada de la visita"
+                                                            multiline
+                                                            rows={8}
+                                                            value={form.resultados}
+                                                            onChange={(e) => setForm(f => ({ ...f, resultados: e.target.value }))}
+                                                            placeholder="Describa la situación del infante, entorno familiar, salud, estudios..."
+                                                            variant="filled"
+                                                            sx={{ 
+                                                                '& .MuiFilledInput-root': { 
+                                                                    borderRadius: 4, 
+                                                                    bgcolor: isDark ? alpha('#000', 0.2) : alpha(theme.palette.divider, 0.05),
+                                                                    border: '1px solid transparent',
+                                                                    '&:hover': { bgcolor: isDark ? alpha('#000', 0.3) : alpha(theme.palette.divider, 0.08) },
+                                                                    '&.Mui-focused': { borderColor: CCO.azul, bgcolor: isDark ? alpha('#000', 0.4) : '#fff' }
+                                                                } 
+                                                            }}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item xs={12} md={4}>
+                                                        <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2, color: CCO.naranja, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                            <PhotoIcon /> Evidencia Visual
+                                                        </Typography>
+                                                        <Box 
+                                                            sx={{ 
+                                                                border: '2px dashed', 
+                                                                borderColor: fotoPreview ? CCO.naranja : isDark ? 'rgba(255,255,255,0.1)' : 'divider',
+                                                                borderRadius: 5,
+                                                                height: 236,
+                                                                px: 2,
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                bgcolor: isDark ? alpha(CCO.naranja, 0.05) : alpha(CCO.naranja, 0.02),
+                                                                position: 'relative',
+                                                                overflow: 'hidden',
+                                                                transition: 'all 0.3s'
+                                                            }}
+                                                        >
+                                                            {fotoPreview ? (
+                                                                <>
+                                                                    <img 
+                                                                        src={fotoPreview} 
+                                                                        alt="Vista previa" 
+                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                    />
+                                                                    <IconButton 
+                                                                        onClick={() => { setFotoVisita(null); setFotoPreview(null); }}
+                                                                        sx={{ position: 'absolute', top: 12, right: 12, bgcolor: 'error.main', color: 'white', boxShadow: 3, '&:hover': { bgcolor: 'error.dark' } }}
+                                                                        size="medium"
+                                                                    >
+                                                                        <CloseIcon />
+                                                                    </IconButton>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <IconButton color="primary" component="label" sx={{ bgcolor: alpha(CCO.naranja, 0.15), mb: 2, p: 2 }}>
+                                                                        <PhotoIcon fontSize="large" sx={{ color: CCO.naranja }} />
+                                                                        <input type="file" hidden accept="image/*" onChange={(e) => {
+                                                                            const file = e.target.files[0];
+                                                                            if (file) {
+                                                                                setFotoVisita(file);
+                                                                                setFotoPreview(URL.createObjectURL(file));
+                                                                            }
+                                                                        }} />
+                                                                    </IconButton>
+                                                                    <Typography variant="body2" color="text.secondary" fontWeight={700} textAlign="center">
+                                                                        Subir Fotografía de Respaldo
+                                                                    </Typography>
+                                                                    <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ mt: 0.5 }}>
+                                                                        (Opcional)
+                                                                    </Typography>
+                                                                </>
+                                                            )}
+                                                        </Box>
+                                                    </Grid>
+                                                </Grid>
+                                            </CardContent>
+                                        </Card>
                                     </Grid>
 
-                                    <Grid item xs={12} md={5}>
-                                        <TextField
-                                            select
-                                            fullWidth
-                                            label="Decisión / Situación Post-Visita"
-                                            value={form.situacion}
-                                            onChange={e => setForm(f => ({ ...f, situacion: e.target.value }))}
-                                            InputProps={{ sx: { borderRadius: 2 } }}
-                                        >
-                                            {SITUACIONES.map(s => (
-                                                <MenuItem key={s} value={s}>{s}</MenuItem>
-                                            ))}
-                                        </TextField>
+                                    {/* SECCIÓN 4: CIERRE */}
+                                    <Grid item xs={12}>
+                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', bgcolor: isDark ? alpha(theme.palette.warning.main, 0.05) : alpha(theme.palette.warning.main, 0.02) }}>
+                                            <CardContent sx={{ p: 4 }}>
+                                                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 3, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                    <HistoryIcon /> 4. Conclusión y Seguimiento
+                                                </Typography>
+                                                <Grid container spacing={4}>
+                                                    <Grid item xs={12} md={5}>
+                                                        <TextField
+                                                            select
+                                                            fullWidth
+                                                            label="Estado Final del Infante"
+                                                            value={form.situacion}
+                                                            onChange={(e) => setForm(f => ({ ...f, situacion: e.target.value }))}
+                                                        >
+                                                            {SITUACIONES.map(s => (
+                                                                <MenuItem key={s} value={s}>{s}</MenuItem>
+                                                            ))}
+                                                        </TextField>
+                                                    </Grid>
+                                                    <Grid item xs={12} md={7}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Observaciones Técnicas Finales"
+                                                            value={form.observaciones}
+                                                            onChange={(e) => setForm(f => ({ ...f, observaciones: e.target.value }))}
+                                                            placeholder="Notas finales o compromisos adquiridos..."
+                                                        />
+                                                    </Grid>
+                                                </Grid>
+                                            </CardContent>
+                                        </Card>
                                     </Grid>
 
-                                    <Grid item xs={12} md={7}>
-                                        <TextField
-                                            fullWidth
-                                            label="Observaciones y Recomendaciones"
-                                            multiline
-                                            rows={2}
-                                            value={form.observaciones}
-                                            onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
-                                            placeholder="Tareas pendientes o compromisos adquiridos..."
-                                            InputProps={{ sx: { borderRadius: 2 } }}
-                                        />
-                                    </Grid>
-
-                                    <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 4, mb: 2 }}>
+                                    {/* BOTONES DE ACCIÓN */}
+                                    <Grid item xs={12} sx={{ mt: 5, display: 'flex', justifyContent: 'center', gap: 4 }}>
                                         <Button
-                                            variant="text"
+                                            variant="outlined"
+                                            size="large"
                                             onClick={() => setTabIndex(0)}
                                             disabled={saving}
-                                            sx={{ px: 4, fontWeight: 700, color: 'text.secondary' }}
+                                            sx={{ 
+                                                px: 6, 
+                                                py: 2, 
+                                                borderRadius: 4, 
+                                                fontWeight: 700, 
+                                                fontSize: '1.1rem',
+                                                border: '2px solid', 
+                                                '&:hover': { border: '2px solid', bgcolor: alpha(theme.palette.action.hover, 0.1) } 
+                                            }}
                                         >
-                                            Descartar
+                                            Cancelar Registro
                                         </Button>
                                         <Button
                                             variant="contained"
+                                            size="large"
                                             onClick={guardar}
                                             disabled={saving}
+                                            startIcon={saving ? <CircularProgress size={28} color="inherit" /> : <SuccessIcon sx={{ fontSize: '1.5rem !important' }} />}
                                             sx={{
-                                                px: 6,
-                                                py: 1.5,
-                                                borderRadius: 3,
-                                                fontWeight: 800,
-                                                fontSize: '1rem',
+                                                px: 10,
+                                                py: 2,
+                                                borderRadius: 4,
+                                                fontWeight: 900,
+                                                fontSize: '1.2rem',
                                                 background: `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
-                                                boxShadow: `0 4px 15px ${alpha(CCO.violeta, 0.4)}`,
+                                                boxShadow: `0 12px 30px ${alpha(CCO.naranja, 0.4)}`,
+                                                transition: 'all 0.3s',
                                                 '&:hover': {
-                                                    boxShadow: `0 6px 20px ${alpha(CCO.violeta, 0.6)}`,
-                                                    opacity: 0.9
+                                                    transform: 'translateY(-4px)',
+                                                    boxShadow: `0 15px 40px ${alpha(CCO.naranja, 0.6)}`,
+                                                    opacity: 0.95
+                                                },
+                                                '&:active': {
+                                                    transform: 'translateY(0)'
                                                 }
                                             }}
-                                            startIcon={saving ? <CircularProgress size={24} color="inherit" /> : <SuccessIcon />}
                                         >
-                                            {saving ? 'Procesando...' : 'Finalizar y Guardar'}
+                                            {saving ? 'Guardando...' : 'GUARDAR HOJA DE VISITA'}
                                         </Button>
                                     </Grid>
                                 </Grid>

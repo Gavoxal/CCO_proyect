@@ -21,6 +21,7 @@ import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
 import infanteService from '../../services/infanteService';
 import asistenciaService from '../../services/asistenciaService';
+import { getSchoolYearRange, formatDateToDDMMYYYY } from '../../utils/dateUtils';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { amarillo: '#FFD700', naranja: '#FF8C00', violeta: '#6A5ACD', azul: '#4169E1' };
@@ -31,6 +32,7 @@ const ESTADO_ICONS = {
     Ausente: <CancelIcon fontSize="small" />, 
     Justificado: <PendingIcon fontSize="small" /> 
 };
+const EMOJI = { Presente: '✅', Ausente: '❌', Justificado: '⚠️' };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getInitials = (inf) => `${inf.persona?.nombres?.charAt(0) || ''}${inf.persona?.apellidos?.charAt(0) || ''}`;
@@ -45,11 +47,12 @@ const PERIODOS = [
 
 const getFechaInicio = (periodo) => {
     const hoy = new Date();
+    const schoolYear = getSchoolYearRange();
     switch (periodo) {
         case 'mes': return new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
         case 'trimestre': return new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 3) * 3, 1).toISOString().split('T')[0];
         case 'semestre': return new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 6) * 6, 1).toISOString().split('T')[0];
-        case 'anual': return new Date(hoy.getFullYear(), 0, 1).toISOString().split('T')[0];
+        case 'anual': return schoolYear.start.toISOString().split('T')[0];
         default: return new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
     }
 };
@@ -204,21 +207,8 @@ const AsistenciaPage = () => {
     };
 
     // ── Historial ─────────────────────────────────────────────────────────────
-    const filteredHistorial = useMemo(() => {
-        let res = historial;
-        if (histFiltroEstado) res = res.filter(r => r.estado === histFiltroEstado);
-        if (histFiltroFecha) res = res.filter(r => r.fecha === histFiltroFecha);
-        if (searchHist) {
-            const s = searchHist.toLowerCase();
-            res = res.filter(r =>
-                `${r.infante.persona.nombres} ${r.infante.persona.apellidos}`.toLowerCase().includes(s) ||
-                r.infante.codigo.toLowerCase().includes(s)
-            );
-        }
-        return res;
-    }, [histFiltroEstado, histFiltroFecha, searchHist]);
-
-    const histPaginado = filteredHistorial.slice(histPage * histRowsPerPage, histPage * histRowsPerPage + histRowsPerPage);
+    // El filtrado y paginación ahora se confía plenamente al backend
+    const histPaginado = historial;
 
     // Estadísticas del historial global
     const histStats = useMemo(() => {
@@ -229,18 +219,20 @@ const AsistenciaPage = () => {
         return { total, p, a, j, pct: total > 0 ? Math.round((p / total) * 100) : 0 };
     }, [historial]);
 
-    // ── Estadísticas del mes actual ───────────────────────────────────────────
-    const mesActual = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-
+    // ── Estadísticas del Año Lectivo ─────────────────────────────────────────
     const statsDestesMes = useMemo(() => {
-        const registrosMes = historial.filter(r => r.fecha.startsWith(mesActual));
+        const { start, end } = getSchoolYearRange();
+        const registrosAño = historial.filter(r => {
+            const f = new Date(r.fecha);
+            return f >= start && f <= end;
+        });
         const infantesConAsistencia = new Set(
-            registrosMes.filter(r => r.estado === 'Presente').map(r => r.infanteId)
+            registrosAño.filter(r => r.estado === 'Presente').map(r => r.infanteId)
         );
-        const diasUnicos = new Set(registrosMes.map(r => r.fecha)).size;
-        const totalPresencias = registrosMes.filter(r => r.estado === 'Presente').length;
-        const totalAusencias = registrosMes.filter(r => r.estado === 'Ausente').length;
-        const totalJustificados = registrosMes.filter(r => r.estado === 'Justificado').length;
+        const diasUnicos = new Set(registrosAño.map(r => r.fecha.split('T')[0])).size;
+        const totalPresencias = registrosAño.filter(r => r.estado === 'Presente').length;
+        const totalAusencias = registrosAño.filter(r => r.estado === 'Ausente').length;
+        const totalJustificados = registrosAño.filter(r => r.estado === 'Justificado').length;
         return {
             infantesAsistidos: infantesConAsistencia.size,
             totalInfantes: infantes.length,
@@ -250,7 +242,7 @@ const AsistenciaPage = () => {
             ausencias: totalAusencias,
             justificados: totalJustificados,
         };
-    }, [mesActual, historial, infantes]);
+    }, [historial, infantes]);
 
     // ── Exportar Excel (Formato Matriz Avanzada) ──────────────────────────────
     const handleExportar = async () => {
@@ -275,11 +267,8 @@ const AsistenciaPage = () => {
             });
 
             // 4. Construir filas para Excel
-            // Fila de Cabecera Personalizada
-            const headerRow = ['Código', 'Nombres', 'Apellidos'];
             fechasUnicas.forEach(f => {
-                const dateObj = new Date(f + 'T12:00:00');
-                headerRow.push(`${dateObj.getDate()}/${dateObj.getMonth() + 1}`);
+                headerRow.push(formatDateToDDMMYYYY(f));
             });
             headerRow.push('Total Pres.', '% Asist.');
 
@@ -427,13 +416,13 @@ const AsistenciaPage = () => {
                             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
                                 <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <GroupIcon fontSize="small" sx={{ color: CCO.azul }} />
-                                    Asistencia del mes · {new Date().toLocaleDateString('es-EC', { month: 'long', year: 'numeric' })}
+                                    Participación Año Lectivo · {getSchoolYearRange().label}
                                 </Typography>
                                 <Grid container spacing={2} alignItems="center">
                                     {/* Barra principal infantes */}
                                     <Grid item xs={12} md={6}>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                                            <Typography variant="body2" color="text.secondary">Infantes con asistencia este mes</Typography>
+                                            <Typography variant="body2" color="text.secondary">Participación en el año lectivo</Typography>
                                             <Typography variant="body2" fontWeight={800} color={statsDestesMes.pct >= 80 ? 'success.main' : statsDestesMes.pct >= 50 ? 'warning.main' : 'error.main'}>
                                                 {statsDestesMes.infantesAsistidos} / {statsDestesMes.totalInfantes}
                                             </Typography>
@@ -581,7 +570,7 @@ const AsistenciaPage = () => {
                                 </TableBody>
                             </Table>
                             <TablePagination
-                                component="div" count={filteredInfantes.length}
+                                component="div" count={totalHist}
                                 page={tomaPage} onPageChange={(_, p) => setTomaPage(p)}
                                 rowsPerPage={tomaRowsPerPage}
                                 onRowsPerPageChange={e => { setTomaRowsPerPage(parseInt(e.target.value, 10)); setTomaPage(0); }}

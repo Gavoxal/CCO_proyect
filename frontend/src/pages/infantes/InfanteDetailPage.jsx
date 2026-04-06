@@ -14,7 +14,7 @@ import {
     CalendarMonth as CalIcon, CheckCircle as CheckIcon,
     Cancel as CancelIcon, Warning as WarningIcon,
     PhotoCamera as PhotoIcon, Explore as MapIcon,
-    Close as CloseIcon,
+    Close as CloseIcon, HomeWork as VisitaIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
@@ -152,10 +152,25 @@ const InfanteDetailPage = () => {
                         Volver
                     </Button>
                     {canWrite && (
-                        <Button startIcon={<EditIcon />} onClick={() => navigate(`/infantes/${id}/editar`)} variant="contained" size="small"
-                            sx={{ borderRadius: 2 }}>
-                            Editar
-                        </Button>
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                startIcon={<VisitaIcon />}
+                                onClick={() => navigate('/visitas', { state: { registrarVisitaPara: infante.id } })}
+                                variant="contained"
+                                size="small"
+                                sx={{
+                                    borderRadius: 2,
+                                    background: `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
+                                    '&:hover': { opacity: 0.9 }
+                                }}
+                            >
+                                Registrar Visita
+                            </Button>
+                            <Button startIcon={<EditIcon />} onClick={() => navigate(`/infantes/${id}/editar`)} variant="contained" size="small"
+                                sx={{ borderRadius: 2, bgcolor: theme.palette.grey[700] }}>
+                                Editar
+                            </Button>
+                        </Stack>
                     )}
                 </Box>
 
