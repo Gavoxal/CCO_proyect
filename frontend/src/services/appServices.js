@@ -85,6 +85,13 @@ export const materialesService = {
             headers: { 'Content-Type': 'multipart/form-data' },
         }).then(r => r.data);
     },
+    importarExcel: (file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return api.post('/inventario/materiales/importar', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }).then(r => r.data);
+    },
 };
 
 export const incidentesService = {

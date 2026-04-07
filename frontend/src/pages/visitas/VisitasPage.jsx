@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import {
     Add as AddIcon, HomeWork as VisitaIcon, History as HistoryIcon,
     Search as SearchIcon, FilterAlt as FilterIcon,
@@ -19,7 +19,7 @@ import {
     Person as PersonIcon, CalendarMonth as CalendarIcon,
     Assignment as FormIcon, Download as DownloadIcon,
     FileDownload as ExcelIcon, PhotoCamera as PhotoIcon,
-    Print as PrintIcon, Close as CloseIcon,
+    Print as PrintIcon, Close as CloseIcon, Delete as DeleteIcon, Edit as EditIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
@@ -44,8 +44,12 @@ const MESES = [
     { value: '10', label: 'Noviembre' }, { value: '11', label: 'Diciembre' }
 ];
 
-const ANIOS = [2024, 2025, 2026, 2027];
-
+// Generar dinámicamente los años lectivos desde 2024 hasta el año actual + 2
+const currentYearGlobal = new Date().getFullYear();
+const ANIOS = Array.from(
+    { length: Math.max(4, currentYearGlobal - 2024 + 2) },
+    (_, i) => 2024 + i
+);
 const RAZONES = ['Inasistencia', 'Enfermedad', 'Otra Causa', 'Seguimiento'];
 const SITUACIONES = ['Continuación en el Ministerio', 'Dar de Baja', 'Otra'];
 
@@ -64,15 +68,18 @@ export default function VisitasPage() {
     const [saving, setSaving] = useState(false);
     const [visitas, setVisitas] = useState([]);
     const [pendientes, setPendientes] = useState([]);
+    const [editId, setEditId] = useState(null);
+    const [deleteModal, setDeleteModal] = useState({ open: false, id: null });
     const [infantes, setInfantes] = useState([]);
     const [total, setTotal] = useState(0);
     const [totalPendientes, setTotalPendientes] = useState(0);
+    const [tutoresLista, setTutoresLista] = useState([]);
 
     // Filtros Historial
     const currentYear = new Date().getFullYear();
     const [searchHist, setSearchHist] = useState('');
     const [filtroTutor, setFiltroTutor] = useState('');
-    const [filtroAnio, setFiltroAnio] = useState(currentYear);
+    const [filtroAnio, setFiltroAnio] = useState(currentYear.toString());
     const [histPage, setHistPage] = useState(0);
     const [histRowsPerPage, setHistRowsPerPage] = useState(10);
     const [pendPage, setPendPage] = useState(0);
@@ -126,8 +133,22 @@ export default function VisitasPage() {
         }
     };
 
+    const cargarTutores = async () => {
+        try {
+            const res = await visitaService.listarTutores();
+            // Secure array extraction
+            const extracted = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+            setTutoresLista(extracted);
+        } catch (error) {
+            console.error('Error al cargar tutores:', error);
+            setTutoresLista([]);
+        }
+    };
+
+
     useEffect(() => {
         cargarInfantes();
+        cargarTutores();
         // Revisar si venimos desde el detalle de un infante
         if (location.state?.registrarVisitaPara) {
             setForm(f => ({ ...f, infanteId: location.state.registrarVisitaPara }));
@@ -138,6 +159,11 @@ export default function VisitasPage() {
     useEffect(() => {
         if (tabIndex === 0) cargarVisitas();
         if (tabIndex === 1) cargarPendientes();
+        if (tabIndex === 0 && editId !== null) {
+            // Cancelar edición al cambiar de pestaña
+            setEditId(null);
+            resetForm();
+        }
     }, [tabIndex, filtroAnio, searchHist, filtroTutor, histPage, histRowsPerPage, pendPage, pendRowsPerPage]);
 
     const handleExportExcel = () => {
@@ -171,6 +197,7 @@ export default function VisitasPage() {
 
     const [form, setForm] = useState({
         infanteId: null,
+        tutorId: null,
         fecha: new Date().toISOString().split('T')[0],
         visitaExitosa: 'SI',
         razon: '',
@@ -180,10 +207,52 @@ export default function VisitasPage() {
     });
     const [fotoVisita, setFotoVisita] = useState(null);
     const [fotoPreview, setFotoPreview] = useState(null);
+    const resetForm = () => {
+        setForm({
+            infanteId: null,
+            tutorId: null,
+            fecha: new Date().toISOString().split('T')[0],
+            visitaExitosa: 'SI',
+            razon: '',
+            resultados: '',
+            situacion: 'Continuación en el Ministerio',
+            observaciones: '',
+        });
+        setFotoVisita(null);
+        setFotoPreview(null);
+    };
+
+    const handleEditAction = (v) => {
+        setForm({
+            infanteId: v.infanteId,
+            tutorId: v.tutorId,
+            fecha: new Date(v.fecha).toISOString().split('T')[0],
+            visitaExitosa: v.visitaExitosa,
+            // Revert frontend mapped reasons if needed, but the backend maps it back.
+            razon: v.razon,
+            resultados: v.resultados || '',
+            situacion: v.situacion || 'Continuación en el Ministerio',
+            observaciones: v.observaciones || '',
+        });
+        setEditId(v.id);
+        setTabIndex(2);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteModal.id) return;
+        try {
+            await visitaService.eliminar(deleteModal.id);
+            enqueueSnackbar('Visita eliminada correctamente', { variant: 'success' });
+            setDeleteModal({ open: false, id: null });
+            cargarVisitas();
+        } catch (error) {
+            enqueueSnackbar('Error al eliminar visita', { variant: 'error' });
+        }
+    };
 
     const guardar = async () => {
-        if (!form.infanteId || !form.fecha || !form.razon) {
-            enqueueSnackbar('Complete los campos obligatorios', { variant: 'warning' });
+        if (!form.infanteId || !form.fecha || !form.razon || !form.tutorId) {
+            enqueueSnackbar('Complete los campos obligatorios (Infante, Tutor, Fecha, Razón)', { variant: 'warning' });
             return;
         }
         setSaving(true);
@@ -196,23 +265,20 @@ export default function VisitasPage() {
                 formData.append('archivo', fotoVisita);
             }
 
-            await visitaService.crear(formData);
-            enqueueSnackbar('Visita registrada correctamente', { variant: 'success' });
+            if (editId) {
+                await visitaService.actualizar(editId, formData);
+                enqueueSnackbar('Visita actualizada correctamente', { variant: 'success' });
+            } else {
+                await visitaService.crear(formData);
+                enqueueSnackbar('Visita registrada correctamente', { variant: 'success' });
+            }
+            
             setTabIndex(0);
             cargarVisitas();
-            setForm({
-                infanteId: null,
-                fecha: new Date().toISOString().split('T')[0],
-                visitaExitosa: 'SI',
-                razon: '',
-                resultados: '',
-                situacion: 'Continuación en el Ministerio',
-                observaciones: '',
-            });
-            setFotoVisita(null);
-            setFotoPreview(null);
+            resetForm();
+            setEditId(null);
         } catch (error) {
-            enqueueSnackbar('Error al guardar visita', { variant: 'error' });
+            enqueueSnackbar(`Error al ${editId ? 'actualizar' : 'guardar'} visita`, { variant: 'error' });
         } finally {
             setSaving(false);
         }
@@ -221,7 +287,7 @@ export default function VisitasPage() {
     const generarPDF = async (v) => {
         const doc = new jsPDF();
         const primaryColor = [65, 105, 225]; // CCO Azul
-        
+
         // Membrete/Título
         doc.setFillColor(...primaryColor);
         doc.rect(0, 0, 210, 40, 'F');
@@ -230,7 +296,7 @@ export default function VisitasPage() {
         doc.setFont('helvetica', 'bold');
         doc.text('HOJA DE VISITA DOMICILIARIA', 105, 20, { align: 'center' });
         doc.setFontSize(10);
-        doc.text('CENTRO DE CUIDADO Y ORIENTACIÓN (CCO)', 105, 30, { align: 'center' });
+        doc.text('CENTRO CRISTIANO DE OBRAPIA (CCO)', 105, 30, { align: 'center' });
 
         // Información General
         doc.setTextColor(0, 0, 0);
@@ -253,7 +319,7 @@ export default function VisitasPage() {
         doc.setLineWidth(0.5);
         doc.line(20, 87, 190, 87);
 
-        doc.autoTable({
+        autoTable(doc, {
             startY: 90,
             head: [['Campo', 'Descripción']],
             body: [
@@ -267,7 +333,7 @@ export default function VisitasPage() {
         });
 
         const finalY = doc.lastAutoTable.finalY + 10;
-        
+
         // Resultados
         doc.setFont('helvetica', 'bold');
         doc.text('RESULTADOS Y NOVEDADES:', 20, finalY);
@@ -282,7 +348,7 @@ export default function VisitasPage() {
             try {
                 // El fotoVisita es una URL relativa, necesitamos la absoluta para jsPDF
                 const imgUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${v.fotoVisita}`;
-                
+
                 // Cargar imagen
                 const img = await new Promise((resolve, reject) => {
                     const i = new Image();
@@ -292,36 +358,30 @@ export default function VisitasPage() {
                     i.src = imgUrl;
                 });
 
-                // Calcular dimensiones para que quepa (max 100x70)
+                // Calcular dimensiones para que quepa (max 100x60)
                 const ratio = img.width / img.height;
                 let imgW = 100;
                 let imgH = imgW / ratio;
-                if (imgH > 70) {
-                    imgH = 70;
+                if (imgH > 60) {
+                    imgH = 60;
                     imgW = imgH * ratio;
                 }
 
-                if (currentY + imgH > 250) {
-                    doc.addPage();
-                    currentY = 20;
+                // Ajustar currentY si está muy abajo para que quepa en la misma página
+                if (currentY + imgH > 260) {
+                    currentY = 260 - imgH - 10; 
                 }
 
                 doc.setFont('helvetica', 'bold');
                 doc.text('EVIDENCIA FOTOGRÁFICA:', 20, currentY);
                 doc.addImage(img, 'JPEG', 55, currentY + 5, imgW, imgH);
-                currentY += imgH + 20;
             } catch (e) {
                 console.error("Error cargando imagen para PDF", e);
             }
         }
 
-        // Espacio para firmas
-        if (currentY > 240) {
-            doc.addPage();
-            currentY = 40;
-        } else {
-            currentY = Math.max(currentY, 240);
-        }
+        // Espacio estático para firmas en la misma página
+        currentY = 270;
 
         doc.setLineWidth(0.5);
         doc.line(30, currentY, 90, currentY);
@@ -388,7 +448,7 @@ export default function VisitasPage() {
                     >
                         <Tab icon={<HistoryIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Historial de Visitas" />
                         <Tab icon={<ErrorIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Pendientes de Visita" />
-                        <Tab icon={<AddIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Registrar Nueva Visita" />
+                        <Tab icon={<AddIcon sx={{ fontSize: 20 }} />} iconPosition="start" label={editId ? "Editar Visita" : "Registrar Nueva Visita"} />
                     </Tabs>
 
                     <Box sx={{ p: 3 }}>
@@ -513,15 +573,39 @@ export default function VisitasPage() {
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell align="center">
-                                                        <Tooltip title="Imprimir Hoja de Visita">
-                                                            <IconButton 
-                                                                size="small" 
-                                                                onClick={() => generarPDF(v)}
-                                                                sx={{ color: CCO.azul, '&:hover': { bgcolor: alpha(CCO.azul, 0.1) } }}
-                                                            >
-                                                                <PrintIcon fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
+                                                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                                                            <Tooltip title="Descargar Reporte PDF">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => generarPDF(v)}
+                                                                    sx={{ color: CCO.azul, '&:hover': { bgcolor: alpha(CCO.azul, 0.1) } }}
+                                                                >
+                                                                    <PrintIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                            {canWrite && (
+                                                                <Tooltip title="Editar Visita">
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() => handleEditAction(v)}
+                                                                        sx={{ color: CCO.naranja, '&:hover': { bgcolor: alpha(CCO.naranja, 0.1) } }}
+                                                                    >
+                                                                        <EditIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            )}
+                                                            {canWrite && (
+                                                                <Tooltip title="Eliminar Visita">
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() => setDeleteModal({ open: true, id: v.id })}
+                                                                        sx={{ color: 'error.main', '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) } }}
+                                                                    >
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            )}
+                                                        </Box>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
@@ -611,7 +695,7 @@ export default function VisitasPage() {
                             </Box>
                         ) : (
                             /* ─── REGISTRO REDISEÑADO ───────────────────────── */
-                            <Box sx={{ maxWidth: 1200, mx: 'auto', pb: 4 }}>
+                            <Box sx={{ maxWidth: 900, mx: 'auto', pb: 4 }}>
                                 <Box sx={{ textAlign: 'center', mb: 5 }}>
                                     <Typography variant="h4" fontWeight={900} sx={{
                                         mb: 1,
@@ -631,122 +715,164 @@ export default function VisitasPage() {
                                     <Divider sx={{ mt: 3, width: 100, mx: 'auto', borderWidth: 2, borderColor: CCO.naranja, borderRadius: 1, opacity: 0.5 }} />
                                 </Box>
 
-                                <Grid container spacing={4} justifyContent="center">
-                                    {/* SECCIÓN 1: IDENTIFICACIÓN */}
-                                    <Grid item xs={12} md={6}>
-                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', height: '100%', display: 'flex', flexDirection: 'column', bgcolor: isDark ? alpha('#fff', 0.02) : '#fff' }}>
-                                            <CardContent sx={{ p: 4, flexGrow: 1 }}>
+                                <Grid container spacing={2.5} justifyContent="center" sx={{ width: '100%' }}>
+                                    <Grid size={{ xs: 12 }}>
+                                        <Typography variant="h6" fontWeight={800} sx={{ color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <VisitaIcon /> {editId ? 'Editar Visita Domiciliaria' : 'Nueva Visita Domiciliaria'}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                                            {editId ? 'Modifique los detalles de la visita' : 'Complete el formulario a continuación para registrar la visita al hogar del infante.'}
+                                        </Typography>
+                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', bgcolor: isDark ? alpha('#fff', 0.02) : '#fff' }}>
+                                            <CardContent sx={{ p: 2.5 }}>
                                                 <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 3, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                    <PersonIcon /> 1. Identificación y Fecha
+                                                    <PersonIcon /> 1. Datos Generales de la Visita
                                                 </Typography>
-                                                <Stack spacing={4}>
-                                                    <Autocomplete
-                                                        options={infantes}
-                                                        getOptionLabel={(option) => `${option.codigo} - ${option.persona?.apellidos} ${option.persona?.nombres}`}
-                                                        value={infantes.find(i => i.id === form.infanteId) || null}
-                                                        onChange={(_, newValue) => setForm(f => ({ ...f, infanteId: newValue?.id || null }))}
-                                                        renderInput={(params) => (
-                                                            <TextField
-                                                                {...params}
-                                                                label="Infante a visitar"
-                                                                required
-                                                                placeholder="Busque por código o nombre"
-                                                                InputProps={{
-                                                                    ...params.InputProps,
-                                                                    startAdornment: (
-                                                                        <InputAdornment position="start">
-                                                                            <SearchIcon color="primary" />
-                                                                        </InputAdornment>
-                                                                    ),
-                                                                }}
-                                                            />
-                                                        )}
-                                                    />
-                                                    <TextField
-                                                        fullWidth
-                                                        label="Fecha de la Visita"
-                                                        type="date"
-                                                        value={form.fecha}
-                                                        onChange={(e) => setForm(f => ({ ...f, fecha: e.target.value }))}
-                                                        InputLabelProps={{ shrink: true }}
-                                                        required
-                                                        InputProps={{
-                                                            startAdornment: (
-                                                                <InputAdornment position="start">
-                                                                    <CalendarIcon color="primary" />
-                                                                </InputAdornment>
-                                                            ),
-                                                        }}
-                                                    />
-                                                </Stack>
+                                                <Grid container spacing={2.5}>
+                                                    <Grid size={{ xs: 12 }}>
+                                                        <Autocomplete
+                                                            options={infantes}
+                                                            getOptionLabel={(option) => `${option.codigo} - ${option.persona?.apellidos} ${option.persona?.nombres}`}
+                                                            value={infantes.find(i => i.id === form.infanteId) || null}
+                                                            onChange={(_, newValue) => setForm(f => ({ ...f, infanteId: newValue?.id || null }))}
+                                                            renderInput={(params) => (
+                                                                <TextField
+                                                                    {...params}
+                                                                    label="Infante a visitar"
+                                                                    required
+                                                                    placeholder="Busque por código o nombre"
+                                                                    InputProps={{
+                                                                        ...params.InputProps,
+                                                                        startAdornment: (
+                                                                            <InputAdornment position="start">
+                                                                                <SearchIcon color="primary" />
+                                                                            </InputAdornment>
+                                                                        ),
+                                                                    }}
+                                                                />
+                                                            )}
+                                                        />
+                                                    </Grid>
+
+                                                    <Grid size={{ xs: 12, md: 8 }}>
+                                                        <Autocomplete
+                                                            options={Array.isArray(tutoresLista) ? tutoresLista : []}
+                                                            getOptionLabel={(option) => `${option.persona?.apellidos} ${option.persona?.nombres}`}
+                                                            value={Array.isArray(tutoresLista) ? tutoresLista.find(t => t.id === form.tutorId) || null : null}
+                                                            onChange={(_, newValue) => setForm(f => ({ ...f, tutorId: newValue?.id || null }))}
+                                                            renderInput={(params) => (
+                                                                <TextField
+                                                                    {...params}
+                                                                    label="Tutor responsable"
+                                                                    required
+                                                                    placeholder="Seleccione el tutor que realiza la visita"
+                                                                    InputProps={{
+                                                                        ...params.InputProps,
+                                                                        startAdornment: (
+                                                                            <InputAdornment position="start">
+                                                                                <PersonIcon color="primary" />
+                                                                            </InputAdornment>
+                                                                        ),
+                                                                    }}
+                                                                />
+                                                            )}
+                                                        />
+                                                    </Grid>
+
+                                                    <Grid size={{ xs: 12, md: 4 }}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Fecha de la Visita"
+                                                            type="date"
+                                                            required
+                                                            value={form.fecha}
+                                                            onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                                                            InputProps={{
+                                                                startAdornment: (
+                                                                    <InputAdornment position="start">
+                                                                        <CalendarIcon color="primary" />
+                                                                    </InputAdornment>
+                                                                ),
+                                                                sx: { borderRadius: 3 }
+                                                            }}
+                                                        />
+                                                    </Grid>
+                                                </Grid>
                                             </CardContent>
                                         </Card>
                                     </Grid>
 
-                                    {/* SECCIÓN 2: ESTADO */}
-                                    <Grid item xs={12} md={6}>
-                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', height: '100%', bgcolor: isDark ? alpha(CCO.azul, 0.05) : alpha(CCO.azul, 0.02) }}>
-                                            <CardContent sx={{ p: 4 }}>
+                                    {/* SECCIÓN 2: ESTADO Y RAZÓN */}
+                                    <Grid size={{ xs: 12 }}>
+                                        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', bgcolor: isDark ? alpha(CCO.azul, 0.05) : alpha(CCO.azul, 0.02) }}>
+                                            <CardContent sx={{ p: 2.5 }}>
                                                 <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 3, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                                     <VisitaIcon /> 2. Resultado y Motivo
                                                 </Typography>
-                                                <Typography variant="body1" fontWeight={700} gutterBottom sx={{ mb: 2, color: 'text.secondary' }}>
-                                                    ¿Se logró realizar la visita exitosamente?
-                                                </Typography>
-                                                <ToggleButtonGroup
-                                                    value={form.visitaExitosa}
-                                                    exclusive
-                                                    onChange={(_, val) => val && setForm(f => ({ ...f, visitaExitosa: val }))}
-                                                    fullWidth
-                                                    sx={{ mb: 4, height: 64 }}
-                                                >
-                                                    <ToggleButton value="SI" sx={{ 
-                                                        borderRadius: '16px !important', 
-                                                        border: '2px solid transparent',
-                                                        '&.Mui-selected': { 
-                                                            bgcolor: alpha(theme.palette.success.main, 0.15), 
-                                                            color: 'success.main', 
-                                                            fontWeight: 900,
-                                                            borderColor: 'success.main'
-                                                        } 
-                                                    }}>
-                                                        <SuccessIcon sx={{ mr: 1 }} /> SÍ, REALIZADA
-                                                    </ToggleButton>
-                                                    <ToggleButton value="NO" sx={{ 
-                                                        borderRadius: '16px !important',
-                                                        border: '2px solid transparent',
-                                                        '&.Mui-selected': { 
-                                                            bgcolor: alpha(theme.palette.error.main, 0.15), 
-                                                            color: 'error.main', 
-                                                            fontWeight: 900,
-                                                            borderColor: 'error.main'
-                                                        }
-                                                    }}>
-                                                        <ErrorIcon sx={{ mr: 1 }} /> NO REALIZADA
-                                                    </ToggleButton>
-                                                </ToggleButtonGroup>
-                                                <TextField
-                                                    select
-                                                    fullWidth
-                                                    label="Razón o Motivo de la visita"
-                                                    value={form.razon}
-                                                    onChange={(e) => setForm(f => ({ ...f, razon: e.target.value }))}
-                                                    required
-                                                >
-                                                    {RAZONES.map(r => (
-                                                        <MenuItem key={r} value={r}>{r}</MenuItem>
-                                                    ))}
-                                                </TextField>
+                                                <Grid container spacing={2.5} alignItems="center">
+                                                    <Grid size={{ xs: 12, md: 6 }}>
+                                                        <Typography variant="body1" fontWeight={700} gutterBottom sx={{ mb: 1.5, color: 'text.secondary' }}>
+                                                            ¿Se logró realizar la visita exitosamente?
+                                                        </Typography>
+                                                        <ToggleButtonGroup
+                                                            value={form.visitaExitosa}
+                                                            exclusive
+                                                            onChange={(_, val) => val && setForm(f => ({ ...f, visitaExitosa: val }))}
+                                                            fullWidth
+                                                            sx={{ height: 56 }}
+                                                        >
+                                                            <ToggleButton value="SI" sx={{
+                                                                borderRadius: '12px !important',
+                                                                border: '2px solid transparent',
+                                                                '&.Mui-selected': {
+                                                                    bgcolor: alpha(theme.palette.success.main, 0.15),
+                                                                    color: 'success.main',
+                                                                    fontWeight: 800,
+                                                                    borderColor: 'success.main'
+                                                                }
+                                                            }}>
+                                                                <SuccessIcon sx={{ mr: 1 }} /> SÍ, REALIZADA
+                                                            </ToggleButton>
+                                                            <ToggleButton value="NO" sx={{
+                                                                borderRadius: '12px !important',
+                                                                border: '2px solid transparent',
+                                                                '&.Mui-selected': {
+                                                                    bgcolor: alpha(theme.palette.error.main, 0.15),
+                                                                    color: 'error.main',
+                                                                    fontWeight: 800,
+                                                                    borderColor: 'error.main'
+                                                                }
+                                                            }}>
+                                                                <ErrorIcon sx={{ mr: 1 }} /> NO REALIZADA
+                                                            </ToggleButton>
+                                                        </ToggleButtonGroup>
+                                                    </Grid>
+                                                    <Grid size={{ xs: 12, md: 6 }}>
+                                                        <TextField
+                                                            select
+                                                            fullWidth
+                                                            label="Razón o Motivo de la visita"
+                                                            value={form.razon}
+                                                            onChange={(e) => setForm(f => ({ ...f, razon: e.target.value }))}
+                                                            required
+                                                            sx={{ mt: { xs: 0, md: 3.2 } }}
+                                                        >
+                                                            {RAZONES.map(r => (
+                                                                <MenuItem key={r} value={r}>{r}</MenuItem>
+                                                            ))}
+                                                        </TextField>
+                                                    </Grid>
+                                                </Grid>
                                             </CardContent>
                                         </Card>
                                     </Grid>
 
                                     {/* SECCIÓN 3: NOVEDADES Y FOTO */}
-                                    <Grid item xs={12}>
+                                    <Grid size={{ xs: 12 }}>
                                         <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', bgcolor: isDark ? alpha('#fff', 0.02) : '#fff' }}>
-                                            <CardContent sx={{ p: 4 }}>
-                                                <Grid container spacing={4}>
-                                                    <Grid item xs={12} md={8}>
+                                            <CardContent sx={{ p: 2.5 }}>
+                                                <Grid container spacing={2.5}>
+                                                    <Grid size={{ xs: 12, md: 8 }}>
                                                         <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                                             <FormIcon /> 3. Hallazgos y Resultados
                                                         </Typography>
@@ -759,24 +885,24 @@ export default function VisitasPage() {
                                                             onChange={(e) => setForm(f => ({ ...f, resultados: e.target.value }))}
                                                             placeholder="Describa la situación del infante, entorno familiar, salud, estudios..."
                                                             variant="filled"
-                                                            sx={{ 
-                                                                '& .MuiFilledInput-root': { 
-                                                                    borderRadius: 4, 
+                                                            sx={{
+                                                                '& .MuiFilledInput-root': {
+                                                                    borderRadius: 4,
                                                                     bgcolor: isDark ? alpha('#000', 0.2) : alpha(theme.palette.divider, 0.05),
                                                                     border: '1px solid transparent',
                                                                     '&:hover': { bgcolor: isDark ? alpha('#000', 0.3) : alpha(theme.palette.divider, 0.08) },
                                                                     '&.Mui-focused': { borderColor: CCO.azul, bgcolor: isDark ? alpha('#000', 0.4) : '#fff' }
-                                                                } 
+                                                                }
                                                             }}
                                                         />
                                                     </Grid>
-                                                    <Grid item xs={12} md={4}>
+                                                    <Grid size={{ xs: 12, md: 4 }}>
                                                         <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2, color: CCO.naranja, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                                             <PhotoIcon /> Evidencia Visual
                                                         </Typography>
-                                                        <Box 
-                                                            sx={{ 
-                                                                border: '2px dashed', 
+                                                        <Box
+                                                            sx={{
+                                                                border: '2px dashed',
                                                                 borderColor: fotoPreview ? CCO.naranja : isDark ? 'rgba(255,255,255,0.1)' : 'divider',
                                                                 borderRadius: 5,
                                                                 height: 236,
@@ -793,12 +919,12 @@ export default function VisitasPage() {
                                                         >
                                                             {fotoPreview ? (
                                                                 <>
-                                                                    <img 
-                                                                        src={fotoPreview} 
-                                                                        alt="Vista previa" 
-                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                    <img
+                                                                        src={fotoPreview}
+                                                                        alt="Vista previa"
+                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                                     />
-                                                                    <IconButton 
+                                                                    <IconButton
                                                                         onClick={() => { setFotoVisita(null); setFotoPreview(null); }}
                                                                         sx={{ position: 'absolute', top: 12, right: 12, bgcolor: 'error.main', color: 'white', boxShadow: 3, '&:hover': { bgcolor: 'error.dark' } }}
                                                                         size="medium"
@@ -834,14 +960,14 @@ export default function VisitasPage() {
                                     </Grid>
 
                                     {/* SECCIÓN 4: CIERRE */}
-                                    <Grid item xs={12}>
+                                    <Grid size={{ xs: 12 }}>
                                         <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'divider', bgcolor: isDark ? alpha(theme.palette.warning.main, 0.05) : alpha(theme.palette.warning.main, 0.02) }}>
-                                            <CardContent sx={{ p: 4 }}>
+                                            <CardContent sx={{ p: 2.5 }}>
                                                 <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 3, color: CCO.azul, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                                     <HistoryIcon /> 4. Conclusión y Seguimiento
                                                 </Typography>
-                                                <Grid container spacing={4}>
-                                                    <Grid item xs={12} md={5}>
+                                                <Grid container spacing={2.5}>
+                                                    <Grid size={{ xs: 12, md: 6 }}>
                                                         <TextField
                                                             select
                                                             fullWidth
@@ -854,7 +980,7 @@ export default function VisitasPage() {
                                                             ))}
                                                         </TextField>
                                                     </Grid>
-                                                    <Grid item xs={12} md={7}>
+                                                    <Grid size={{ xs: 12, md: 6 }}>
                                                         <TextField
                                                             fullWidth
                                                             label="Observaciones Técnicas Finales"
@@ -869,20 +995,20 @@ export default function VisitasPage() {
                                     </Grid>
 
                                     {/* BOTONES DE ACCIÓN */}
-                                    <Grid item xs={12} sx={{ mt: 5, display: 'flex', justifyContent: 'center', gap: 4 }}>
+                                    <Grid size={{ xs: 12 }} sx={{ mt: 5, display: 'flex', justifyContent: 'center', gap: 4 }}>
                                         <Button
                                             variant="outlined"
                                             size="large"
-                                            onClick={() => setTabIndex(0)}
+                                            onClick={() => { setTabIndex(0); setEditId(null); }}
                                             disabled={saving}
-                                            sx={{ 
-                                                px: 6, 
-                                                py: 2, 
-                                                borderRadius: 4, 
-                                                fontWeight: 700, 
-                                                fontSize: '1.1rem',
-                                                border: '2px solid', 
-                                                '&:hover': { border: '2px solid', bgcolor: alpha(theme.palette.action.hover, 0.1) } 
+                                            sx={{
+                                                px: 4,
+                                                py: 1.5,
+                                                borderRadius: 3,
+                                                fontWeight: 700,
+                                                fontSize: '1rem',
+                                                border: '2px solid',
+                                                '&:hover': { border: '2px solid', bgcolor: alpha(theme.palette.action.hover, 0.1) }
                                             }}
                                         >
                                             Cancelar Registro
@@ -892,19 +1018,19 @@ export default function VisitasPage() {
                                             size="large"
                                             onClick={guardar}
                                             disabled={saving}
-                                            startIcon={saving ? <CircularProgress size={28} color="inherit" /> : <SuccessIcon sx={{ fontSize: '1.5rem !important' }} />}
+                                            startIcon={saving ? <CircularProgress size={24} color="inherit" /> : <SuccessIcon />}
                                             sx={{
-                                                px: 10,
-                                                py: 2,
-                                                borderRadius: 4,
-                                                fontWeight: 900,
-                                                fontSize: '1.2rem',
+                                                px: 6,
+                                                py: 1.5,
+                                                borderRadius: 3,
+                                                fontWeight: 700,
+                                                fontSize: '1.05rem',
                                                 background: `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
-                                                boxShadow: `0 12px 30px ${alpha(CCO.naranja, 0.4)}`,
+                                                boxShadow: `0 8px 20px ${alpha(CCO.naranja, 0.3)}`,
                                                 transition: 'all 0.3s',
                                                 '&:hover': {
-                                                    transform: 'translateY(-4px)',
-                                                    boxShadow: `0 15px 40px ${alpha(CCO.naranja, 0.6)}`,
+                                                    transform: 'translateY(-2px)',
+                                                    boxShadow: `0 12px 25px ${alpha(CCO.naranja, 0.5)}`,
                                                     opacity: 0.95
                                                 },
                                                 '&:active': {
@@ -921,6 +1047,18 @@ export default function VisitasPage() {
                     </Box>
                 </Paper>
             </Box>
+
+            {/* Dialogo Confirmar Eliminación */}
+            <Dialog open={deleteModal.open} onClose={() => setDeleteModal({ open: false, id: null })}>
+                <DialogTitle sx={{ fontWeight: 800, color: 'error.main' }}>Eliminar Visita</DialogTitle>
+                <DialogContent>
+                    <Typography>¿Está seguro de eliminar esta visita? Esta acción no se puede deshacer.</Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setDeleteModal({ open: false, id: null })} sx={{ color: 'text.secondary', fontWeight: 600 }}>Cancelar</Button>
+                    <Button onClick={confirmDelete} variant="contained" color="error" sx={{ fontWeight: 700, px: 3 }}>Eliminar</Button>
+                </DialogActions>
+            </Dialog>
         </MainLayout>
     );
 }

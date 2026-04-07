@@ -1,5 +1,5 @@
 import { requireRoles, ROLES } from '../../middleware/roles.js'
-import { listar, obtener, crear, eliminar, listarPendientes } from './visitas.controller.js'
+import { listar, obtener, crear, actualizar, eliminar, listarPendientes } from './visitas.controller.js'
 
 export default async function visitasRoutes(fastify) {
     const todos = { preHandler: [requireRoles(...ROLES.TODOS)] }
@@ -10,6 +10,7 @@ export default async function visitasRoutes(fastify) {
     fastify.get('/:id', todos, obtener)
     // Tutores y tutores especiales pueden registrar visitas
     fastify.post('/', todos, crear)
-    fastify.delete('/:id', superAdmins, eliminar)
+    fastify.put('/:id', todos, actualizar)
+    fastify.delete('/:id', todos, eliminar)
 }
 

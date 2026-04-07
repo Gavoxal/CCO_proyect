@@ -100,21 +100,93 @@ export async function crear(request, reply) {
         'Otra': 'Otra'
     };
 
-    const visita = await db.visita.create({
-        data: {
+    try {
+        const visita = await db.visita.create({
+            data: {
+                fecha: new Date(body.fecha),
+                estado: body.visitaExitosa === 'SI' ? 'Realizada' : 'NoRealizada',
+                razonVisita: razonMap[body.razon] || 'Seguimiento',
+                decision: decisionMap[body.situacion] || 'ContinuaMinisterio',
+                resultados: body.resultados || null,
+                observaciones: body.observaciones || null,
+                fotoVisita,
+                infanteId: parseInt(body.infanteId),
+                tutorId: body.tutorId ? parseInt(body.tutorId) : null
+            },
+            include: { infante: { include: { persona: true } } }
+        })
+        return created(reply, visita)
+    } catch (error) {
+        request.server.log.error('Error al crear visita:', error)
+        return reply.status(500).send({ error: 'Error al guardar la visita en la base de datos', details: error.message })
+    }
+}
+
+export async function actualizar(request, reply) {
+    const db = request.server.db
+    const id = parseInt(request.params.id)
+    
+    let body
+    let fotoVisita = undefined
+
+    if (request.isMultipart()) {
+        const parts = request.parts()
+        const fields = {}
+        for await (const part of parts) {
+            if (part.file) {
+                const dir = path.join(UPLOAD_DIR, 'visitas')
+                await fs.mkdir(dir, { recursive: true })
+                const filename = `visita-${Date.now()}-${part.filename}`
+                await fs.writeFile(path.join(dir, filename), await part.toBuffer())
+                fotoVisita = `/uploads/visitas/${filename}`
+            } else {
+                fields[part.fieldname] = part.value
+            }
+        }
+        body = fields
+    } else {
+        body = request.body
+    }
+
+    const razonMap = {
+        'Inasistencia': 'Inasistencia',
+        'Enfermedad': 'Enfermedad',
+        'Otra Causa': 'OtraCausa',
+        'Seguimiento': 'Seguimiento'
+    }
+
+    const decisionMap = {
+        'Continuación en el Ministerio': 'ContinuaMinisterio',
+        'Dar de Baja': 'DarDeBaja',
+        'Otra': 'Otra'
+    }
+
+    try {
+        const dataToUpdate = {
             fecha: new Date(body.fecha),
             estado: body.visitaExitosa === 'SI' ? 'Realizada' : 'NoRealizada',
             razonVisita: razonMap[body.razon] || 'Seguimiento',
             decision: decisionMap[body.situacion] || 'ContinuaMinisterio',
             resultados: body.resultados || null,
             observaciones: body.observaciones || null,
-            fotoVisita,
             infanteId: parseInt(body.infanteId),
             tutorId: body.tutorId ? parseInt(body.tutorId) : null
-        },
-        include: { infante: { include: { persona: true } } }
-    })
-    return created(reply, visita)
+        }
+
+        if (fotoVisita !== undefined) {
+            dataToUpdate.fotoVisita = fotoVisita
+        }
+
+        const visitaActualizada = await db.visita.update({
+            where: { id },
+            data: dataToUpdate,
+            include: { infante: { include: { persona: true } }, tutor: { include: { persona: true } } }
+        })
+        return ok(reply, visitaActualizada)
+    } catch (error) {
+        request.server.log.error('Error al actualizar visita:', error)
+        return notFound(reply, 'Error al actualizar la visita o no encontrada')
+    }
 }
 
 export async function eliminar(request, reply) {

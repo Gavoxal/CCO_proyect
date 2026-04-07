@@ -556,6 +556,10 @@ export default function MaterialesPage() {
     const [stockModal, setStockModal] = useState({ open: false, tipo: null, item: null });
     const [fotoModal, setFotoModal] = useState({ open: false, item: null });
 
+    // Importación Excel
+    const importRef = useRef(null);
+    const [importing, setImporting] = useState(false);
+
     // ── Carga ─────────────────────────────────────────────────
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -637,6 +641,22 @@ export default function MaterialesPage() {
             cargar();
         } catch (err) {
             enqueueSnackbar('Error al subir foto (modo demo)', { variant: 'warning' });
+        }
+    };
+
+    const handleImportar = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setImporting(true);
+        try {
+            const res = await materialesService.importarExcel(file);
+            enqueueSnackbar(res.data?.message || 'Inventario importado correctamente', { variant: 'success' });
+            cargar();
+        } catch (err) {
+            enqueueSnackbar(err.response?.data?.error || 'Error al importar datos', { variant: 'error' });
+        } finally {
+            setImporting(false);
+            if (importRef.current) importRef.current.value = '';
         }
     };
 
@@ -783,11 +803,22 @@ export default function MaterialesPage() {
                     </Box>
 
                     {canWrite && (
-                        <Button variant="contained" startIcon={<AddIcon />}
-                            onClick={() => setFormModal({ open: true, tipo: 'crear', item: null })}
-                            sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', bgcolor: CCO.azul, boxShadow: '0 4px 14px rgba(0,78,137,0.3)', '&:hover': { bgcolor: '#003d6b' } }}>
-                            Nuevo Material
-                        </Button>
+                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                            <Button variant="outlined"
+                                disabled={importing}
+                                onClick={() => importRef.current?.click()}
+                                sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', borderColor: CCO.azul, color: CCO.azul, '&:hover': { bgcolor: alpha(CCO.azul, 0.05) } }}
+                            >
+                                {importing ? 'Importando...' : '📥 Importar Excel'}
+                            </Button>
+                            <input type="file" ref={importRef} accept=".xlsx, .xls" hidden onChange={handleImportar} />
+
+                            <Button variant="contained" startIcon={<AddIcon />}
+                                onClick={() => setFormModal({ open: true, tipo: 'crear', item: null })}
+                                sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', bgcolor: CCO.azul, boxShadow: '0 4px 14px rgba(0,48,103,0.3)', '&:hover': { bgcolor: '#003d6b' } }}>
+                                Nuevo Material
+                            </Button>
+                        </Box>
                     )}
                 </Box>
 

@@ -7,6 +7,7 @@ import {
     Tab, Tabs, Table, TableBody, TableCell, TableHead, TableRow,
     TablePagination, LinearProgress, Divider, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions,
+    MenuItem,
 } from '@mui/material';
 import {
     Save as SaveIcon, ChecklistRtl as AsistenciaIcon,
@@ -69,6 +70,8 @@ const AsistenciaPage = () => {
     const [tabIndex, setTabIndex] = useState(0); 
     const [fecha, setFecha] = useState(hoy);
     const [searchToma, setSearchToma] = useState('');
+    const [totalHist, setTotalHist] = useState(0);
+    const [histSummary, setHistSummary] = useState({ Presente: 0, Ausente: 0, Justificado: 0 });
     const [searchHist, setSearchHist] = useState('');
     
     const [infantes, setInfantes] = useState([]);
@@ -87,7 +90,6 @@ const AsistenciaPage = () => {
     const [histFiltroFecha, setHistFiltroFecha] = useState('');
     const [histPage, setHistPage] = useState(0);
     const [histRowsPerPage, setHistRowsPerPage] = useState(15);
-    const [totalHist, setTotalHist] = useState(0);
 
     // Toma de asistencia pagination
     const [tomaPage, setTomaPage] = useState(0);
@@ -98,7 +100,7 @@ const AsistenciaPage = () => {
         const cargarDatosBase = async () => {
             setLoading(true);
             try {
-                const res = await infanteService.listar({ limit: 500 });
+                const res = await infanteService.listar({ limit: 1000 });
                 setInfantes(res.data || []);
             } catch (error) {
                 enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
@@ -113,7 +115,7 @@ const AsistenciaPage = () => {
     const cargarTomaFecha = useCallback(async () => {
         if (!fecha) return;
         try {
-            const res = await asistenciaService.listar({ fecha });
+            const res = await asistenciaService.listar({ fecha, limit: 1000 });
             const data = res.data || [];
             const mapping = {};
             // Inicializar todos con 'Ausente' por defecto si no tienen registro
@@ -143,7 +145,8 @@ const AsistenciaPage = () => {
                 search: searchHist || undefined
             });
             setHistorial(res.data || []);
-            setTotalHist(res.total || 0);
+            setTotalHist(res.meta?.total || 0);
+            setHistSummary(res.meta?.summary || { Presente: 0, Ausente: 0, Justificado: 0 });
         } catch (error) {
             console.error('Error cargando historial:', error);
         }
@@ -210,14 +213,12 @@ const AsistenciaPage = () => {
     // El filtrado y paginación ahora se confía plenamente al backend
     const histPaginado = historial;
 
-    // Estadísticas del historial global
+    // Estadísticas del historial global (basadas en el resumen del servidor)
     const histStats = useMemo(() => {
-        const total = historial.length;
-        const p = historial.filter(r => r.estado === 'Presente').length;
-        const a = historial.filter(r => r.estado === 'Ausente').length;
-        const j = historial.filter(r => r.estado === 'Justificado').length;
+        const { Presente: p, Ausente: a, Justificado: j } = histSummary;
+        const total = p + a + j;
         return { total, p, a, j, pct: total > 0 ? Math.round((p / total) * 100) : 0 };
-    }, [historial]);
+    }, [histSummary]);
 
     // ── Estadísticas del Año Lectivo ─────────────────────────────────────────
     const statsDestesMes = useMemo(() => {
@@ -570,7 +571,7 @@ const AsistenciaPage = () => {
                                 </TableBody>
                             </Table>
                             <TablePagination
-                                component="div" count={totalHist}
+                                component="div" count={filteredInfantes.length}
                                 page={tomaPage} onPageChange={(_, p) => setTomaPage(p)}
                                 rowsPerPage={tomaRowsPerPage}
                                 onRowsPerPageChange={e => { setTomaRowsPerPage(parseInt(e.target.value, 10)); setTomaPage(0); }}
@@ -642,10 +643,10 @@ const AsistenciaPage = () => {
                             <TextField select size="small" label="Estado" value={histFiltroEstado}
                                 onChange={e => { setHistFiltroEstado(e.target.value); setHistPage(0); }}
                                 sx={{ minWidth: 160 }}>
-                                <option value="">Todos</option>
-                                <option value="Presente">Presente</option>
-                                <option value="Ausente">Ausente</option>
-                                <option value="Justificado">Justificado</option>
+                                <MenuItem value="">Todos</MenuItem>
+                                <MenuItem value="Presente">Presente</MenuItem>
+                                <MenuItem value="Ausente">Ausente</MenuItem>
+                                <MenuItem value="Justificado">Justificado</MenuItem>
                             </TextField>
                             <TextField
                                 type="date" size="small" label="Filtrar fecha"
@@ -680,7 +681,7 @@ const AsistenciaPage = () => {
                                             onClick={() => navigate(`/infantes/${r.infanteId}`)}>
                                             <TableCell>
                                                 <Typography variant="body2" fontWeight={500} sx={{ textTransform: 'capitalize' }}>
-                                                    {new Date(r.fecha).toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                                    {new Date(r.fecha.split('T')[0] + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' })}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>

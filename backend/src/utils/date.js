@@ -5,7 +5,13 @@
  * @returns {{ start: Date, end: Date }}
  */
 export function getSchoolYearRange(date = new Date()) {
-    const d = new Date(date)
+    // Si se pasa un número de 4 dígitos, tratarlo como el año
+    let d
+    if (typeof date === 'number' && date > 1900 && date < 2100) {
+        d = new Date(`${date}-01-01T12:00:00`)
+    } else {
+        d = new Date(date)
+    }
     const month = d.getMonth() + 1 // 1-12
     const year = d.getFullYear()
 

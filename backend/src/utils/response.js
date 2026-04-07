@@ -20,14 +20,18 @@ export const notFound = (reply, message = 'Recurso no encontrado') =>
 export const badRequest = (reply, message) =>
     reply.status(400).send({ success: false, error: message })
 
-export const paginated = (reply, data, total, page, limit) =>
-    reply.status(200).send({
+export const paginated = (reply, data, total, page, limit, summary = null) => {
+    const meta = {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+    }
+    if (summary) meta.summary = summary
+    
+    return reply.status(200).send({
         success: true,
         data,
-        meta: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit)
-        }
+        meta
     })
+}

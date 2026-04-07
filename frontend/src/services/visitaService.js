@@ -10,6 +10,11 @@ const visitaService = {
         const { data } = await api.get('/visitas/pendientes', { params });
         return data;
     },
+
+    listarTutores: async () => {
+        const { data } = await api.get('/usuarios/tutores');
+        return data;
+    },
     
     obtener: async (id) => {
         const { data } = await api.get(`/visitas/${id}`);

@@ -13,7 +13,8 @@ export async function listar(request, reply) {
     if (estado) where.estado = estado
     
     if (fecha) {
-        where.fecha = new Date(fecha)
+        // Normalizar a UTC 00:00:00 para coincidir con el tipo @db.Date de Prisma/MySQL
+        where.fecha = new Date(fecha + 'T00:00:00.000Z')
     } else if (fechaInicio || fechaFin) {
         where.fecha = {}
         if (fechaInicio) where.fecha.gte = new Date(fechaInicio)
@@ -24,7 +25,7 @@ export async function listar(request, reply) {
         where.infante = { tutorId: parseInt(tutorId) }
     }
 
-    const [total, registros] = await Promise.all([
+    const [total, registros, summaryRaw] = await Promise.all([
         db.asistencia.count({ where }),
         db.asistencia.findMany({
             where, skip, take: limit,
@@ -32,10 +33,20 @@ export async function listar(request, reply) {
                 infante: { include: { persona: true } }
             },
             orderBy: [{ fecha: 'desc' }, { infante: { persona: { apellidos: 'asc' } } }]
+        }),
+        db.asistencia.groupBy({
+            by: ['estado'],
+            where,
+            _count: { estado: true }
         })
     ])
 
-    return paginated(reply, registros, total, page, limit)
+    const summary = { Presente: 0, Ausente: 0, Justificado: 0 }
+    summaryRaw.forEach(item => {
+        summary[item.estado] = item._count.estado
+    })
+
+    return paginated(reply, registros, total, page, limit, summary)
 }
 
 // POST /asistencia — registrar asistencia bulk por fecha
@@ -47,17 +58,27 @@ export async function registrarBulk(request, reply) {
         return badRequest(reply, 'Se require fecha y un arreglo de registros')
     }
 
-    const fechaDate = new Date(fecha)
+    const fechaDate = new Date(fecha + 'T00:00:00.000Z')
 
-    const ops = registros.map(r =>
-        db.asistencia.upsert({
+    // 1. Obtener todos los infantes para asegurar que todos tengan registro (inasistencia por defecto)
+    const todosLosInfantes = await db.infante.findMany({
+        select: { id: true }
+    })
+
+    // 2. Crear un mapa de los registros enviados por el frontend
+    const registrosMap = new Map(registros.map(r => [r.infanteId, r.estado]))
+
+    // 3. Crear operaciones upsert para CADA infante
+    const ops = todosLosInfantes.map(infante => {
+        const estado = registrosMap.get(infante.id) || 'Ausente'
+        return db.asistencia.upsert({
             where: {
-                infanteId_fecha: { infanteId: r.infanteId, fecha: fechaDate }
+                infanteId_fecha: { infanteId: infante.id, fecha: fechaDate }
             },
-            update: { estado: r.estado },
-            create: { infanteId: r.infanteId, fecha: fechaDate, estado: r.estado }
+            update: { estado },
+            create: { infanteId: infante.id, fecha: fechaDate, estado }
         })
-    )
+    })
 
     const resultado = await db.$transaction(ops)
     return created(reply, { registrados: resultado.length, fecha })

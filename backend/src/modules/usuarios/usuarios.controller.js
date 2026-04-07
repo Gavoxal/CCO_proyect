@@ -26,6 +26,19 @@ export async function listar(request, reply) {
     return paginated(reply, usuarios, total, page, limit)
 }
 
+// GET /usuarios/tutores — Lista simple de tutores para combos
+export async function listarTutores(request, reply) {
+    const db = request.server.db
+    const tutores = await db.tutor.findMany({
+        select: {
+            id: true,
+            persona: { select: { nombres: true, apellidos: true } }
+        },
+        orderBy: { persona: { apellidos: 'asc' } }
+    })
+    return ok(reply, tutores)
+}
+
 // GET /usuarios/:id
 export async function obtener(request, reply) {
     const db = request.server.db
