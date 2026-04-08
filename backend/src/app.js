@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+// restart nodemon
 import { prismaPlugin } from './plugins/prisma.js'
 import { authPlugin } from './plugins/auth.js'
 import { corsPlugin } from './plugins/cors.js'

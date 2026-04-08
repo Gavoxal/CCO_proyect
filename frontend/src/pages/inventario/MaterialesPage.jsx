@@ -3,7 +3,7 @@ import {
     Box, Typography, Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, MenuItem, Stack, IconButton, Tooltip, Avatar, Grid, Card, CardContent,
     CardActions, LinearProgress, Badge, InputAdornment, ToggleButtonGroup,
-    ToggleButton, Divider, Skeleton, Alert, Paper
+    ToggleButton, Divider, Skeleton, Alert, Paper, TableContainer
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -23,107 +23,53 @@ import {
     CheckCircle as OkIcon,
     ErrorOutline as AlertIcon,
     ClearAll as ClearIcon,
+    School as SchoolIcon,
+    CleaningServices as CleanIcon,
+    Checkroom as ClothesIcon,
+    AccessibilityNew as FootwearIcon,
+    Toys as ToysIcon,
+    Devices as TechIcon,
+    Chair as FurnitureIcon,
+    MedicalServices as HealthIcon,
+    Description as PaperIcon,
+    Build as ToolsIcon,
+    Church as ChurchIcon,
+    MusicNote as MinistryIcon,
+    Sync as FungibleIcon,
+    Lock as NonFungibleIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import DataTable from '../../components/common/DataTable';
 import { materialesService } from '../../services/appServices';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import * as XLSX from 'xlsx';
 
 // ─── Paleta CCO ──────────────────────────────────────────────
 const CCO = { naranja: '#FF6B35', azul: '#004E89', crema: '#EFEFD0', violeta: '#6B2D5C', celeste: '#7BAE7F' };
 
-const FUENTE_COLORS = {
-    Compassion: { bg: '#1565c0', label: 'Compassion' },
-    Plan: { bg: '#6a1b9a', label: 'Plan' },
-    Iglesia: { bg: '#2e7d32', label: 'Iglesia' },
-    ViasEnAccion: { bg: CCO.naranja, label: 'Vías en Acción' },
-};
-
-// ─── MOCK DATA (250 items representados en demo) ──────────────
-const MOCK_CATEGORIAS = ['Útiles escolares', 'Limpieza', 'Ropa', 'Calzado', 'Juguetes', 'Tecnología', 'Mobiliario', 'Botiquín', 'Papelería', 'Herramientas'];
-const MOCK_FUENTES = ['Compassion', 'Plan', 'Iglesia', 'ViasEnAccion'];
-const PERTENECE_OPTIONS = ['Iglesia', 'Ministerio'];
-
-const generarMock = () => {
-    const items = [
-        { nombreMaterial: 'Cuadernos universitarios', categoria: 'Útiles escolares', stockMin: 20 },
-        { nombreMaterial: 'Lápices de colores (12)', categoria: 'Útiles escolares', stockMin: 30 },
-        { nombreMaterial: 'Mochilas escolares', categoria: 'Útiles escolares', stockMin: 10 },
-        { nombreMaterial: 'Juego de geometría', categoria: 'Útiles escolares', stockMin: 15 },
-        { nombreMaterial: 'Marcadores pizarra', categoria: 'Papelería', stockMin: 5 },
-        { nombreMaterial: 'Resmas de papel A4', categoria: 'Papelería', stockMin: 10 },
-        { nombreMaterial: 'Detergente 1kg', categoria: 'Limpieza', stockMin: 8 },
-        { nombreMaterial: 'Escobas industriales', categoria: 'Limpieza', stockMin: 3 },
-        { nombreMaterial: 'Desinfectante galón', categoria: 'Limpieza', stockMin: 5 },
-        { nombreMaterial: 'Uniformes talla S', categoria: 'Ropa', stockMin: 10 },
-        { nombreMaterial: 'Uniformes talla M', categoria: 'Ropa', stockMin: 10 },
-        { nombreMaterial: 'Uniformes talla L', categoria: 'Ropa', stockMin: 8 },
-        { nombreMaterial: 'Zapatos talla 28', categoria: 'Calzado', stockMin: 6 },
-        { nombreMaterial: 'Zapatos talla 30', categoria: 'Calzado', stockMin: 6 },
-        { nombreMaterial: 'Balones de fútbol', categoria: 'Juguetes', stockMin: 4 },
-        { nombreMaterial: 'Juegos de mesa', categoria: 'Juguetes', stockMin: 3 },
-        { nombreMaterial: 'Tablets Samsung', categoria: 'Tecnología', stockMin: 2 },
-        { nombreMaterial: 'Cables USB Type-C', categoria: 'Tecnología', stockMin: 5 },
-        { nombreMaterial: 'Mesas infantiles', categoria: 'Mobiliario', stockMin: 2 },
-        { nombreMaterial: 'Sillas plásticas', categoria: 'Mobiliario', stockMin: 5 },
-        { nombreMaterial: 'Kit primeros auxilios', categoria: 'Botiquín', stockMin: 2 },
-        { nombreMaterial: 'Termómetro digital', categoria: 'Botiquín', stockMin: 1 },
-        { nombreMaterial: 'Tijeras escolares', categoria: 'Útiles escolares', stockMin: 20 },
-        { nombreMaterial: 'Goma de pegar', categoria: 'Útiles escolares', stockMin: 25 },
-        { nombreMaterial: 'Plastilina colores', categoria: 'Útiles escolares', stockMin: 15 },
-    ];
-
-    return items.map((it, i) => {
-        const stock = Math.floor(Math.random() * 50);
-        const fuente = MOCK_FUENTES[i % MOCK_FUENTES.length];
-        return {
-            id: i + 1,
-            codigo: `MAT-${String(i + 1).padStart(3, '0')}`,
-            nombreMaterial: it.nombreMaterial,
-            categoria: it.categoria,
-            fuenteRecurso: fuente,
-            cantidadDisponible: stock,
-            stockMinimo: it.stockMin,
-            stockBajo: stock < it.stockMin,
-            fotografia: null,
-            area: ['Ministerio', 'Administración', 'Cocina'][i % 3],
-            marca: '',
-            numeroserie: '',
-            fungible: i % 2 === 0 ? 'Fungible' : 'No Fungible',
-            pertenece: PERTENECE_OPTIONS[i % 2],
-            fechaUltimaActualizacion: new Date(Date.now() - Math.random() * 60 * 24 * 3600 * 1000).toISOString(),
-        };
-    });
-};
-
-const MOCK_DATA = generarMock();
-
 // ─── Icono por categoría ──────────────────────────────────────
 const CATEGORIA_ICON = {
-    'Útiles escolares': '📚', 'Limpieza': '🧹', 'Ropa': '👕', 'Calzado': '👟',
-    'Juguetes': '🎮', 'Tecnología': '💻', 'Mobiliario': '🪑', 'Botiquín': '🩺',
-    'Papelería': '📄', 'Herramientas': '🔧',
+    'Útiles escolares': <SchoolIcon />,
+    'Limpieza': <CleanIcon />,
+    'Ropa': <ClothesIcon />,
+    'Calzado': <FootwearIcon />,
+    'Juguetes': <ToysIcon />,
+    'Tecnología': <TechIcon />,
+    'Mobiliario': <FurnitureIcon />,
+    'Botiquín': <HealthIcon />,
+    'Papelería': <PaperIcon />,
+    'Herramientas': <ToolsIcon />,
 };
 
-// ─── CHIP de fuente ───────────────────────────────────────────
-function FuenteChip({ fuente, size = 'small' }) {
-    const cfg = FUENTE_COLORS[fuente] || { bg: '#666', label: fuente };
-    return (
-        <Chip
-            label={cfg.label}
-            size={size}
-            sx={{ bgcolor: alpha(cfg.bg, 0.14), color: cfg.bg, fontWeight: 700, border: `1px solid ${alpha(cfg.bg, 0.3)}`, fontSize: 10 }}
-        />
-    );
-}
+const DEFAULT_ICON = <InventoryIcon />;
 
 // ─── CARD DE MATERIAL ─────────────────────────────────────────
 function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEditar, onEliminar, onVerFoto }) {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const porcentaje = item.stockMinimo > 0 ? Math.min(100, Math.round((item.cantidadDisponible / (item.stockMinimo * 3)) * 100)) : 100;
-    const icono = CATEGORIA_ICON[item.categoria] || '📦';
+    const icono = CATEGORIA_ICON[item.categoria] || DEFAULT_ICON;
 
     return (
         <Card
@@ -177,7 +123,7 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
                         {item.fotografia ? (
                             <Box component="img" src={item.fotografia} sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 2 }} />
                         ) : (
-                            <Typography fontSize={22}>{icono}</Typography>
+                            <Box sx={{ color: alpha(CCO.azul, 0.5) }}>{icono}</Box>
                         )}
                         {canWrite && (
                             <Box className="photo-overlay" sx={{
@@ -210,12 +156,12 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
                         <Typography variant="caption" color="text.secondary" noWrap display="block">
                             {item.codigo} · {item.categoria}
                         </Typography>
-                        {/* Chip fuente — altura fija siempre presente */}
+                        {/* Status Chips */}
                         <Box sx={{ mt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                            <FuenteChip fuente={item.fuenteRecurso} />
                             {item.fungible && (
                                 <Chip
-                                    label={item.fungible === 'Fungible' ? '🔄 Fungible' : '🔒 No Fungible'}
+                                    icon={item.fungible === 'Fungible' ? <FungibleIcon sx={{ fontSize: '12px !important' }} /> : <NonFungibleIcon sx={{ fontSize: '12px !important' }} />}
+                                    label={item.fungible}
                                     size="small"
                                     sx={{
                                         fontSize: 9, fontWeight: 700,
@@ -227,7 +173,8 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
                             )}
                             {item.pertenece && (
                                 <Chip
-                                    label={item.pertenece === 'Iglesia' ? '⛪ Iglesia' : '🎵 Ministerio'}
+                                    icon={item.pertenece === 'Iglesia' ? <ChurchIcon sx={{ fontSize: '12px !important' }} /> : <MinistryIcon sx={{ fontSize: '12px !important' }} />}
+                                    label={item.pertenece}
                                     size="small"
                                     sx={{
                                         fontSize: 9, fontWeight: 700,
@@ -300,7 +247,7 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
 
 // ─── MODAL: FORMULARIO MATERIAL ───────────────────────────────
 function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
-    const EMPTY = { codigo: '', nombreMaterial: '', categoria: '', fuenteRecurso: 'Iglesia', area: '', marca: '', numeroserie: '', stockMinimo: 5, fungible: 'Fungible', pertenece: 'Iglesia' };
+    const EMPTY = { codigo: '', nombreMaterial: '', categoria: '', area: '', marca: '', numeroSerie: '', stockMinimo: 5, fungible: 'Fungible', pertenece: 'Iglesia' };
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
 
@@ -319,7 +266,7 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-                <Typography fontWeight={800}>{tipo === 'crear' ? '➕ Nuevo Material' : '✏️ Editar Material'}</Typography>
+                <Typography fontWeight={800}>{tipo === 'crear' ? 'Nuevo Material' : 'Editar Material'}</Typography>
                 <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
             </DialogTitle>
             <Divider />
@@ -334,9 +281,6 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
                         <TextField label="Categoría" value={form.categoria} onChange={e => set('categoria', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                         <TextField label="Área" value={form.area || ''} onChange={e => set('area', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                     </Box>
-                    <TextField select label="Fuente de Recurso" value={form.fuenteRecurso} onChange={e => set('fuenteRecurso', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
-                        {Object.entries(FUENTE_COLORS).map(([k, v]) => <MenuItem key={k} value={k}>{v.label}</MenuItem>)}
-                    </TextField>
 
                     {/* ── Tipo: Fungible / No Fungible ── */}
                     <Box>
@@ -350,24 +294,24 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
                         >
                             <ToggleButton value="Fungible" sx={{ flex: 1, borderRadius: '8px 0 0 8px', fontWeight: 700, fontSize: 12,
                                 '&.Mui-selected': { bgcolor: alpha(CCO.naranja, 0.15), color: CCO.naranja, borderColor: alpha(CCO.naranja, 0.4) } }}>
-                                🔄 Fungible
+                                Fungible
                             </ToggleButton>
                             <ToggleButton value="No Fungible" sx={{ flex: 1, borderRadius: '0 8px 8px 0', fontWeight: 700, fontSize: 12,
                                 '&.Mui-selected': { bgcolor: alpha(CCO.azul, 0.15), color: CCO.azul, borderColor: alpha(CCO.azul, 0.4) } }}>
-                                🔒 No Fungible
+                                No Fungible
                             </ToggleButton>
                         </ToggleButtonGroup>
                     </Box>
 
                     {/* ── Pertenece: Iglesia / Ministerio ── */}
                     <TextField select label="Pertenece a" value={form.pertenece || 'Iglesia'} onChange={e => set('pertenece', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
-                        <MenuItem value="Iglesia">⛪ Iglesia</MenuItem>
-                        <MenuItem value="Ministerio">🎵 Ministerio</MenuItem>
+                        <MenuItem value="Iglesia">Iglesia</MenuItem>
+                        <MenuItem value="Ministerio">Ministerio</MenuItem>
                     </TextField>
 
                     <Box sx={{ display: 'flex', gap: 2 }}>
                         <TextField label="Marca" value={form.marca || ''} onChange={e => set('marca', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                        <TextField label="N° Serie / Código de Barras" value={form.numeroserie || ''} onChange={e => set('numeroserie', e.target.value)} size="small" sx={{ flex: 1.5, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <TextField label="N° Serie / Código de Barras" value={form.numeroSerie || ''} onChange={e => set('numeroSerie', e.target.value)} size="small" sx={{ flex: 1.5, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                     </Box>
                     <Alert severity="info" sx={{ borderRadius: 2, fontSize: 12 }}>
                         La foto del material se puede subir desde la vista de tarjetas después de crear el item.
@@ -405,14 +349,14 @@ function StockModal({ open, tipo, item, onClose, onConfirm }) {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-                <Typography fontWeight={800}>{esIngreso ? '⬇️ Ingresar Stock' : '⬆️ Despachar Stock'}</Typography>
+                <Typography fontWeight={800}>{esIngreso ? 'Ingresar Stock' : 'Despachar Stock'}</Typography>
                 <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
             </DialogTitle>
             <Divider />
             <DialogContent>
                 {item && (
                     <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(CCO.azul, 0.05), display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                        <Typography fontSize={24}>{CATEGORIA_ICON[item.categoria] || '📦'}</Typography>
+                        <Box sx={{ color: CCO.azul }}>{CATEGORIA_ICON[item.categoria] || DEFAULT_ICON}</Box>
                         <Box>
                             <Typography fontWeight={700} fontSize={14}>{item.nombreMaterial}</Typography>
                             <Typography variant="caption" color="text.secondary">Stock actual: <strong>{item.cantidadDisponible}</strong></Typography>
@@ -482,7 +426,7 @@ function FotoModal({ open, item, onClose, onSubirFoto }) {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-                <Typography fontWeight={800}>📷 Foto del Material</Typography>
+                <Typography fontWeight={800}>Foto del Material</Typography>
                 <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
             </DialogTitle>
             <Divider />
@@ -509,6 +453,9 @@ function FotoModal({ open, item, onClose, onSubirFoto }) {
                     )}
                 </Box>
                 <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
+                    Máximo 5MB · Formatos: JPG, PNG, WebP
+                </Typography>
             </DialogContent>
             <Divider />
             <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -543,7 +490,6 @@ export default function MaterialesPage() {
     // Filtros
     const [buscar, setBuscar] = useState('');
     const [filtroCategoria, setFiltroCategoria] = useState('');
-    const [filtroFuente, setFiltroFuente] = useState('');
     const [filtroStock, setFiltroStock] = useState(''); // 'bajo' | 'ok' | ''
     const [filtroFungible, setFiltroFungible] = useState(''); // 'Fungible' | 'No Fungible' | ''
     const [filtroPertenece, setFiltroPertenece] = useState(''); // 'Iglesia' | 'Ministerio' | ''
@@ -559,6 +505,11 @@ export default function MaterialesPage() {
     // Importación Excel
     const importRef = useRef(null);
     const [importing, setImporting] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+    const [importData, setImportData] = useState([]);
+    const [importColumns, setImportColumns] = useState([]);
+    const [importFileName, setImportFileName] = useState('');
+    const [lastSelectedFile, setLastSelectedFile] = useState(null);
 
     // ── Carga ─────────────────────────────────────────────────
     const cargar = useCallback(async () => {
@@ -569,14 +520,14 @@ export default function MaterialesPage() {
                 materialesService.alertas(),
             ]);
             const data = res.data || [];
-            setRows(data.length > 0 ? data : MOCK_DATA);
-            setTotal(res.meta?.total || data.length || MOCK_DATA.length);
+            setRows(data);
+            setTotal(res.meta?.total || data.length);
             setAlertas(alertRes.data || { stockBajo: [], desactualizados: [] });
-        } catch {
-            enqueueSnackbar('Cargando en modo demo', { variant: 'info' });
-            setRows(MOCK_DATA);
-            setTotal(MOCK_DATA.length);
-            setAlertas({ stockBajo: MOCK_DATA.filter(m => m.stockBajo), desactualizados: [] });
+        } catch (err) {
+            enqueueSnackbar('Error al cargar datos del inventario', { variant: 'error' });
+            setRows([]);
+            setTotal(0);
+            setAlertas({ stockBajo: [], desactualizados: [] });
         } finally {
             setLoading(false);
         }
@@ -587,22 +538,21 @@ export default function MaterialesPage() {
     // ── Filtrado client-side ──────────────────────────────────
     const filtered = useMemo(() => {
         return rows.filter(r => {
-            const txt = `${r.nombreMaterial} ${r.codigo} ${r.categoria} ${r.fuenteRecurso}`.toLowerCase();
+            const txt = `${r.nombreMaterial} ${r.codigo} ${r.categoria}`.toLowerCase();
             if (buscar && !txt.includes(buscar.toLowerCase())) return false;
             if (filtroCategoria && r.categoria !== filtroCategoria) return false;
-            if (filtroFuente && r.fuenteRecurso !== filtroFuente) return false;
             if (filtroStock === 'bajo' && !r.stockBajo) return false;
             if (filtroStock === 'ok' && r.stockBajo) return false;
             if (filtroFungible && r.fungible !== filtroFungible) return false;
             if (filtroPertenece && r.pertenece !== filtroPertenece) return false;
             return true;
         });
-    }, [rows, buscar, filtroCategoria, filtroFuente, filtroStock, filtroFungible, filtroPertenece]);
+    }, [rows, buscar, filtroCategoria, filtroStock, filtroFungible, filtroPertenece]);
 
     // Categorías únicas para los filtros
     const categorias = useMemo(() => [...new Set(rows.map(r => r.categoria).filter(Boolean))].sort(), [rows]);
 
-    const hayFiltros = buscar || filtroCategoria || filtroFuente || filtroStock || filtroFungible || filtroPertenece;
+    const hayFiltros = buscar || filtroCategoria || filtroStock || filtroFungible || filtroPertenece;
 
     // ── Handlers ──────────────────────────────────────────────
     const handleAccionForm = async (form) => {
@@ -635,28 +585,64 @@ export default function MaterialesPage() {
     };
 
     const handleSubirFoto = async (id, file) => {
+        // Validación de tamaño: 5MB
+        if (file.size > 5 * 1024 * 1024) {
+            enqueueSnackbar('La imagen es demasiado grande. El límite es 5MB.', { variant: 'warning' });
+            return;
+        }
+
         try {
             await materialesService.subirFoto(id, file);
             enqueueSnackbar('Foto actualizada correctamente', { variant: 'success' });
             cargar();
         } catch (err) {
-            enqueueSnackbar('Error al subir foto (modo demo)', { variant: 'warning' });
+            enqueueSnackbar(err?.response?.data?.error || 'Error al subir foto', { variant: 'error' });
         }
     };
 
-    const handleImportar = async (e) => {
-        const file = e.target.files[0];
+    const handleFileSelect = (e) => {
+        const file = e.target.files?.[0];
         if (!file) return;
+        setImportFileName(file.name);
+        setLastSelectedFile(file);
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+                if (data.length === 0) {
+                    enqueueSnackbar('El archivo no contiene datos', { variant: 'warning' });
+                    return;
+                }
+
+                setImportColumns(Object.keys(data[0]));
+                setImportData(data);
+                setImportOpen(true);
+            } catch (err) {
+                enqueueSnackbar('Error al leer el archivo Excel', { variant: 'error' });
+            }
+        };
+        reader.readAsBinaryString(file);
+        if (importRef.current) importRef.current.value = '';
+    };
+
+    const handleImportConfirm = async () => {
+        if (!lastSelectedFile) return;
         setImporting(true);
         try {
-            const res = await materialesService.importarExcel(file);
-            enqueueSnackbar(res.data?.message || 'Inventario importado correctamente', { variant: 'success' });
+            const res = await materialesService.importarExcel(lastSelectedFile);
+            enqueueSnackbar(res.message || 'Inventario importado correctamente', { variant: 'success' });
             cargar();
         } catch (err) {
             enqueueSnackbar(err.response?.data?.error || 'Error al importar datos', { variant: 'error' });
         } finally {
             setImporting(false);
-            if (importRef.current) importRef.current.value = '';
+            setImportOpen(false);
+            setImportData([]);
+            setLastSelectedFile(null);
         }
     };
 
@@ -700,13 +686,13 @@ export default function MaterialesPage() {
                 </Box>
             )
         },
-        { field: 'fuenteRecurso', headerName: 'Fuente', renderCell: r => <FuenteChip fuente={r.fuenteRecurso} /> },
         { field: 'area', headerName: 'Área', renderCell: r => <Typography variant="caption">{r.area || '—'}</Typography> },
         {
             field: 'fungible', headerName: 'Tipo',
             renderCell: r => r.fungible ? (
                 <Chip
-                    label={r.fungible === 'Fungible' ? '🔄 Fungible' : '🔒 No Fungible'}
+                    icon={r.fungible === 'Fungible' ? <FungibleIcon sx={{ fontSize: '12px !important' }} /> : <NonFungibleIcon sx={{ fontSize: '12px !important' }} />}
+                    label={r.fungible}
                     size="small"
                     sx={{
                         fontSize: 10, fontWeight: 700,
@@ -721,7 +707,8 @@ export default function MaterialesPage() {
             field: 'pertenece', headerName: 'Pertenece',
             renderCell: r => r.pertenece ? (
                 <Chip
-                    label={r.pertenece === 'Iglesia' ? '⛪ Iglesia' : '🎵 Ministerio'}
+                    icon={r.pertenece === 'Iglesia' ? <ChurchIcon sx={{ fontSize: '12px !important' }} /> : <MinistryIcon sx={{ fontSize: '12px !important' }} />}
+                    label={r.pertenece}
                     size="small"
                     sx={{
                         fontSize: 10, fontWeight: 700,
@@ -798,7 +785,7 @@ export default function MaterialesPage() {
                         </Typography>
                         <Typography color="text.secondary" fontWeight={500}>
                             {total} items registrados
-                            {stockBajoCount > 0 && <> · <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>⚠️ {stockBajoCount} con stock bajo</Box></>}
+                            {stockBajoCount > 0 && <> · <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{stockBajoCount} con stock bajo</Box></>}
                         </Typography>
                     </Box>
 
@@ -811,7 +798,7 @@ export default function MaterialesPage() {
                             >
                                 {importing ? 'Importando...' : '📥 Importar Excel'}
                             </Button>
-                            <input type="file" ref={importRef} accept=".xlsx, .xls" hidden onChange={handleImportar} />
+                            <input type="file" ref={importRef} accept=".xlsx, .xls" hidden onChange={handleFileSelect} />
 
                             <Button variant="contained" startIcon={<AddIcon />}
                                 onClick={() => setFormModal({ open: true, tipo: 'crear', item: null })}
@@ -874,21 +861,14 @@ export default function MaterialesPage() {
                             {categorias.map(c => <MenuItem key={c} value={c}>{CATEGORIA_ICON[c]} {c}</MenuItem>)}
                         </TextField>
 
-                        {/* Filtro fuente */}
-                        <TextField select size="small" label="Fuente" value={filtroFuente}
-                            onChange={e => setFiltroFuente(e.target.value)}
-                            sx={{ minWidth: 140, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
-                            <MenuItem value="">Todas</MenuItem>
-                            {Object.entries(FUENTE_COLORS).map(([k, v]) => <MenuItem key={k} value={k}>{v.label}</MenuItem>)}
-                        </TextField>
 
                         {/* Filtro stock */}
                         <TextField select size="small" label="Stock" value={filtroStock}
                             onChange={e => setFiltroStock(e.target.value)}
                             sx={{ minWidth: 130, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
                             <MenuItem value="">Todos</MenuItem>
-                            <MenuItem value="bajo">⚠️ Stock bajo</MenuItem>
-                            <MenuItem value="ok">✅ Stock OK</MenuItem>
+                            <MenuItem value="bajo">Stock bajo</MenuItem>
+                            <MenuItem value="ok">Stock OK</MenuItem>
                         </TextField>
 
                         {/* Filtro Fungible */}
@@ -896,8 +876,8 @@ export default function MaterialesPage() {
                             onChange={e => setFiltroFungible(e.target.value)}
                             sx={{ minWidth: 140, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
                             <MenuItem value="">Todos</MenuItem>
-                            <MenuItem value="Fungible">🔄 Fungible</MenuItem>
-                            <MenuItem value="No Fungible">🔒 No Fungible</MenuItem>
+                            <MenuItem value="Fungible">Fungible</MenuItem>
+                            <MenuItem value="No Fungible">No Fungible</MenuItem>
                         </TextField>
 
                         {/* Filtro Pertenece */}
@@ -905,14 +885,14 @@ export default function MaterialesPage() {
                             onChange={e => setFiltroPertenece(e.target.value)}
                             sx={{ minWidth: 140, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
                             <MenuItem value="">Todos</MenuItem>
-                            <MenuItem value="Iglesia">⛪ Iglesia</MenuItem>
-                            <MenuItem value="Ministerio">🎵 Ministerio</MenuItem>
+                            <MenuItem value="Iglesia">Iglesia</MenuItem>
+                            <MenuItem value="Ministerio">Ministerio</MenuItem>
                         </TextField>
 
                         {/* Limpiar filtros */}
                         {hayFiltros && (
                             <Tooltip title="Limpiar filtros" arrow>
-                                <IconButton onClick={() => { setBuscar(''); setFiltroCategoria(''); setFiltroFuente(''); setFiltroStock(''); setFiltroFungible(''); setFiltroPertenece(''); }}
+                                <IconButton onClick={() => { setBuscar(''); setFiltroCategoria(''); setFiltroStock(''); setFiltroFungible(''); setFiltroPertenece(''); }}
                                     sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                                     <ClearIcon />
                                 </IconButton>
@@ -936,10 +916,9 @@ export default function MaterialesPage() {
                         <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                             <Typography variant="caption" color="text.secondary" fontWeight={600}>Filtros:</Typography>
                             {filtroCategoria && <Chip label={filtroCategoria} size="small" onDelete={() => setFiltroCategoria('')} sx={{ fontWeight: 700 }} />}
-                            {filtroFuente && <Chip label={FUENTE_COLORS[filtroFuente]?.label || filtroFuente} size="small" onDelete={() => setFiltroFuente('')} sx={{ fontWeight: 700 }} />}
-                            {filtroStock && <Chip label={filtroStock === 'bajo' ? '⚠️ Stock bajo' : '✅ Stock OK'} size="small" onDelete={() => setFiltroStock('')} sx={{ fontWeight: 700 }} />}
-                            {filtroFungible && <Chip label={filtroFungible === 'Fungible' ? '🔄 Fungible' : '🔒 No Fungible'} size="small" onDelete={() => setFiltroFungible('')} sx={{ fontWeight: 700 }} />}
-                            {filtroPertenece && <Chip label={filtroPertenece === 'Iglesia' ? '⛪ Iglesia' : '🎵 Ministerio'} size="small" onDelete={() => setFiltroPertenece('')} sx={{ fontWeight: 700 }} />}
+                            {filtroStock && <Chip label={filtroStock === 'bajo' ? 'Stock bajo' : 'Stock OK'} size="small" onDelete={() => setFiltroStock('')} sx={{ fontWeight: 700 }} />}
+                            {filtroFungible && <Chip label={filtroFungible === 'Fungible' ? 'Fungible' : 'No Fungible'} size="small" onDelete={() => setFiltroFungible('')} sx={{ fontWeight: 700 }} />}
+                            {filtroPertenece && <Chip label={filtroPertenece === 'Iglesia' ? 'Iglesia' : 'Ministerio'} size="small" onDelete={() => setFiltroPertenece('')} sx={{ fontWeight: 700 }} />}
                             <Chip label={`${filtered.length} resultados`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
                         </Box>
                     )}
@@ -957,7 +936,7 @@ export default function MaterialesPage() {
                         </Grid>
                     ) : filtered.length === 0 ? (
                         <Box sx={{ textAlign: 'center', py: 8 }}>
-                            <Typography fontSize={48}>🔍</Typography>
+                            <SearchIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
                             <Typography variant="h6" fontWeight={700} color="text.secondary">No se encontraron materiales</Typography>
                             <Typography variant="body2" color="text.secondary">Prueba con otros términos de búsqueda o limpia los filtros</Typography>
                         </Box>
@@ -1009,6 +988,83 @@ export default function MaterialesPage() {
                 onClose={() => setFotoModal({ open: false, item: null })}
                 onSubirFoto={handleSubirFoto}
             />
+
+            {/* ═══════════════════════════════════════════════════════════════
+                DIALOG: Importar desde Excel
+                ═══════════════════════════════════════════════════════════════ */}
+            <Dialog open={importOpen} onClose={() => setImportOpen(false)} maxWidth="lg" fullWidth
+                PaperProps={{ sx: { borderRadius: 4, maxHeight: '85vh' } }}>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <IngresarIcon sx={{ color: CCO.azul }} />
+                        <Box>
+                            <Typography variant="h6" fontWeight={700}>Importar Materiales desde Excel</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Archivo: <b>{importFileName}</b> · {importData.length} registro{importData.length !== 1 ? 's' : ''}
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <IconButton onClick={() => setImportOpen(false)} size="small"><CloseIcon /></IconButton>
+                </DialogTitle>
+                <Divider />
+                <DialogContent sx={{ p: 0 }}>
+                    <Alert severity="info" sx={{ mx: 3, mt: 2, borderRadius: 2 }}>
+                        <Typography variant="body2">
+                            <b>Columnas detectadas:</b> {importColumns.join(', ')}
+                        </Typography>
+                    </Alert>
+
+                    <TableContainer sx={{ maxHeight: 400, mt: 2 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                            <thead>
+                                <tr>
+                                    <th style={{ padding: '8px 16px', borderBottom: '1px solid #ddd', backgroundColor: isDark ? '#1a1f36' : '#f5f5f5' }}>#</th>
+                                    {importColumns.map(col => (
+                                        <th key={col} style={{ padding: '8px 16px', borderBottom: '1px solid #ddd', backgroundColor: isDark ? '#1a1f36' : '#f5f5f5', whiteSpace: 'nowrap', fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                                            {col}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {importData.slice(0, 50).map((row, idx) => (
+                                    <tr key={idx}>
+                                        <td style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}><Typography variant="caption" fontWeight={600}>{idx + 1}</Typography></td>
+                                        {importColumns.map(col => (
+                                            <td key={col} style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}>
+                                                <Typography variant="body2" fontSize="0.78rem" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {row[col] != null ? String(row[col]) : ''}
+                                                </Typography>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                                {importData.length > 50 && (
+                                    <tr>
+                                        <td colSpan={importColumns.length + 1} style={{ textAlign: 'center', padding: '16px' }}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                ... y {importData.length - 50} registro{importData.length - 50 !== 1 ? 's' : ''} más
+                                            </Typography>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </TableContainer>
+                </DialogContent>
+                <Divider />
+                <DialogActions sx={{ p: 2.5, gap: 1 }}>
+                    <Button onClick={() => setImportOpen(false)} color="inherit" sx={{ borderRadius: 2 }}>
+                        Cancelar
+                    </Button>
+                    <Button variant="contained" startIcon={<OkIcon />}
+                        onClick={handleImportConfirm}
+                        disabled={importing}
+                        sx={{ borderRadius: 3, px: 3, fontWeight: 700, bgcolor: CCO.azul }}>
+                        {importing ? 'Importando...' : `Importar ${importData.length} Material${importData.length !== 1 ? 'es' : ''}`}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </MainLayout>
     );
 }

@@ -5,15 +5,37 @@ import * as fs from 'fs/promises'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
+
+const ALLOWED_FIELDS = [
+    'codigo', 'nombreMaterial', 'cantidadDisponible', 'stockMinimo',
+    'categoria', 'area', 'tipo', 'marca', 'numeroSerie', 'fotografia',
+    'pertenece', 'fungible'
+];
+
+function filterData(body) {
+    const data = {};
+    ALLOWED_FIELDS.forEach(key => {
+        if (body[key] !== undefined) {
+            data[key] = body[key];
+        }
+    });
+    // Parse integer fields
+    if (data.cantidadDisponible !== undefined) data.cantidadDisponible = parseInt(data.cantidadDisponible) || 0;
+    if (data.stockMinimo !== undefined) data.stockMinimo = parseInt(data.stockMinimo) || 0;
+    return data;
+}
+
 // GET /inventario/materiales
 export async function listar(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { buscar, fuenteRecurso, stockBajo } = request.query
+    const { buscar, stockBajo, pertenece, fungible } = request.query
     const db = request.server.db
 
     const where = {}
     if (buscar) where.nombreMaterial = { contains: buscar }
-    if (fuenteRecurso) where.fuenteRecurso = fuenteRecurso
+    if (pertenece) where.pertenece = pertenece
+    if (fungible) where.fungible = fungible
     if (stockBajo === 'true') {
         where.cantidadDisponible = { lte: db.inventarioMaterial.fields.stockMinimo }
     }
@@ -49,9 +71,10 @@ export async function crear(request, reply) {
         const fields = {}
         for await (const part of parts) {
             if (part.file) {
-                const dir = path.join(process.cwd(), 'uploads', 'materiales')
+                const dir = path.join(UPLOAD_DIR, 'materiales')
                 await fs.mkdir(dir, { recursive: true })
-                const filename = `material-${Date.now()}-${part.filename}`
+                const ext = part.filename.split('.').pop()
+                const filename = `material-${Date.now()}.${ext}`
                 await fs.writeFile(path.join(dir, filename), await part.toBuffer())
                 foto = `/uploads/materiales/${filename}`
             } else {
@@ -61,13 +84,9 @@ export async function crear(request, reply) {
         body = fields
     }
 
-    const data = { ...body, fechaUltimaActualizacion: new Date() }
-    
-    // Parse ints as needed
-    if (data.cantidadDisponible) data.cantidadDisponible = parseInt(data.cantidadDisponible)
-    if (data.stockMinimo) data.stockMinimo = parseInt(data.stockMinimo)
-
-    if (foto) data.foto = foto
+    const data = filterData(body);
+    data.fechaUltimaActualizacion = new Date();
+    if (foto) data.fotografia = foto;
 
     const item = await db.inventarioMaterial.create({ data })
     return created(reply, item)
@@ -84,9 +103,10 @@ export async function actualizar(request, reply) {
         const fields = {}
         for await (const part of parts) {
             if (part.file) {
-                const dir = path.join(process.cwd(), 'uploads', 'materiales')
+                const dir = path.join(UPLOAD_DIR, 'materiales')
                 await fs.mkdir(dir, { recursive: true })
-                const filename = `material-${Date.now()}-${part.filename}`
+                const ext = part.filename.split('.').pop()
+                const filename = `material-${Date.now()}.${ext}`
                 await fs.writeFile(path.join(dir, filename), await part.toBuffer())
                 foto = `/uploads/materiales/${filename}`
             } else {
@@ -96,12 +116,9 @@ export async function actualizar(request, reply) {
         body = fields
     }
 
-    const data = { ...body, fechaUltimaActualizacion: new Date() }
-    
-    // Parse ints as needed
-    if (data.cantidadDisponible !== undefined) data.cantidadDisponible = parseInt(data.cantidadDisponible)
-    if (data.stockMinimo !== undefined) data.stockMinimo = parseInt(data.stockMinimo)
-    if (foto) data.foto = foto
+    const data = filterData(body);
+    data.fechaUltimaActualizacion = new Date();
+    if (foto) data.fotografia = foto;
 
     try {
         const item = await db.inventarioMaterial.update({
@@ -109,8 +126,10 @@ export async function actualizar(request, reply) {
             data
         })
         return ok(reply, item)
-    } catch {
-        return notFound(reply)
+    } catch (e) {
+        request.server.log.error(e)
+        if (e.code === 'P2025') return notFound(reply)
+        return reply.status(500).send({ error: 'Error al actualizar el material', details: e.message })
     }
 }
 
@@ -143,8 +162,9 @@ export async function importarExcel(request, reply) {
                 marca: (row['Marca / Modelo'] || '').toString().substring(0, 100) || null,
                 cantidadDisponible: 1, // Assumption: each row models a unique physical item
                 stockMinimo: 1,
-                fechaUltimaActualizacion: new Date(),
-                fuenteRecurso: 'Donacion'
+                pertenece: 'Iglesia',
+                fungible: 'Fungible',
+                fechaUltimaActualizacion: new Date()
             };
 
             await db.inventarioMaterial.upsert({
@@ -158,7 +178,7 @@ export async function importarExcel(request, reply) {
         return ok(reply, { message: `Importación exitosa. ${count} registros procesados.` });
     } catch (e) {
         request.server.log.error(e);
-        return reply.status(500).send({ error: 'Error procesando el archivo de excel' });
+        return reply.status(500).send({ error: 'Error procesando el archivo de excel', details: e.message, stack: e.stack });
     }
 }
 
@@ -237,5 +257,50 @@ export async function eliminar(request, reply) {
         return noContent(reply)
     } catch {
         return notFound(reply)
+    }
+}
+
+export async function subirFoto(request, reply) {
+    const db = request.server.db
+    const id = parseInt(request.params.id)
+    
+    try {
+        const material = await db.inventarioMaterial.findUnique({ where: { id } })
+        if (!material) return notFound(reply)
+
+        const data = await request.file()
+        if (!data) return reply.status(400).send({ error: 'No se envió ningún archivo' })
+
+        // Validar tipo
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+        if (!allowedTypes.includes(data.mimetype)) {
+            return reply.status(400).send({ error: 'Solo se permiten imágenes JPG, PNG o WebP' })
+        }
+
+        const dir = path.join(UPLOAD_DIR, 'materiales')
+        await fs.mkdir(dir, { recursive: true })
+        
+        const ext = data.filename.split('.').pop()
+        const filename = `material-${id}-${Date.now()}.${ext}`
+        const filepath = path.join(dir, filename)
+        
+        await fs.writeFile(filepath, await data.toBuffer())
+        const urlPath = `/uploads/materiales/${filename}`
+
+        const actualizado = await db.inventarioMaterial.update({
+            where: { id },
+            data: { 
+                fotografia: urlPath, 
+                fechaUltimaActualizacion: new Date() 
+            }
+        })
+
+        return ok(reply, actualizado)
+    } catch (e) {
+        request.server.log.error('Error en subirFoto material:', e)
+        return reply.status(500).send({ 
+            error: 'Error al subir la fotografía', 
+            details: e.message 
+        })
     }
 }

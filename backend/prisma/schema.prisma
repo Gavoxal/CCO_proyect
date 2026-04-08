@@ -1,7 +1,3 @@
-// This is your Prisma schema file for CCO KidScam
-// Tecnologías: Prisma v6 + MySQL 8.0
-// Sistema: Centro Cristiano de Obrapía / Ministerio Vías en Acción
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,9 +7,247 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================
-// ENUMS
-// ============================================================
+model Persona {
+  id              Int       @id @default(autoincrement())
+  nombres         String    @db.VarChar(255)
+  apellidos       String    @db.VarChar(255)
+  cedula          String?   @unique @db.VarChar(20)
+  telefono1       String?   @db.VarChar(20)
+  telefono2       String?   @db.VarChar(20)
+  email           String?   @db.VarChar(255)
+  direccion       String?   @db.VarChar(500)
+  fechaNacimiento DateTime? @db.Date
+  ubicacionGps    String?   @db.VarChar(255)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  infante         Infante?
+  miembro         Miembro?
+  tutor           Tutor?
+  usuario         Usuario?
+
+  @@map("personas")
+}
+
+model Usuario {
+  id              Int                @id @default(autoincrement())
+  username        String             @unique @db.VarChar(50)
+  email           String             @unique @db.VarChar(255)
+  password        String             @db.VarChar(255)
+  rol             RolUsuario         @default(tutor)
+  activo          Boolean            @default(true)
+  ultimoAcceso    DateTime?
+  tokenVersion    Int                @default(0)
+  personaId       Int?               @unique
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  notificaciones  Notificacion[]
+  reportesCreados ReporteIncidente[]
+  persona         Persona?           @relation(fields: [personaId], references: [id])
+
+  @@map("usuarios")
+}
+
+model Notificacion {
+  id            Int              @id @default(autoincrement())
+  usuarioId     Int
+  titulo        String           @db.VarChar(255)
+  mensaje       String           @db.Text
+  leida         Boolean          @default(false)
+  fechaCreacion DateTime         @default(now())
+  tipo          TipoNotificacion @default(INFO)
+  referenciaId  Int?
+  usuario       Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([fechaCreacion])
+  @@map("notificaciones")
+}
+
+model Infante {
+  id                     Int                @id @default(autoincrement())
+  codigo                 String             @unique @db.VarChar(50)
+  enfermedades           String?            @db.Text
+  alergias               String?            @db.Text
+  cuidador               String?            @db.VarChar(255)
+  celular2               String?            @db.VarChar(20)
+  esPatrocinado          Boolean            @default(false)
+  tipoPrograma           TipoPrograma       @default(Ministerio)
+  fuentePatrocinio       FuentePatrocinio   @default(Ninguno)
+  fotografia             String?            @db.VarChar(500)
+  fechaActualizacionFoto DateTime?          @db.Date
+  personaId              Int                @unique
+  tutorId                Int?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  asistencias            Asistencia[]
+  persona                Persona            @relation(fields: [personaId], references: [id])
+  tutor                  Tutor?             @relation(fields: [tutorId], references: [id])
+  regalos                Regalo[]
+  visitas                Visita[]
+  reportes_incidentes    ReporteIncidente[] @relation("incidenteinfantes")
+
+  @@index([tutorId], map: "infantes_tutorId_fkey")
+  @@map("infantes")
+}
+
+model Tutor {
+  id                     Int       @id @default(autoincrement())
+  codigo                 String    @unique @db.VarChar(50)
+  profesion              String?   @db.VarChar(255)
+  fotografia             String?   @db.VarChar(500)
+  fechaActualizacionFoto DateTime? @db.Date
+  personaId              Int       @unique
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  infantes               Infante[]
+  persona                Persona   @relation(fields: [personaId], references: [id])
+  visitasRealizadas      Visita[]
+
+  @@map("tutores")
+}
+
+model Asistencia {
+  id        Int              @id @default(autoincrement())
+  fecha     DateTime         @db.Date
+  estado    EstadoAsistencia @default(Presente)
+  infanteId Int
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  infante   Infante          @relation(fields: [infanteId], references: [id])
+
+  @@unique([infanteId, fecha])
+  @@index([infanteId])
+  @@index([fecha])
+  @@map("asistencias")
+}
+
+model Visita {
+  id            Int            @id @default(autoincrement())
+  fecha         DateTime       @db.Date
+  estado        EstadoVisita   @default(Realizada)
+  razonVisita   RazonVisita    @default(Seguimiento)
+  decision      DecisionVisita @default(ContinuaMinisterio)
+  resultados    String?        @db.Text
+  observaciones String?        @db.Text
+  fotoVisita    String?        @db.VarChar(500)
+  infanteId     Int
+  tutorId       Int?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  infante       Infante        @relation(fields: [infanteId], references: [id])
+  tutor         Tutor?         @relation(fields: [tutorId], references: [id])
+
+  @@index([infanteId])
+  @@index([tutorId], map: "visitas_tutorId_fkey")
+  @@map("visitas")
+}
+
+model ReporteIncidente {
+  id             Int       @id @default(autoincrement())
+  fecha          DateTime  @db.Date
+  descripcion    String    @db.Text
+  tipoAbuso      String    @db.VarChar(100)
+  foto           String?   @db.VarChar(500)
+  reportadoPorId Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  reportadoPor   Usuario   @relation(fields: [reportadoPorId], references: [id])
+  infantes       Infante[] @relation("incidenteinfantes")
+
+  @@index([fecha])
+  @@index([reportadoPorId], map: "reportes_incidentes_reportadoPorId_fkey")
+  @@map("reportes_incidentes")
+}
+
+model InventarioMaterial {
+  id                       Int      @id @default(autoincrement())
+  codigo                   String   @unique @db.VarChar(50)
+  nombreMaterial           String   @db.VarChar(255)
+  cantidadDisponible       Int      @default(0)
+  stockMinimo              Int      @default(5)
+  fechaUltimaActualizacion DateTime @db.Date
+  categoria                String?  @db.VarChar(100)
+  area                     String?  @db.VarChar(100)
+  tipo                     String?  @db.VarChar(50)
+  marca                    String?  @db.VarChar(100)
+  numeroSerie              String?  @db.VarChar(100)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  fungible                 String?  @default("Fungible") @db.VarChar(50)
+  pertenece                String?  @default("Iglesia") @db.VarChar(50)
+  fotografia               String?  @db.VarChar(500)
+
+  @@map("inventario_materiales")
+}
+
+model Regalo {
+  id            Int          @id @default(autoincrement())
+  tipo          TipoRegalo
+  fechaEntrega  DateTime?    @db.Date
+  estado        EstadoRegalo @default(pendiente)
+  observaciones String?      @db.Text
+  foto          String?      @db.VarChar(500)
+  anio          Int
+  infanteId     Int
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  infante       Infante      @relation(fields: [infanteId], references: [id])
+
+  @@index([infanteId, anio])
+  @@map("regalos")
+}
+
+model Miembro {
+  id                     Int           @id @default(autoincrement())
+  tipoMembresia          TipoMembresia @default(Regular)
+  fechaIngreso           DateTime?     @db.Date
+  personaId              Int           @unique
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  casasDePazComoLider    CasaDePaz[]   @relation("LiderCasaPaz")
+  casasDePazComoAsistido CasaDePaz[]   @relation("AsistidoCasaPaz")
+  persona                Persona       @relation(fields: [personaId], references: [id])
+
+  @@map("miembros")
+}
+
+model CasaDePaz {
+  id                Int           @id @default(autoincrement())
+  codigo            String        @unique @db.VarChar(50)
+  fechaInicio       DateTime      @db.Date
+  fechaFin          DateTime?     @db.Date
+  red               String?       @db.VarChar(50)
+  estado            EstadoCasaPaz @default(EnProgreso)
+  lugar             String?       @db.VarChar(500)
+  diasVisita        String?       @db.VarChar(255)
+  foto              String?       @db.VarChar(500)
+  observaciones     String?       @db.Text
+  liderId           Int?
+  personaAsistidaId Int?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  lider             Miembro?      @relation("LiderCasaPaz", fields: [liderId], references: [id])
+  personaAsistida   Miembro?      @relation("AsistidoCasaPaz", fields: [personaAsistidaId], references: [id])
+
+  @@index([liderId], map: "casas_de_paz_liderId_fkey")
+  @@index([personaAsistidaId], map: "casas_de_paz_personaAsistidaId_fkey")
+  @@map("casas_de_paz")
+}
+
+model Evento {
+  id          Int        @id @default(autoincrement())
+  titulo      String     @db.VarChar(255)
+  descripcion String?    @db.Text
+  fechaInicio DateTime
+  fechaFin    DateTime?
+  tipo        TipoEvento @default(Ministerio)
+  notificar   Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([fechaInicio])
+  @@map("eventos")
+}
 
 enum RolUsuario {
   admin
@@ -40,13 +274,6 @@ enum EstadoAsistencia {
   Presente
   Ausente
   Justificado
-}
-
-enum FuenteRecurso {
-  Compassion
-  Plan
-  Iglesia
-  ViasEnAccion
 }
 
 enum TipoRegalo {
@@ -101,304 +328,4 @@ enum DecisionVisita {
   ContinuaMinisterio
   DarDeBaja
   Otra
-}
-
-// ============================================================
-// PERSONAS — entidad base para cualquier persona en el sistema
-// ============================================================
-
-model Persona {
-  id              Int       @id @default(autoincrement())
-  nombres         String    @db.VarChar(255)
-  apellidos       String    @db.VarChar(255)
-  cedula          String?   @unique @db.VarChar(20)
-  telefono1       String?   @db.VarChar(20)
-  telefono2       String?   @db.VarChar(20)
-  email           String?   @db.VarChar(255)
-  direccion       String?   @db.VarChar(500)
-  fechaNacimiento DateTime? @db.Date
-  ubicacionGps    String?   @db.VarChar(255)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Relaciones 1:1 opcionales
-  infante  Infante?
-  tutor    Tutor?
-  miembro  Miembro?
-  usuario  Usuario?
-
-  @@map("personas")
-}
-
-// ============================================================
-// USUARIOS — autenticación y control de acceso
-// ============================================================
-
-model Usuario {
-  id           Int        @id @default(autoincrement())
-  username     String     @unique @db.VarChar(50)
-  email        String     @unique @db.VarChar(255)
-  password     String     @db.VarChar(255)
-  rol          RolUsuario @default(tutor)
-  activo       Boolean    @default(true)
-  ultimoAcceso DateTime?
-  tokenVersion Int        @default(0)
-  personaId    Int?       @unique
-  persona      Persona?   @relation(fields: [personaId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  reportesCreados ReporteIncidente[]
-  notificaciones  Notificacion[]
-
-  @@map("usuarios")
-}
-
-// ============================================================
-// NOTIFICACIONES IN-APP
-// ============================================================
-
-model Notificacion {
-  id            Int              @id @default(autoincrement())
-  usuarioId     Int
-  usuario       Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  titulo        String           @db.VarChar(255)
-  mensaje       String           @db.Text
-  leida         Boolean          @default(false)
-  fechaCreacion DateTime         @default(now())
-  tipo          TipoNotificacion @default(INFO)
-  referenciaId  Int?
-
-  @@index([usuarioId])
-  @@index([fechaCreacion])
-  @@map("notificaciones")
-}
-
-// ============================================================
-// INFANTES — niños del Ministerio y/o Comedor
-// ============================================================
-
-model Infante {
-  id                     Int              @id @default(autoincrement())
-  codigo                 String           @unique @db.VarChar(50)
-  enfermedades           String?          @db.Text
-  alergias               String?          @db.Text
-  cuidador               String?          @db.VarChar(255)
-  celular2               String?          @db.VarChar(20)
-  esPatrocinado          Boolean          @default(false)
-  tipoPrograma           TipoPrograma     @default(Ministerio)
-  fuentePatrocinio       FuentePatrocinio @default(Ninguno)
-  fotografia             String?          @db.VarChar(500)
-  fechaActualizacionFoto DateTime?        @db.Date
-  // Relaciones
-  personaId              Int              @unique
-  persona                Persona          @relation(fields: [personaId], references: [id])
-  tutorId                Int?
-  tutor                  Tutor?           @relation(fields: [tutorId], references: [id])
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
-
-  asistencias Asistencia[]
-  visitas     Visita[]
-  regalos     Regalo[]
-  incidentes  ReporteIncidente[] @relation("IncidenteInfantes")
-
-  @@map("infantes")
-}
-
-// ============================================================
-// TUTORES
-// ============================================================
-
-model Tutor {
-  id        Int      @id @default(autoincrement())
-  codigo    String   @unique @db.VarChar(50)
-  profesion String?  @db.VarChar(255)
-  fotografia             String?  @db.VarChar(500)
-  fechaActualizacionFoto DateTime? @db.Date
-  
-  personaId Int      @unique
-  persona   Persona  @relation(fields: [personaId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  infantes          Infante[]
-  visitasRealizadas Visita[]
-
-  @@map("tutores")
-}
-
-// ============================================================
-// ASISTENCIA — registro de asistencia de infantes
-// ============================================================
-
-model Asistencia {
-  id        Int              @id @default(autoincrement())
-  fecha     DateTime         @db.Date
-  estado    EstadoAsistencia @default(Presente)
-  infanteId Int
-  infante   Infante          @relation(fields: [infanteId], references: [id])
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
-  @@unique([infanteId, fecha])
-  @@index([infanteId])
-  @@index([fecha])
-  @@map("asistencias")
-}
-
-// ============================================================
-// VISITAS — visita domiciliaria a infante (req. una por año)
-// ============================================================
-
-model Visita {
-  id             Int            @id @default(autoincrement())
-  fecha          DateTime       @db.Date
-  estado         EstadoVisita   @default(Realizada)
-  razonVisita    RazonVisita    @default(Seguimiento)
-  decision       DecisionVisita @default(ContinuaMinisterio)
-  resultados     String?        @db.Text
-  observaciones  String?        @db.Text
-  fotoVisita     String?        @db.VarChar(500)
-  infanteId      Int
-  infante        Infante        @relation(fields: [infanteId], references: [id])
-  tutorId        Int?
-  tutor          Tutor?         @relation(fields: [tutorId], references: [id])
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  @@index([infanteId])
-  @@map("visitas")
-}
-
-// ============================================================
-// REPORTE DE INCIDENTES — M:N con Infante
-// Solo tutores/especiales pueden CREAR, solo admin/director/proteccion/secretaria pueden VER
-// ============================================================
-
-model ReporteIncidente {
-  id             Int      @id @default(autoincrement())
-  fecha          DateTime @db.Date
-  descripcion    String   @db.Text
-  tipoAbuso      String   @db.VarChar(100)
-  foto           String?  @db.VarChar(500)
-  // FK al usuario que reporta
-  reportadoPorId Int
-  reportadoPor   Usuario  @relation(fields: [reportadoPorId], references: [id])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  // Relación M:N con infantes (un incidente puede involucrar varios infantes)
-  infantes Infante[] @relation("IncidenteInfantes")
-
-  @@index([fecha])
-  @@map("reportes_incidentes")
-}
-
-// ============================================================
-// INVENTARIO DE MATERIALES
-// ============================================================
-
-model InventarioMaterial {
-  id                       Int           @id @default(autoincrement())
-  codigo                   String        @unique @db.VarChar(50)
-  nombreMaterial           String        @db.VarChar(255)
-  cantidadDisponible       Int           @default(0)
-  stockMinimo              Int           @default(5)
-  fechaUltimaActualizacion DateTime      @db.Date
-  fuenteRecurso            FuenteRecurso @default(Iglesia)
-  categoria                String?       @db.VarChar(100)
-  area                     String?       @db.VarChar(100)
-  tipo                     String?       @db.VarChar(50)
-  marca                    String?       @db.VarChar(100)
-  numeroSerie              String?       @db.VarChar(100)
-  foto                     String?       @db.VarChar(500)
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
-
-  @@map("inventario_materiales")
-}
-
-// ============================================================
-// REGALOS y KITS ESCOLARES
-// ============================================================
-
-model Regalo {
-  id            Int          @id @default(autoincrement())
-  tipo          TipoRegalo
-  fechaEntrega  DateTime?    @db.Date
-  estado        EstadoRegalo @default(pendiente)
-  observaciones String?      @db.Text
-  foto          String?      @db.VarChar(500)
-  anio          Int
-  infanteId     Int
-  infante       Infante      @relation(fields: [infanteId], references: [id])
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  @@index([infanteId, anio])
-  @@map("regalos")
-}
-
-// ============================================================
-// MIEMBROS DE LA IGLESIA (CCO)
-// ============================================================
-
-model Miembro {
-  id            Int           @id @default(autoincrement())
-  tipoMembresia TipoMembresia @default(Regular)
-  fechaIngreso  DateTime?     @db.Date
-  personaId     Int           @unique
-  persona       Persona       @relation(fields: [personaId], references: [id])
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  casasDePazComoLider    CasaDePaz[] @relation("LiderCasaPaz")
-  casasDePazComoAsistido CasaDePaz[] @relation("AsistidoCasaPaz")
-
-  @@map("miembros")
-}
-
-// ============================================================
-// CASAS DE PAZ
-// ============================================================
-
-model CasaDePaz {
-  id                Int           @id @default(autoincrement())
-  codigo            String        @unique @db.VarChar(50)
-  fechaInicio       DateTime      @db.Date
-  fechaFin          DateTime?     @db.Date
-  red               String?       @db.VarChar(50)
-  estado            EstadoCasaPaz @default(EnProgreso)
-  lugar             String?       @db.VarChar(500)
-  diasVisita        String?       @db.VarChar(255)
-  foto              String?       @db.VarChar(500)
-  observaciones     String?       @db.Text
-  liderId           Int?
-  lider             Miembro?      @relation("LiderCasaPaz", fields: [liderId], references: [id])
-  personaAsistidaId Int?
-  personaAsistida   Miembro?      @relation("AsistidoCasaPaz", fields: [personaAsistidaId], references: [id])
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-
-  @@map("casas_de_paz")
-}
-
-// ============================================================
-// EVENTOS / CALENDARIO CENTRALIZADO
-// ============================================================
-
-model Evento {
-  id          Int        @id @default(autoincrement())
-  titulo      String     @db.VarChar(255)
-  descripcion String?    @db.Text
-  fechaInicio DateTime
-  fechaFin    DateTime?
-  tipo        TipoEvento @default(Ministerio)
-  notificar   Boolean    @default(true)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([fechaInicio])
-  @@map("eventos")
 }
