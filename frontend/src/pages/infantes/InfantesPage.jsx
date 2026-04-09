@@ -18,7 +18,7 @@ import {
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
-import { infantesService } from '../../services/appServices';
+import { infantesService, usuariosService } from '../../services/appServices';
 import api from '../../services/api';
 import * as XLSX from 'xlsx';
 
@@ -103,6 +103,7 @@ const InfantesPage = () => {
     const fileInputRef = useRef(null);
 
     const [infantes, setInfantes] = useState([]);
+    const [tutores, setTutores] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -121,6 +122,15 @@ const InfantesPage = () => {
 
     useEffect(() => {
         cargarInfantes();
+        const cargarTutores = async () => {
+            try {
+                const res = await usuariosService.listarTutores();
+                setTutores(res.data || []);
+            } catch (error) {
+                console.error('Error cargando tutores', error);
+            }
+        };
+        cargarTutores();
     }, [cargarInfantes]);
 
     const [search, setSearch] = useState('');
@@ -130,7 +140,6 @@ const InfantesPage = () => {
     const [page, setPage] = useState(0);
 
     const getTutorName = (row) => {
-        if (row.persona?.tutor) return row.persona.tutor;
         if (row.tutor?.persona) return `${row.tutor.persona.nombres} ${row.tutor.persona.apellidos}`.trim();
         return '—';
     };
@@ -359,9 +368,13 @@ const InfantesPage = () => {
                         onChange={(e) => { setFiltroTutor(e.target.value); setPage(0); }}
                         sx={{ minWidth: 160 }}>
                         <MenuItem value="">Todos</MenuItem>
-                        {tutoresDisponibles.map(t => (
-                            <MenuItem key={t} value={t}>{t}</MenuItem>
-                        ))}
+                        {tutores.map(t => {
+                            if (!t.persona) return null;
+                            const name = `${t.persona.nombres} ${t.persona.apellidos}`.trim();
+                            return (
+                                <MenuItem key={t.id} value={name}>{name}</MenuItem>
+                            );
+                        })}
                     </TextField>
                     <TextField select size="small" label="Visita Anual" value={filtroVisita}
                         onChange={(e) => { setFiltroVisita(e.target.value); setPage(0); }}

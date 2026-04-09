@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box, Grid, Typography, Card, CardContent, LinearProgress,
     Alert, Chip, Avatar, List, ListItem, ListItemText, ListItemAvatar,
-    Divider, Tab, Tabs, Button, Stack,
+    Divider, Tab, Tabs, Button, Stack, CircularProgress,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { Badge } from '@mui/material';
@@ -16,10 +16,13 @@ import {
     CalendarMonth as CalIcon,
     ManageAccounts as UsuariosIcon,
     AssignmentTurnedIn as AsistenciaIcon,
+    Cake as CakeIcon,
+    Event as EventIcon,
 } from '@mui/icons-material';
 import MainLayout from '../components/layout/MainLayout';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { dashboardService } from '../services/appServices';
 
 // ─── Paleta CCO ───────────────────────────────────────────────
 const CCO = {
@@ -30,76 +33,8 @@ const CCO = {
     amarillo: '#F4C430',
 };
 
-// ─── Leer localStorage (datos reales) ────────────────────────
-const leer = (key, fallback) => {
-    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
-};
+// removed localStorage mock functions
 
-const getDashboardData = () => {
-    const infantesRaw = leer('cco_infantes_v2', []);
-    const totalInfantes = infantesRaw.length || 148;
-    const patrocinados = infantesRaw.filter(i => i.esPatrocinado).length || 82;
-
-    const asistencias = leer('cco_asistencias', []);
-    const mesActual = new Date().getMonth();
-    const asistMes = asistencias.filter(a => new Date(a.fecha).getMonth() === mesActual);
-    const pctAsistencia = asistMes.length > 0 ? Math.round((asistMes.filter(a => a.estado === 'Presente').length / asistMes.length) * 100) : 91;
-
-    const visitas = leer('cco_visitas', []);
-    const visitasAnio = visitas.filter(v => new Date(v.fecha).getFullYear() === new Date().getFullYear()).length || 131;
-    const sinVisita = Math.max(0, totalInfantes - visitasAnio);
-
-    const regalos = leer('cco_regalos', []);
-    const navidad = regalos.filter(r => r.tipo === 'regalo_navidad');
-    const kits = regalos.filter(r => r.tipo === 'kit_escolar');
-    const navEntregados = navidad.filter(r => r.estado === 'entregado').length || 95;
-    const kitsEntregados = kits.filter(r => r.estado === 'entregado').length || 73;
-    const navTotal = navidad.length || totalInfantes;
-    const kitsTotal = kits.length || totalInfantes;
-
-    const mesNombre = new Date().toLocaleString('es-EC', { month: 'long' });
-    const cumplesMes = infantesRaw
-        .filter(i => i.persona?.fechaNacimiento && new Date(i.persona.fechaNacimiento).getMonth() === mesActual)
-        .slice(0, 5)
-        .map(i => ({
-            nombre: `${i.persona.nombres} ${i.persona.apellidos}`,
-            fecha: new Date(i.persona.fechaNacimiento).toLocaleDateString('es-EC', { day: 'numeric', month: 'short' }),
-            edad: new Date().getFullYear() - new Date(i.persona.fechaNacimiento).getFullYear(),
-        }));
-    const cumplesFallback = [
-        { nombre: 'María Gabriela López', fecha: `12 ${mesNombre.slice(0, 3)}`, edad: 8 },
-        { nombre: 'José Andrés Pérez', fecha: `18 ${mesNombre.slice(0, 3)}`, edad: 6 },
-        { nombre: 'Camila Torres', fecha: `24 ${mesNombre.slice(0, 3)}`, edad: 10 },
-    ];
-
-    const materiales = leer('cco_materiales', []);
-    const matTotal = materiales.length || 54;
-    const stockBajo = materiales
-        .filter(m => (m.cantidad || m.cantidadDisponible || 0) < (m.stockMinimo || 5))
-        .slice(0, 5)
-        .map(m => ({ id: m.id, nombre: m.nombreMaterial || m.nombre, cantidad: m.cantidad || m.cantidadDisponible || 0, min: m.stockMinimo || 5 }));
-    const stockFallback = [
-        { id: 1, nombre: 'Cuadernos cuadros 100 hj', cantidad: 3, min: 10 },
-        { id: 2, nombre: 'Lápices HB', cantidad: 8, min: 20 },
-        { id: 3, nombre: 'Pegamento en barra', cantidad: 2, min: 5 },
-    ];
-
-    const usuarios = leer('cco_usuarios', []);
-    const usrActivos = usuarios.filter(u => u.activo).length || 5;
-    const tutores = usuarios.filter(u => ['tutor', 'tutor_especial'].includes(u.rol)).length || 3;
-
-    return {
-        totalInfantes, patrocinados, noPatrocinados: totalInfantes - patrocinados,
-        pctAsistencia, visitasAnio, sinVisita,
-        navEntregados, navTotal, kitsEntregados, kitsTotal,
-        cumplesMes: cumplesMes.length > 0 ? cumplesMes : cumplesFallback,
-        matTotal, stockBajo: stockBajo.length > 0 ? stockBajo : stockFallback,
-        usrActivos, tutores,
-        cumplesMes: cumplesMes.length > 0 ? cumplesMes : cumplesFallback,
-        matTotal, stockBajo: stockBajo.length > 0 ? stockBajo : stockFallback,
-        usrActivos, tutores,
-    };
-};
 
 // ─── Componentes ──────────────────────────────────────────────
 const StatCard = ({ icon, title, value, subtitle, color, chip, onClick }) => {
@@ -193,34 +128,34 @@ const GoBtn = ({ to, label }) => {
 const TabMinisterio = ({ d }) => {
     const theme = useTheme();
     const navigate = useNavigate();
-    const aColor = d.pctAsistencia >= 80 ? '#4caf50' : d.pctAsistencia >= 60 ? '#ff9800' : '#f44336';
+    const aColor = d.asistencia.pct >= 80 ? '#4caf50' : d.asistencia.pct >= 60 ? '#ff9800' : '#f44336';
 
     return (
         <Box>
-            <SectionTitle action={<GoBtn to="/infantes" label="Ver infantes" />}>👶 Infantes del Ministerio</SectionTitle>
+            <SectionTitle action={<GoBtn to="/infantes" label="Ver infantes" />}>Infantes del Ministerio</SectionTitle>
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard icon={<InfantesIcon sx={{ color: CCO.violeta, fontSize: 26 }} />}
-                        title="Total Infantes" value={d.totalInfantes}
-                        subtitle={`${d.patrocinados} patrocinados · ${d.noPatrocinados} sin patrocinio`}
+                        title="Total Infantes" value={d.infantes.total}
+                        subtitle={`${d.infantes.patrocinados} patrocinados · ${d.infantes.noPatrocinados} sin patrocinio`}
                         color={CCO.violeta} onClick={() => navigate('/infantes')} />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard icon={<AsistenciaIcon sx={{ color: aColor, fontSize: 26 }} />}
-                        title="Asistencia este Mes" value={`${d.pctAsistencia}%`}
+                        title="Asistencia este Mes" value={`${d.asistencia.pct}%`}
                         subtitle="Promedio mensual del ministerio"
                         color={aColor} onClick={() => navigate('/asistencia')} />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
-                    <StatCard icon={<VisitaIcon sx={{ color: d.sinVisita > 0 ? '#ef5350' : '#4caf50', fontSize: 26 }} />}
-                        title="Sin Visita este Año" value={d.sinVisita}
-                        subtitle={d.sinVisita > 0 ? 'Requieren visita domiciliaria' : 'Todos han sido visitados'}
-                        color={d.sinVisita > 0 ? '#ef5350' : '#4caf50'} onClick={() => navigate('/visitas')} />
+                    <StatCard icon={<VisitaIcon sx={{ color: d.visitas.sinVisita > 0 ? '#ef5350' : '#4caf50', fontSize: 26 }} />}
+                        title="Sin Visita este Año" value={d.visitas.sinVisita}
+                        subtitle={d.visitas.sinVisita > 0 ? 'Requieren visita domiciliaria' : 'Todos han sido visitados'}
+                        color={d.visitas.sinVisita > 0 ? '#ef5350' : '#4caf50'} onClick={() => navigate('/visitas')} />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard icon={<CheckIcon sx={{ color: '#4caf50', fontSize: 26 }} />}
-                        title="Visitas Realizadas" value={d.visitasAnio}
-                        subtitle={`de ${d.totalInfantes} infantes este año`}
+                        title="Visitas Realizadas" value={d.visitas.realizadas}
+                        subtitle={`de ${d.infantes.total} infantes este año`}
                         color="#4caf50" onClick={() => navigate('/visitas')} />
                 </Grid>
             </Grid>
@@ -229,21 +164,21 @@ const TabMinisterio = ({ d }) => {
                 {/* Regalos */}
                 <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
                     <SectionTitle action={<GoBtn to="/regalos" label="Ver regalos" />}>
-                        🎁 Regalos y Kits {new Date().getFullYear()}
+                        Regalos y Kits {new Date().getFullYear()}
                     </SectionTitle>
                     <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3, flex: 1 }}>
                         <CardContent sx={{ p: 3 }}>
-                            <ProgressBar label="Regalos de Navidad" value={d.navEntregados} total={d.navTotal} color="#ef5350" />
-                            <ProgressBar label="Kits Escolares" value={d.kitsEntregados} total={d.kitsTotal} color={CCO.azul} />
+                            <ProgressBar label="Regalos de Navidad" value={d.regalos.navidad.entregados} total={d.regalos.navidad.total} color="#ef5350" />
+                            <ProgressBar label="Kits Escolares" value={d.regalos.kits.entregados} total={d.regalos.kits.total} color={CCO.azul} />
                             <ProgressBar label="Atención Especial (est.)"
-                                value={Math.round(d.totalInfantes * 0.15)} total={d.totalInfantes} color={CCO.celeste} />
+                                value={Math.round(d.infantes.total * 0.15)} total={d.infantes.total} color={CCO.celeste} />
                         </CardContent>
                     </Card>
                 </Grid>
 
                 {/* Cumpleaños */}
                 <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <SectionTitle>🎂 Cumpleaños este Mes</SectionTitle>
+                    <SectionTitle>Cumpleaños este Mes</SectionTitle>
                     <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3, flex: 1 }}>
                         <CardContent sx={{ p: 3 }}>
                             {d.cumplesMes.length === 0 ? (
@@ -283,51 +218,55 @@ const TabMinisterio = ({ d }) => {
                 {/* Próximos Eventos del Ministerio */}
                 <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
                     <SectionTitle action={<GoBtn to="/calendario" label="Ver calendario" />}>
-                        📅 Próximos Eventos
+                        Próximos Eventos
                     </SectionTitle>
                     <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3, flex: 1 }}>
                         <CardContent sx={{ p: 3 }}>
-                            <List disablePadding>
-                                {[
-                                    { id: 1, titulo: 'Entrega Kits Escolares', fecha: '2026-03-27T09:00:00', desc: 'Entrega masiva de kits a infantes' },
-                                    { id: 2, titulo: 'Visitas Domiciliarias', fecha: '2026-03-30T08:00:00', desc: 'Visitas a familias del ministerio' },
-                                    { id: 3, titulo: 'Día del Niño — Actividad', fecha: '2026-04-05T10:00:00', desc: 'Celebración especial para infantes' },
-                                    { id: 4, titulo: 'Entrega Regalos Navidad', fecha: '2026-12-15T09:00:00', desc: 'Entrega anual de regalos de Navidad' },
-                                ].map((ev, i, arr) => {
-                                    const f = new Date(ev.fecha);
-                                    return (
-                                        <Box key={ev.id}>
-                                            <ListItem disableGutters sx={{ py: 1.25, alignItems: 'flex-start' }}>
-                                                <ListItemAvatar>
-                                                    <Box sx={{
-                                                        width: 44, height: 44, borderRadius: 2,
-                                                        bgcolor: alpha(CCO.violeta, 0.12),
-                                                        border: `1px solid ${alpha(CCO.violeta, 0.25)}`,
-                                                        display: 'flex', flexDirection: 'column',
-                                                        alignItems: 'center', justifyContent: 'center',
-                                                        flexShrink: 0,
-                                                    }}>
-                                                        <Typography sx={{ fontSize: 14, fontWeight: 900, color: CCO.violeta, lineHeight: 1 }}>
-                                                            {f.getDate()}
-                                                        </Typography>
-                                                        <Typography sx={{ fontSize: 8, fontWeight: 700, color: CCO.violeta, lineHeight: 1, mt: 0.25, opacity: 0.85 }}>
-                                                            {f.toLocaleString('es-EC', { month: 'short' }).toUpperCase()}
-                                                        </Typography>
-                                                    </Box>
-                                                </ListItemAvatar>
-                                                <ListItemText
-                                                    primary={ev.titulo}
-                                                    secondary={ev.desc}
-                                                    primaryTypographyProps={{ fontWeight: 800, fontSize: '0.85rem' }}
-                                                    secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                                                    sx={{ pl: 0.5 }}
-                                                />
-                                            </ListItem>
-                                            {i < arr.length - 1 && <Divider />}
-                                        </Box>
-                                    );
-                                })}
-                            </List>
+                            {d.eventos?.length === 0 ? (
+                                <Box sx={{ textAlign: 'center', py: 2 }}>
+                                    <EventIcon sx={{ fontSize: 40, color: 'text.disabled', opacity: 0.5 }} />
+                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                        No hay eventos programados
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                <List disablePadding>
+                                    {d.eventos.map((ev, i, arr) => {
+                                        const f = new Date(ev.fecha);
+                                        return (
+                                            <Box key={ev.id}>
+                                                <ListItem disableGutters sx={{ py: 1.25, alignItems: 'flex-start' }}>
+                                                    <ListItemAvatar>
+                                                        <Box sx={{
+                                                            width: 44, height: 44, borderRadius: 2,
+                                                            bgcolor: alpha(CCO.violeta, 0.12),
+                                                            border: `1px solid ${alpha(CCO.violeta, 0.25)}`,
+                                                            display: 'flex', flexDirection: 'column',
+                                                            alignItems: 'center', justifyContent: 'center',
+                                                            flexShrink: 0,
+                                                        }}>
+                                                            <Typography sx={{ fontSize: 14, fontWeight: 900, color: CCO.violeta, lineHeight: 1 }}>
+                                                                {f.getDate()}
+                                                            </Typography>
+                                                            <Typography sx={{ fontSize: 8, fontWeight: 700, color: CCO.violeta, lineHeight: 1, mt: 0.25, opacity: 0.85 }}>
+                                                                {f.toLocaleString('es-EC', { month: 'short' }).toUpperCase()}
+                                                            </Typography>
+                                                        </Box>
+                                                    </ListItemAvatar>
+                                                    <ListItemText
+                                                        primary={ev.titulo}
+                                                        secondary={ev.desc || 'Sin descripción'}
+                                                        primaryTypographyProps={{ fontWeight: 800, fontSize: '0.85rem' }}
+                                                        secondaryTypographyProps={{ fontSize: '0.75rem', sx: { display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' } }}
+                                                        sx={{ pl: 0.5 }}
+                                                    />
+                                                </ListItem>
+                                                {i < arr.length - 1 && <Divider />}
+                                            </Box>
+                                        );
+                                    })}
+                                </List>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -340,15 +279,15 @@ const TabMinisterio = ({ d }) => {
 const TabInventario = ({ d }) => {
     const theme = useTheme();
     const navigate = useNavigate();
-    const stockList = d.stockBajo;
+    const stockList = d.inventario.stockBajo;
 
     return (
         <Box>
-            <SectionTitle action={<GoBtn to="/inventario/materiales" label="Ir a Materiales" />}>📦 Inventario de Materiales</SectionTitle>
+            <SectionTitle action={<GoBtn to="/inventario/materiales" label="Ir a Materiales" />}>Inventario de Materiales</SectionTitle>
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={4}>
                     <StatCard icon={<InvIcon sx={{ color: CCO.azul, fontSize: 26 }} />}
-                        title="Materiales Registrados" value={d.matTotal}
+                        title="Materiales Registrados" value={d.inventario.matTotal}
                         subtitle="Artículos en el sistema" color={CCO.azul}
                         onClick={() => navigate('/inventario/materiales')} />
                 </Grid>
@@ -361,8 +300,8 @@ const TabInventario = ({ d }) => {
                 </Grid>
                 <Grid item xs={12} sm={4}>
                     <StatCard icon={<UsuariosIcon sx={{ color: CCO.violeta, fontSize: 26 }} />}
-                        title="Usuarios Activos" value={d.usrActivos}
-                        subtitle={`${d.tutores} tutores · ${d.usrActivos - d.tutores} otros`}
+                        title="Usuarios Activos" value={d.usuarios.activos}
+                        subtitle={`${d.usuarios.tutores} tutores · ${d.usuarios.activos - d.usuarios.tutores} otros`}
                         color={CCO.violeta} onClick={() => navigate('/usuarios')} />
                 </Grid>
             </Grid>
@@ -425,11 +364,26 @@ export default function DashboardPage() {
     const { user } = useAuth();
     const isDark = theme.palette.mode === 'dark';
     const [tab, setTab] = useState(0);
-    const d = useMemo(() => getDashboardData(), []);
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const res = await dashboardService.getStats();
+                setStats(res.data);
+            } catch (error) {
+                console.error('Error al cargar estadísticas:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStats();
+    }, []);
 
     const TABS = [
-        { label: '👶 Ministerio', badge: 0 },
-        { label: '📦 Inventario', badge: d.stockBajo.length },
+        { label: 'Ministerio', badge: 0 },
+        { label: 'Inventario', badge: stats?.inventario?.alertaCount || 0 },
     ];
 
     const hora = new Date().getHours();
@@ -442,10 +396,10 @@ export default function DashboardPage() {
                 {/* Header */}
                 <Box sx={{ mb: 3.5 }}>
                     <Typography variant="h4" fontWeight={900}>
-                        {saludo}, {user?.nombre?.split(' ')[0] || user?.username}! 👋
+                        {saludo}, {user?.nombre?.split(' ')[0] || user?.username}!
                     </Typography>
                     <Typography color="text.secondary" fontWeight={500} sx={{ mt: 0.5 }}>
-                        Sistema KidScam · CCO / Ministerio Vídas en Acción —{' '}
+                        Sistema KidScam · CCO / Ministerio Vidas en Acción —{' '}
                         {new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </Typography>
                 </Box>
@@ -492,8 +446,16 @@ export default function DashboardPage() {
                         to: { opacity: 1, transform: 'translateY(0)' },
                     },
                 }}>
-                    {tab === 0 && <TabMinisterio d={d} />}
-                    {tab === 1 && <TabInventario d={d} />}
+                    {loading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+                            <CircularProgress color="primary" />
+                        </Box>
+                    ) : (
+                        <>
+                            {tab === 0 && stats && <TabMinisterio d={stats} />}
+                            {tab === 1 && stats && <TabInventario d={stats} />}
+                        </>
+                    )}
                 </Box>
 
             </Box>

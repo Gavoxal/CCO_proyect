@@ -21,7 +21,6 @@ model Persona {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   infante         Infante?
-  miembro         Miembro?
   tutor           Tutor?
   usuario         Usuario?
 
@@ -45,6 +44,7 @@ model Usuario {
   reportesCreados ReporteIncidente[]
   seguimientos     SeguimientoIncidente[]
   persona         Persona?           @relation(fields: [personaId], references: [id])
+  regalosEntregados Regalo[]
 
   @@map("usuarios")
 }
@@ -203,50 +203,18 @@ model Regalo {
   foto          String?      @db.VarChar(500)
   anio          Int
   infanteId     Int
+  entregadoPorId Int?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   infante       Infante      @relation(fields: [infanteId], references: [id])
+  entregadoPor  Usuario?     @relation(fields: [entregadoPorId], references: [id])
 
   @@index([infanteId, anio])
+  @@index([entregadoPorId])
   @@map("regalos")
 }
 
-model Miembro {
-  id                     Int           @id @default(autoincrement())
-  tipoMembresia          TipoMembresia @default(Regular)
-  fechaIngreso           DateTime?     @db.Date
-  personaId              Int           @unique
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  casasDePazComoLider    CasaDePaz[]   @relation("LiderCasaPaz")
-  casasDePazComoAsistido CasaDePaz[]   @relation("AsistidoCasaPaz")
-  persona                Persona       @relation(fields: [personaId], references: [id])
 
-  @@map("miembros")
-}
-
-model CasaDePaz {
-  id                Int           @id @default(autoincrement())
-  codigo            String        @unique @db.VarChar(50)
-  fechaInicio       DateTime      @db.Date
-  fechaFin          DateTime?     @db.Date
-  red               String?       @db.VarChar(50)
-  estado            EstadoCasaPaz @default(EnProgreso)
-  lugar             String?       @db.VarChar(500)
-  diasVisita        String?       @db.VarChar(255)
-  foto              String?       @db.VarChar(500)
-  observaciones     String?       @db.Text
-  liderId           Int?
-  personaAsistidaId Int?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  lider             Miembro?      @relation("LiderCasaPaz", fields: [liderId], references: [id])
-  personaAsistida   Miembro?      @relation("AsistidoCasaPaz", fields: [personaAsistidaId], references: [id])
-
-  @@index([liderId], map: "casas_de_paz_liderId_fkey")
-  @@index([personaAsistidaId], map: "casas_de_paz_personaAsistidaId_fkey")
-  @@map("casas_de_paz")
-}
 
 model Evento {
   id          Int        @id @default(autoincrement())
@@ -301,23 +269,13 @@ enum EstadoRegalo {
   entregado
 }
 
-enum TipoMembresia {
-  Activo
-  Regular
-  Lider
-  Diacono
-}
 
-enum EstadoCasaPaz {
-  EnProgreso
-  Completada
-  Cancelada
-}
 
 enum TipoEvento {
   Ministerio
   Iglesia
   Emergencia
+  Feriado
 }
 
 enum TipoNotificacion {

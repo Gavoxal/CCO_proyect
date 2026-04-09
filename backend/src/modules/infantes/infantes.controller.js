@@ -196,3 +196,25 @@ export async function sinVisitaAnio(request, reply) {
 
     return ok(reply, infantes, { anio, total: infantes.length })
 }
+
+// PATCH /infantes/:id/ubicacion
+export async function actualizarUbicacion(request, reply) {
+    const db = request.server.db
+    const id = parseInt(request.params.id)
+    const { ubicacionGps } = request.body
+
+    try {
+        const infante = await db.infante.update({
+            where: { id },
+            data: {
+                persona: {
+                    update: { ubicacionGps }
+                }
+            },
+            include: { persona: true }
+        })
+        return ok(reply, infante)
+    } catch {
+        return notFound(reply)
+    }
+}

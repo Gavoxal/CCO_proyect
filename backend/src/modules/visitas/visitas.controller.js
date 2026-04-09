@@ -202,7 +202,7 @@ export async function eliminar(request, reply) {
 // GET /visitas/pendientes?anio=2025
 export async function listarPendientes(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { anio } = request.query
+    const { anio, search, tutorId } = request.query
     const db = request.server.db
 
     let range;
@@ -226,6 +226,19 @@ export async function listarPendientes(request, reply) {
             }
         }
     };
+
+    if (tutorId) {
+        where.tutorId = parseInt(tutorId)
+    }
+
+    if (search) {
+        const s = String(search).trim()
+        where.OR = [
+            { persona: { nombres: { contains: s, mode: 'insensitive' } } },
+            { persona: { apellidos: { contains: s, mode: 'insensitive' } } },
+            { codigo: { contains: s, mode: 'insensitive' } }
+        ]
+    }
 
     const [total, infantes] = await Promise.all([
         db.infante.count({ where }),

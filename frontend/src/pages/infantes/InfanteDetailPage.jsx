@@ -5,7 +5,7 @@ import {
     Tab, Tabs, Button, IconButton, Tooltip, Table, TableBody,
     TableCell, TableHead, TableRow, Alert, alpha, useTheme,
     LinearProgress, Paper, Divider, Stack, CircularProgress, Badge,
-    Dialog
+    Dialog, TextField
 } from '@mui/material';
 import {
     Edit as EditIcon, CameraAlt as CameraIcon, ArrowBack as BackIcon,
@@ -13,7 +13,8 @@ import {
     Home as HomeIcon, Badge as BadgeIcon, LocalHospital as MedIcon,
     CalendarMonth as CalIcon, CheckCircle as CheckIcon,
     Cancel as CancelIcon, Warning as WarningIcon,
-    PhotoCamera as PhotoIcon, Explore as MapIcon,
+    PhotoCamera as PhotoIcon, Explore as ExploreIcon,
+    Map as MapIcon,
     Close as CloseIcon, HomeWork as VisitaIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
@@ -30,8 +31,6 @@ const ESTADO_ICON = {
     Ausente: <CancelIcon sx={{ fontSize: 16 }} />,
     Justificado: <WarningIcon sx={{ fontSize: 16 }} />,
 };
-
-// MOCK y generator eliminados
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const calcEdad = (fechaNac) => {
@@ -60,18 +59,23 @@ const InfanteDetailPage = () => {
     const isDark = theme.palette.mode === 'dark';
     const { user } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
-    const fileRef = useRef(null);
 
+    // Estados primarios
+    const [infante, setInfante] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [tabIndex, setTabIndex] = useState(0);
     const [uploadingFoto, setUploadingFoto] = useState(false);
+    
+    // Estados de fotografía
     const [fotoPreview, setFotoPreview] = useState(null);
     const [fotoFecha, setFotoFecha] = useState(null);
     const [visorFoto, setVisorFoto] = useState(false);
 
-    const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
+    const fileRef = useRef(null);
 
-    const [infante, setInfante] = useState(null);
-    const [loading, setLoading] = useState(true);
+    // Permisos
+    const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
+    const isTutor = user?.rol === 'tutor' || user?.rol === 'tutor_especial';
 
     useEffect(() => {
         const cargar = async () => {
@@ -92,11 +96,10 @@ const InfanteDetailPage = () => {
     const edad = p.fechaNacimiento ? calcEdad(p.fechaNacimiento) : 0;
     const anio = new Date().getFullYear();
 
-    // Foto actual (con preview si se subió una nueva)
+    // Foto actual logic
     const currentFoto = fotoPreview || infante?.fotografia;
     const currentFotoFecha = fotoFecha || infante?.fechaActualizacionFoto;
 
-    // Color de la fecha de foto
     const getFotoFreshness = (fecha) => {
         if (!fecha) return { color: '#ef5350', label: 'Sin foto', icon: '📷' };
         const d = new Date(fecha);
@@ -125,7 +128,6 @@ const InfanteDetailPage = () => {
         }
     };
 
-    // Estadísticas de asistencia
     const asistStats = useMemo(() => {
         const total = infante?.asistencias?.length || 0;
         const presentes = infante?.asistencias?.filter(a => a.estado === 'Presente').length || 0;
@@ -142,16 +144,13 @@ const InfanteDetailPage = () => {
     return (
         <MainLayout>
             <Box sx={{ p: { xs: 1.5, md: 0 } }}>
-                {/* Hidden file input for photo upload */}
                 <input type="file" accept="image/*" ref={fileRef} style={{ display: 'none' }} onChange={handleFotoChange} />
 
-                {/* ── Back + Edit ──────────────────────────────────── */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-                    <Button startIcon={<BackIcon />} onClick={() => navigate('/infantes')} variant="outlined" size="small"
-                        sx={{ borderRadius: 2 }}>
+                    <Button startIcon={<BackIcon />} onClick={() => navigate('/infantes')} variant="outlined" size="small" sx={{ borderRadius: 2 }}>
                         Volver
                     </Button>
-                    {canWrite && (
+                    {(canWrite || isTutor) && (
                         <Stack direction="row" spacing={1}>
                             <Button
                                 startIcon={<VisitaIcon />}
@@ -166,24 +165,17 @@ const InfanteDetailPage = () => {
                             >
                                 Registrar Visita
                             </Button>
-                            <Button startIcon={<EditIcon />} onClick={() => navigate(`/infantes/${id}/editar`)} variant="contained" size="small"
-                                sx={{ borderRadius: 2, bgcolor: theme.palette.grey[700] }}>
+                            <Button startIcon={<EditIcon />} onClick={() => navigate(`/infantes/${id}/editar`)} variant="contained" size="small" sx={{ borderRadius: 2, bgcolor: theme.palette.grey[700] }}>
                                 Editar
                             </Button>
                         </Stack>
                     )}
                 </Box>
 
-                {/* ── Header Card ──────────────────────────────────── */}
                 <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 4, mb: 3, overflow: 'hidden' }}>
-                    {/* Gradient banner */}
-                    <Box sx={{
-                        height: 8,
-                        background: `linear-gradient(90deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
-                    }} />
+                    <Box sx={{ height: 8, background: `linear-gradient(90deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)` }} />
                     <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
                         <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                            {/* Avatar con foto */}
                             <Box sx={{ position: 'relative', textAlign: 'center' }}>
                                 <Badge
                                     overlap="circular"
@@ -191,16 +183,7 @@ const InfanteDetailPage = () => {
                                     badgeContent={
                                         canWrite ? (
                                             <Tooltip title="Actualizar foto">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => fileRef.current?.click()}
-                                                    disabled={uploadingFoto}
-                                                    sx={{
-                                                        bgcolor: 'background.paper', border: `2px solid ${fotoInfo.color}`,
-                                                        width: 32, height: 32,
-                                                        '&:hover': { bgcolor: alpha(fotoInfo.color, 0.1) },
-                                                    }}
-                                                >
+                                                <IconButton size="small" onClick={() => fileRef.current?.click()} disabled={uploadingFoto} sx={{ bgcolor: 'background.paper', border: `2px solid ${fotoInfo.color}`, width: 32, height: 32, '&:hover': { bgcolor: alpha(fotoInfo.color, 0.1) } }}>
                                                     {uploadingFoto ? <CircularProgress size={16} /> : <CameraIcon sx={{ fontSize: 16, color: fotoInfo.color }} />}
                                                 </IconButton>
                                             </Tooltip>
@@ -210,42 +193,20 @@ const InfanteDetailPage = () => {
                                     <Avatar
                                         src={currentFoto || undefined}
                                         onClick={() => currentFoto && setVisorFoto(true)}
-                                        sx={{
-                                            width: 110, height: 110, fontSize: '2.2rem', fontWeight: 800,
-                                            bgcolor: AVATAR_COLORS[infante.id % AVATAR_COLORS.length],
-                                            boxShadow: `0 4px 20px ${alpha(AVATAR_COLORS[infante.id % AVATAR_COLORS.length], 0.4)}`,
-                                            border: `3px solid ${fotoInfo.color}`,
-                                            cursor: currentFoto ? 'pointer' : 'default',
-                                        }}
+                                        sx={{ width: 110, height: 110, fontSize: '2.2rem', fontWeight: 800, bgcolor: AVATAR_COLORS[infante.id % AVATAR_COLORS.length], border: `3px solid ${fotoInfo.color}`, cursor: currentFoto ? 'pointer' : 'default' }}
                                     >
                                         {p.nombres?.charAt(0)}{p.apellidos?.charAt(0)}
                                     </Avatar>
                                 </Badge>
-                                {/* Fecha de foto */}
-                                <Chip
-                                    label={currentFoto ? fotoInfo.label : 'Sin foto'}
-                                    size="small"
-                                    sx={{
-                                        mt: 1, fontSize: '0.65rem', fontWeight: 600, height: 22,
-                                        bgcolor: alpha(fotoInfo.color, 0.1), color: fotoInfo.color,
-                                        border: `1px solid ${alpha(fotoInfo.color, 0.3)}`,
-                                    }}
-                                />
+                                <Chip label={currentFoto ? fotoInfo.label : 'Sin foto'} size="small" sx={{ mt: 1, fontSize: '0.65rem', fontWeight: 600, height: 22, bgcolor: alpha(fotoInfo.color, 0.1), color: fotoInfo.color, border: `1px solid ${alpha(fotoInfo.color, 0.3)}` }} />
                             </Box>
-                            {/* Info */}
                             <Box sx={{ flex: 1 }}>
                                 <Typography variant="h4" fontWeight={800}>{p.nombres} {p.apellidos}</Typography>
                                 <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
                                     <Chip label={`Código: ${infante.codigo}`} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
                                     <Chip label={infante.tipoPrograma} size="small" color="primary" sx={{ fontWeight: 600 }} />
-                                    <Chip
-                                        label={infante.esPatrocinado ? (infante.fuentePatrocinio && infante.fuentePatrocinio !== 'Ninguno' ? `Patrocinado · ${infante.fuentePatrocinio}` : 'Patrocinado') : 'Sin patrocinio'}
-                                        size="small"
-                                        color={infante.esPatrocinado ? 'success' : 'default'}
-                                        sx={{ fontWeight: 600 }}
-                                    />
-                                    <Chip icon={<CakeIcon sx={{ fontSize: 14 }} />} label={`${edad} años`} size="small"
-                                        sx={{ fontWeight: 600, bgcolor: alpha(CCO.azul, 0.1), color: CCO.azul }} />
+                                    <Chip label={infante.esPatrocinado ? (infante.fuentePatrocinio && infante.fuentePatrocinio !== 'Ninguno' ? `Patrocinado · ${infante.fuentePatrocinio}` : 'Patrocinado') : 'Sin patrocinio'} size="small" color={infante.esPatrocinado ? 'success' : 'default'} sx={{ fontWeight: 600 }} />
+                                    <Chip icon={<CakeIcon sx={{ fontSize: 14 }} />} label={`${edad} años`} size="small" sx={{ fontWeight: 600, bgcolor: alpha(CCO.azul, 0.1), color: CCO.azul }} />
                                 </Stack>
                                 {infante.tutor && (
                                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
@@ -253,36 +214,12 @@ const InfanteDetailPage = () => {
                                     </Typography>
                                 )}
                             </Box>
-                            {/* Stats rápidas */}
-                            <Stack spacing={1} sx={{ alignItems: 'flex-end', display: { xs: 'none', md: 'flex' } }}>
-                                <Chip label={`Asistencia: ${asistStats.porcentaje}%`} size="small"
-                                    color={asistStats.porcentaje >= 80 ? 'success' : asistStats.porcentaje >= 50 ? 'warning' : 'error'}
-                                    sx={{ fontWeight: 700, fontSize: '0.78rem' }} />
-                                <Chip
-                                    label={visitadoEsteAnio ? `✅ Visitado ${anio}` : `⚠️ Sin visita ${anio}`}
-                                    size="small"
-                                    color={visitadoEsteAnio ? 'success' : 'warning'}
-                                    variant="outlined"
-                                    sx={{ fontWeight: 600, fontSize: '0.72rem' }}
-                                />
-                            </Stack>
                         </Box>
                     </CardContent>
                 </Card>
 
-                {/* ── Tabs ─────────────────────────────────────────── */}
-                <Paper elevation={0} sx={{
-                    border: `1px solid ${theme.palette.divider}`, borderRadius: 3, overflow: 'hidden', mb: 3,
-                    bgcolor: isDark ? alpha('#fff', 0.02) : alpha('#000', 0.01),
-                }}>
-                    <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} variant="fullWidth"
-                        sx={{
-                            '& .MuiTabs-indicator': {
-                                height: 3, borderRadius: '3px 3px 0 0',
-                                background: `linear-gradient(90deg, ${CCO.naranja}, ${CCO.violeta})`,
-                            },
-                            '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', py: 1.8 },
-                        }}>
+                <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, overflow: 'hidden', mb: 3 }}>
+                    <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} variant="fullWidth" sx={{ '& .MuiTabs-indicator': { height: 3, background: `linear-gradient(90deg, ${CCO.naranja}, ${CCO.violeta})` }, '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', py: 1.8 } }}>
                         <Tab label="Datos Personales" icon={<BadgeIcon />} iconPosition="start" />
                         <Tab label={`Asistencia (${asistStats.total})`} icon={<CalIcon />} iconPosition="start" />
                         <Tab label={`Visitas (${infante.visitas?.length || 0})`} icon={<HomeIcon />} iconPosition="start" />
@@ -290,7 +227,6 @@ const InfanteDetailPage = () => {
                     </Tabs>
                 </Paper>
 
-                {/* ── Tab 0: Datos Personales ─────────────────────── */}
                 {tabIndex === 0 && (
                     <Grid container spacing={3}>
                         <Grid item xs={12} md={6}>
@@ -298,8 +234,7 @@ const InfanteDetailPage = () => {
                                 <CardContent sx={{ p: 3 }}>
                                     <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2.5 }}>Información Personal</Typography>
                                     <InfoRow icon={<BadgeIcon sx={{ color: 'text.secondary', fontSize: 20 }} />} label="Cédula" value={p.cedula} />
-                                    <InfoRow icon={<CakeIcon sx={{ color: 'text.secondary', fontSize: 20 }} />} label="Fecha de Nacimiento"
-                                        value={`${new Date(p.fechaNacimiento).toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' })} (${edad} años)`} />
+                                    <InfoRow icon={<CakeIcon sx={{ color: 'text.secondary', fontSize: 20 }} />} label="Fecha de Nacimiento" value={`${new Date(p.fechaNacimiento).toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' })} (${edad} años)`} />
                                     <InfoRow icon={<PhoneIcon sx={{ color: 'text.secondary', fontSize: 20 }} />} label="Teléfono 1" value={p.telefono1} />
                                     {p.telefono2 && <InfoRow icon={<PhoneIcon sx={{ color: 'text.secondary', fontSize: 20 }} />} label="Teléfono 2" value={p.telefono2} />}
                                     {p.email && <InfoRow icon={<EmailIcon sx={{ color: 'text.secondary', fontSize: 20 }} />} label="Email" value={p.email} />}
@@ -321,11 +256,7 @@ const InfanteDetailPage = () => {
                                             { label: 'Visitas', value: infante.visitas?.length || 0, color: CCO.azul },
                                             { label: 'Regalos', value: infante.regalos?.length || 0, color: CCO.violeta },
                                         ].map(s => (
-                                            <Box key={s.label} sx={{
-                                                flex: 1, textAlign: 'center', p: 2, borderRadius: 2,
-                                                bgcolor: alpha(s.color, 0.08), border: `1px solid ${alpha(s.color, 0.2)}`,
-                                                minWidth: 80,
-                                            }}>
+                                            <Box key={s.label} sx={{ flex: 1, textAlign: 'center', p: 2, borderRadius: 2, bgcolor: alpha(s.color, 0.08), border: `1px solid ${alpha(s.color, 0.2)}`, minWidth: 80 }}>
                                                 <Typography variant="h5" fontWeight={800} sx={{ color: s.color }}>{s.value}</Typography>
                                                 <Typography variant="caption" color="text.secondary" fontWeight={600}>{s.label}</Typography>
                                             </Box>
@@ -334,8 +265,6 @@ const InfanteDetailPage = () => {
                                 </CardContent>
                             </Card>
                         </Grid>
-
-                        {/* Mapa GPS en ancho completo */}
                         {p.ubicacionGps && (
                             <Grid item xs={12}>
                                 <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
@@ -345,11 +274,7 @@ const InfanteDetailPage = () => {
                                             <Typography variant="subtitle1" fontWeight={700}>Ubicación GPS (Google Maps)</Typography>
                                         </Box>
                                         <Box sx={{ width: '100%', height: 350, borderRadius: 3, overflow: 'hidden', border: `1px solid ${theme.palette.divider}` }}>
-                                            <iframe
-                                                width="100%" height="100%" style={{ border: 0 }} loading="lazy" allowFullScreen
-                                                src={`https://maps.google.com/maps?q=${encodeURIComponent(p.ubicacionGps)}&hl=es&z=15&output=embed`}
-                                                title="Ubicación GPS"
-                                            />
+                                            <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" allowFullScreen src={`https://maps.google.com/maps?q=${encodeURIComponent(p.ubicacionGps)}&hl=es&z=15&output=embed`} title="Ubicación GPS" />
                                         </Box>
                                     </CardContent>
                                 </Card>
@@ -358,60 +283,32 @@ const InfanteDetailPage = () => {
                     </Grid>
                 )}
 
-                {/* ── Tab 1: Asistencia ───────────────────────────── */}
                 {tabIndex === 1 && (
                     <Box>
-                        {/* Barra de progreso */}
                         <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3 }}>
                             <CardContent sx={{ p: 3 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                     <Typography variant="subtitle1" fontWeight={700}>Porcentaje de Asistencia</Typography>
-                                    <Chip label={`${asistStats.porcentaje}%`} size="small"
-                                        color={asistStats.porcentaje >= 80 ? 'success' : asistStats.porcentaje >= 50 ? 'warning' : 'error'}
-                                        sx={{ fontWeight: 700 }} />
+                                    <Chip label={`${asistStats.porcentaje}%`} size="small" color={asistStats.porcentaje >= 80 ? 'success' : 'warning'} sx={{ fontWeight: 700 }} />
                                 </Box>
-                                <LinearProgress variant="determinate" value={asistStats.porcentaje}
-                                    sx={{
-                                        height: 10, borderRadius: 5, mb: 2,
-                                        bgcolor: alpha('#000', 0.08),
-                                        '& .MuiLinearProgress-bar': { borderRadius: 5, bgcolor: asistStats.porcentaje >= 80 ? '#4caf50' : asistStats.porcentaje >= 50 ? '#ff9800' : '#ef5350' },
-                                    }} />
+                                <LinearProgress variant="determinate" value={asistStats.porcentaje} sx={{ height: 10, borderRadius: 5, mb: 2, bgcolor: alpha('#000', 0.08), '& .MuiLinearProgress-bar': { bgcolor: asistStats.porcentaje >= 80 ? '#4caf50' : '#ff9800' } }} />
                                 <Stack direction="row" spacing={3}>
-                                    <Typography variant="body2" color="text.secondary">
-                                        ✅ Presentes: <b>{asistStats.presentes}</b>
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        ❌ Ausentes: <b>{asistStats.ausentes}</b>
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        ⚠️ Justificados: <b>{asistStats.justificados}</b>
-                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">✅ Presentes: <b>{asistStats.presentes}</b></Typography>
+                                    <Typography variant="body2" color="text.secondary">❌ Ausentes: <b>{asistStats.ausentes}</b></Typography>
+                                    <Typography variant="body2" color="text.secondary">⚠️ Justificados: <b>{asistStats.justificados}</b></Typography>
                                 </Stack>
                             </CardContent>
                         </Card>
-
                         <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, overflow: 'hidden' }}>
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Fecha</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado</TableCell>
-                                    </TableRow>
-                                </TableHead>
+                                <TableHead><TableRow><TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Fecha</TableCell><TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado</TableCell></TableRow></TableHead>
                                 <TableBody>
                                     {(!infante.asistencias || infante.asistencias.length === 0) ? (
                                         <TableRow><TableCell colSpan={2}><Alert severity="info" sx={{ borderRadius: 2 }}>Sin registros de asistencia</Alert></TableCell></TableRow>
                                     ) : infante.asistencias.map(a => (
                                         <TableRow key={a.id} hover>
-                                            <TableCell>
-                                                <Typography variant="body2" fontWeight={500}>
-                                                    {new Date(a.fecha).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip icon={ESTADO_ICON[a.estado]} label={a.estado} size="small"
-                                                    color={ESTADO_COLOR[a.estado]} variant="outlined" sx={{ fontWeight: 600 }} />
-                                            </TableCell>
+                                            <TableCell><Typography variant="body2" fontWeight={500}>{new Date(a.fecha).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}</Typography></TableCell>
+                                            <TableCell><Chip icon={ESTADO_ICON[a.estado]} label={a.estado} size="small" color={ESTADO_COLOR[a.estado]} variant="outlined" sx={{ fontWeight: 600 }} /></TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -420,13 +317,8 @@ const InfanteDetailPage = () => {
                     </Box>
                 )}
 
-                {/* ── Tab 2: Visitas ──────────────────────────────── */}
                 {tabIndex === 2 && (
                     <Box>
-                        {visitadoEsteAnio
-                            ? <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>✅ Este infante ha sido visitado en {anio}</Alert>
-                            : <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>⚠️ Este infante aún no ha sido visitado en {anio}</Alert>
-                        }
                         {(!infante.visitas || infante.visitas.length === 0) ? (
                             <Alert severity="info" sx={{ borderRadius: 2 }}>No hay visitas registradas para este infante</Alert>
                         ) : (
@@ -436,15 +328,9 @@ const InfanteDetailPage = () => {
                                         <CardContent sx={{ p: 2.5 }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
                                                 <CalIcon sx={{ color: CCO.azul, fontSize: 20 }} />
-                                                <Typography variant="subtitle2" fontWeight={700} sx={{ textTransform: 'capitalize' }}>
-                                                    {new Date(v.fecha).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                                                </Typography>
+                                                <Typography variant="subtitle2" fontWeight={700} sx={{ textTransform: 'capitalize' }}>{new Date(v.fecha).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</Typography>
                                             </Box>
-                                            <Box sx={{
-                                                p: 2, borderRadius: 2,
-                                                bgcolor: isDark ? alpha('#fff', 0.03) : alpha('#000', 0.02),
-                                                border: `1px solid ${theme.palette.divider}`,
-                                            }}>
+                                            <Box sx={{ p: 2, borderRadius: 2, bgcolor: isDark ? alpha('#fff', 0.03) : alpha('#000', 0.02), border: `1px solid ${theme.palette.divider}` }}>
                                                 <Typography variant="body2" color="text.secondary">{v.observaciones || 'Sin observaciones'}</Typography>
                                             </Box>
                                         </CardContent>
@@ -455,63 +341,32 @@ const InfanteDetailPage = () => {
                     </Box>
                 )}
 
-                {/* ── Tab 3: Regalos ──────────────────────────────── */}
                 {tabIndex === 3 && (
                     <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, overflow: 'hidden' }}>
                         <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Año</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Tipo</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Fecha Entrega</TableCell>
-                                </TableRow>
-                            </TableHead>
+                            <TableHead><TableRow><TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Año</TableCell><TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Tipo</TableCell><TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado</TableCell><TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Fecha Entrega</TableCell></TableRow></TableHead>
                             <TableBody>
                                 {(!infante.regalos || infante.regalos.length === 0) ? (
                                     <TableRow><TableCell colSpan={4}><Alert severity="info" sx={{ borderRadius: 2 }}>Sin regalos registrados</Alert></TableCell></TableRow>
-                                ) : infante.regalos.map(r => {
-                                    const tipoLabel = { navidad: '🎄 Navidad', kit_escolar: '🎒 Kit Escolar', cumpleanos: '🎂 Cumpleaños' };
-                                    return (
-                                        <TableRow key={r.id} hover>
-                                            <TableCell><Typography variant="body2" fontWeight={600}>{r.anio}</Typography></TableCell>
-                                            <TableCell>
-                                                <Chip label={tipoLabel[r.tipo] || r.tipo} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={r.estado === 'entregado' ? '✅ Entregado' : '⏳ Pendiente'}
-                                                    size="small"
-                                                    color={r.estado === 'entregado' ? 'success' : 'warning'}
-                                                    sx={{ fontWeight: 600 }}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2">
-                                                    {r.fechaEntrega ? new Date(r.fechaEntrega).toLocaleDateString('es-EC') : '—'}
-                                                </Typography>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
+                                ) : infante.regalos.map(r => (
+                                    <TableRow key={r.id} hover>
+                                        <TableCell><Typography variant="body2" fontWeight={600}>{r.anio}</Typography></TableCell>
+                                        <TableCell><Chip label={r.tipo} size="small" variant="outlined" sx={{ fontWeight: 600 }} /></TableCell>
+                                        <TableCell><Chip label={r.estado} size="small" color={r.estado === 'entregado' ? 'success' : 'warning'} sx={{ fontWeight: 600 }} /></TableCell>
+                                        <TableCell><Typography variant="body2">{r.fechaEntrega ? new Date(r.fechaEntrega).toLocaleDateString('es-EC') : '—'}</Typography></TableCell>
+                                    </TableRow>
+                                ))}
                             </TableBody>
                         </Table>
                     </Paper>
                 )}
 
-                {/* Modal para ver foto en grande */}
                 <Dialog open={visorFoto} onClose={() => setVisorFoto(false)} maxWidth="sm" fullWidth>
                     <Box sx={{ position: 'relative', bgcolor: '#000' }}>
-                        <IconButton
-                            onClick={() => setVisorFoto(false)}
-                            sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
-                        >
-                            <CloseIcon />
-                        </IconButton>
-                        <img src={currentFoto} alt="Foto del Infante" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
+                        <IconButton onClick={() => setVisorFoto(false)} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}><CloseIcon /></IconButton>
+                        <img src={currentFoto} alt="Foto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
                     </Box>
                 </Dialog>
-
             </Box>
         </MainLayout>
     );

@@ -7,11 +7,11 @@ export default async function usuariosRoutes(fastify) {
     const todos = { preHandler: [requireRoles(...ROLES.TODOS)] }
 
     fastify.get('/', superAdmins, listar)
+    fastify.get('/tutores', todos, listarTutores)
     fastify.get('/:id', todos, obtener)
     fastify.post('/', superAdmins, crear)
     fastify.put('/:id', todos, actualizar)
     fastify.post('/:id/foto', todos, subirFoto)
-    fastify.get('/tutores', todos, listarTutores)
     fastify.delete('/:id', superAdmins, eliminar)
 }
 

@@ -84,6 +84,8 @@ export default function VisitasPage() {
     const [histRowsPerPage, setHistRowsPerPage] = useState(10);
     const [pendPage, setPendPage] = useState(0);
     const [pendRowsPerPage, setPendRowsPerPage] = useState(10);
+    const [searchPend, setSearchPend] = useState('');
+    const [filtroTutorPend, setFiltroTutorPend] = useState('');
 
     const schoolYear = useMemo(() => getSchoolYearRange(filtroAnio), [filtroAnio]);
 
@@ -112,6 +114,8 @@ export default function VisitasPage() {
         try {
             const res = await visitaService.listarPendientes({
                 anio: filtroAnio,
+                search: searchPend,
+                tutorId: filtroTutorPend,
                 page: pendPage + 1,
                 limit: pendRowsPerPage
             });
@@ -164,7 +168,7 @@ export default function VisitasPage() {
             setEditId(null);
             resetForm();
         }
-    }, [tabIndex, filtroAnio, searchHist, filtroTutor, histPage, histRowsPerPage, pendPage, pendRowsPerPage]);
+    }, [tabIndex, filtroAnio, searchHist, filtroTutor, histPage, histRowsPerPage, pendPage, pendRowsPerPage, searchPend, filtroTutorPend]);
 
     const handleExportExcel = () => {
         try {
@@ -639,6 +643,46 @@ export default function VisitasPage() {
                                 <Alert severity="info" sx={{ mb: 3, borderRadius: 3 }}>
                                     Listado de infantes que aún <strong>no han recibido una visita exitosa</strong> en el año lectivo seleccionado ({filtroAnio} - {filtroAnio + 1}).
                                 </Alert>
+
+                                <Grid container spacing={2} sx={{ mb: 3 }}>
+                                    <Grid item xs={12} md={7}>
+                                        <TextField
+                                            size="small"
+                                            fullWidth
+                                            placeholder="Buscar niño por nombre o código..."
+                                            value={searchPend}
+                                            onChange={e => { setSearchPend(e.target.value); setPendPage(0); }}
+                                            InputProps={{
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        <SearchIcon fontSize="small" />
+                                                    </InputAdornment>
+                                                ),
+                                                sx: { borderRadius: 2 }
+                                            }}
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} md={5}>
+                                        <Autocomplete
+                                            size="small"
+                                            options={tutoresLista}
+                                            getOptionLabel={(option) => `${option.persona?.nombres} ${option.persona?.apellidos}`}
+                                            value={tutoresLista.find(t => t.id === filtroTutorPend) || null}
+                                            onChange={(_, newValue) => { setFiltroTutorPend(newValue?.id || ''); setPendPage(0); }}
+                                            renderInput={(params) => (
+                                                <TextField
+                                                    {...params}
+                                                    label="Filtrar por Tutor"
+                                                    InputProps={{
+                                                        ...params.InputProps,
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            )}
+                                        />
+                                    </Grid>
+                                </Grid>
+
                                 <Box sx={{ overflowX: 'auto' }}>
                                     <Table>
                                         <TableHead>

@@ -8,6 +8,7 @@ import { ArrowBack as BackIcon, Save as SaveIcon, PersonAdd as AddPersonIcon, Ph
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
 import { infantesService, usuariosService } from '../../services/appServices';
+import { useAuth } from '../../context/AuthContext';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -85,8 +86,10 @@ const InfanteFormPage = () => {
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
+    const { user } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const isEditing = !!id;
+    const isTutor = user?.rol === 'tutor';
 
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
@@ -98,15 +101,14 @@ const InfanteFormPage = () => {
     useEffect(() => {
         const fetchTutores = async () => {
             try {
-                const res = await usuariosService.listar({ limit: 500 });
-                const tutoresActivos = res.data.filter(u =>
-                    (u.rol === 'tutor' || u.rol === 'tutor_especial') && u.activo && u.persona?.tutor?.id
-                ).map(u => ({
-                    id: u.persona.tutor.id,
-                    nombres: u.persona.nombres,
-                    apellidos: u.persona.apellidos
+                const res = await usuariosService.listarTutores();
+                // El backend ya devuelve [{ id, persona: { nombres, apellidos } }]
+                const tutoresList = res.data.map(t => ({
+                    id: t.id,
+                    nombres: t.persona.nombres,
+                    apellidos: t.persona.apellidos
                 }));
-                setTutores(tutoresActivos);
+                setTutores(tutoresList);
             } catch (err) {
                 console.error("Error obteniendo tutores", err);
             }
@@ -210,7 +212,11 @@ const InfanteFormPage = () => {
             };
             let responseId = id;
             if (isEditing) {
-                await infantesService.actualizar(id, payload);
+                if (isTutor) {
+                    await infantesService.actualizarUbicacion(id, form.persona.ubicacionGps);
+                } else {
+                    await infantesService.actualizar(id, payload);
+                }
             } else {
                 const res = await infantesService.crear(payload);
                 responseId = res.data.id;
@@ -282,6 +288,7 @@ const InfanteFormPage = () => {
                                 <TextField fullWidth label="Código del Infante" value={form.codigo}
                                     onChange={e => set('codigo', e.target.value)}
                                     size="small"
+                                    disabled={isTutor && isEditing}
                                     helperText="Formato: EC0802XXXXX"
                                     sx={{ '& input': { fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 } }}
                                 />
@@ -290,6 +297,7 @@ const InfanteFormPage = () => {
                             {/* Tipo Programa */}
                             <Grid item xs={12} sm={6} md={3}>
                                 <TextField fullWidth select label="Tipo de Programa" value={form.tipoPrograma || 'Ministerio'}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => set('tipoPrograma', e.target.value)} size="small"
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value="Ministerio">Ministerio</MenuItem>
@@ -306,9 +314,10 @@ const InfanteFormPage = () => {
                                     borderRadius: 2.5, px: 2, py: 1,
                                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                     bgcolor: form.esPatrocinado ? alpha('#4caf50', 0.06) : 'transparent',
-                                    transition: 'all .2s ease', cursor: 'pointer',
+                                    transition: 'all .2s ease', cursor: (isTutor && isEditing) ? 'default' : 'pointer',
                                     height: '100%', minHeight: 48,
-                                }} onClick={() => set('esPatrocinado', !form.esPatrocinado)}>
+                                    opacity: (isTutor && isEditing) ? 0.8 : 1
+                                }} onClick={() => !(isTutor && isEditing) && set('esPatrocinado', !form.esPatrocinado)}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         {form.esPatrocinado
                                             ? <CheckedIcon sx={{ color: 'success.main', fontSize: 20 }} />
@@ -318,18 +327,20 @@ const InfanteFormPage = () => {
                                                 color={form.esPatrocinado ? 'success.main' : 'text.secondary'}>
                                                 {form.esPatrocinado ? 'Patrocinado' : 'No Patrocinado'}
                                             </Typography>
-                                            <Typography variant="caption" color="text.disabled">Toca para cambiar</Typography>
+                                            <Typography variant="caption" color="text.disabled">
+                                                {(isTutor && isEditing) ? 'Lectura' : 'Toca para cambiar'}
+                                            </Typography>
                                         </Box>
                                     </Box>
-                                    <Switch checked={form.esPatrocinado} onChange={e => { e.stopPropagation(); set('esPatrocinado', e.target.checked); }} color="success" />
+                                    <Switch checked={form.esPatrocinado} disabled={isTutor && isEditing} onChange={e => { e.stopPropagation(); set('esPatrocinado', e.target.checked); }} color="success" />
                                 </Box>
                             </Grid>
 
                             {/* Fuente Patrocinio */}
                             <Grid item xs={12} sm={6} md={3}>
                                 <TextField fullWidth select label="Fuente de Patrocinio" value={form.esPatrocinado ? (form.fuentePatrocinio || 'Compassion') : 'Ninguno'}
+                                    disabled={!form.esPatrocinado || (isTutor && isEditing)}
                                     onChange={e => set('fuentePatrocinio', e.target.value)} size="small"
-                                    disabled={!form.esPatrocinado}
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value="Ninguno" disabled><em>Ninguno</em></MenuItem>
                                     <MenuItem value="Compassion">Compassion</MenuItem>
@@ -355,11 +366,13 @@ const InfanteFormPage = () => {
                                         <input ref={fotoRef} type="file" accept="image/*" onChange={handleFoto} style={{ display: 'none' }} />
                                         <Button variant="outlined" startIcon={<CameraIcon />}
                                             onClick={() => fotoRef.current?.click()}
+                                            disabled={isTutor && isEditing}
                                             size="small" sx={{ borderRadius: 2, fontWeight: 700 }}>
                                             {form.foto ? 'Cambiar foto' : 'Subir foto'}
                                         </Button>
                                         {form.foto && (
                                             <Button variant="text" color="error" startIcon={<DeleteIcon />}
+                                                disabled={isTutor && isEditing}
                                                 onClick={() => set('foto', '')} size="small"
                                                 sx={{ borderRadius: 2, fontWeight: 700 }}>
                                                 Quitar foto
@@ -373,13 +386,15 @@ const InfanteFormPage = () => {
                             </Grid>
 
                             {/* Enfermedades y alergias */}
-                            <Grid item xs={12} sm={6}>
+                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Enfermedades" value={form.enfermedades}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => set('enfermedades', e.target.value)} size="small" multiline rows={2}
                                     placeholder="Ninguna conocida..." />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Alergias" value={form.alergias}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => set('alergias', e.target.value)} size="small" multiline rows={2}
                                     placeholder="Ninguna conocida..." />
                             </Grid>
@@ -405,23 +420,28 @@ const InfanteFormPage = () => {
                         <Grid container spacing={2.5}>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Nombres *" value={form.persona.nombres}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('nombres', e.target.value)} required size="small" />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Apellidos *" value={form.persona.apellidos}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('apellidos', e.target.value)} required size="small" />
                             </Grid>
-                            <Grid item xs={12} sm={4}>
+                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label="Fecha de Nacimiento" type="date" value={form.persona.fechaNacimiento}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('fechaNacimiento', e.target.value)} size="small"
                                     slotProps={{ inputLabel: { shrink: true } }} />
                             </Grid>
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label="Cédula" value={form.persona.cedula}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('cedula', e.target.value)} size="small" placeholder="0900000000" />
                             </Grid>
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth select label="Tutor" value={form.tutorId || ''}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => set('tutorId', e.target.value ? Number(e.target.value) : '')} size="small"
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value=""><em>Sin tutor asignado</em></MenuItem>
@@ -445,24 +465,29 @@ const InfanteFormPage = () => {
                         <Grid container spacing={2.5}>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Cuidador / Representante" value={form.persona.cuidador}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('cuidador', e.target.value)} size="small"
                                     placeholder="Nombre completo del cuidador" />
                             </Grid>
                             <Grid item xs={12} sm={3}>
                                 <TextField fullWidth label="Teléfono *" value={form.persona.telefono}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('telefono', e.target.value)} required size="small"
                                     placeholder="098 563 3054" />
                             </Grid>
                             <Grid item xs={12} sm={3}>
                                 <TextField fullWidth label="Teléfono 2" value={form.persona.telefono2}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('telefono2', e.target.value)} size="small" />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Email" value={form.persona.email}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('email', e.target.value)} type="email" size="small" />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Dirección" value={form.persona.direccion}
+                                    disabled={isTutor && isEditing}
                                     onChange={e => setP('direccion', e.target.value)} size="small"
                                     placeholder="Sector, calle, referencia..." />
                             </Grid>
@@ -488,7 +513,7 @@ const InfanteFormPage = () => {
                                         center={
                                             form.persona.ubicacionGps && form.persona.ubicacionGps.includes(',') && !isNaN(parseFloat(form.persona.ubicacionGps.split(',')[0]))
                                                 ? { lat: parseFloat(form.persona.ubicacionGps.split(',')[0]), lng: parseFloat(form.persona.ubicacionGps.split(',')[1]) }
-                                                : { lat: -3.997809, lng: -79.222595 } // Loja, Ecuador por defecto
+                                                : { lat: -3.9981475756778724, lng: -79.22222229544305 } // Coordenadas predeterminadas (Loja)
                                         }
                                         zoom={14} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }}>
                                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />

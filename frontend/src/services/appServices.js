@@ -46,14 +46,16 @@ export const usuariosService = {
         return api.post(`/usuarios/${id}/foto`, fd, {
             headers: { 'Content-Type': 'multipart/form-data' }
         }).then(r => r.data);
-    }
+    },
+    listarTutores: () => api.get('/usuarios/tutores').then(r => r.data),
 };
 
 export const infantesService = {
     listar: (params) => api.get('/infantes', { params }).then(r => r.data),
     obtener: (id) => api.get(`/infantes/${id}`).then(r => r.data),
     crear: (body) => api.post('/infantes', body).then(r => r.data),
-    actualizar: (id, body) => api.put(`/infantes/${id}`, body).then(r => r.data),
+    actualizar: (id, payload) => api.put(`/infantes/${id}`, payload).then(r => r.data),
+    actualizarUbicacion: (id, ubicacionGps) => api.patch(`/infantes/${id}/ubicacion`, { ubicacionGps }).then(r => r.data),
     eliminar: (id) => api.delete(`/infantes/${id}`).then(r => r.data),
     subirFoto: (id, file) => {
         const fd = new FormData();
@@ -122,6 +124,12 @@ export const regalosService = {
     crear: (body) => api.post('/regalos', body).then(r => r.data),
     actualizar: (id, body) => api.put(`/regalos/${id}`, body).then(r => r.data),
     eliminar: (id) => api.delete(`/regalos/${id}`).then(r => r.data),
+    subirFoto: (id, file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return api.post(`/regalos/${id}/foto`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+    },
+    generarLote: (body) => api.post('/regalos/generar-lote', body).then(r => r.data),
 };
 
 
@@ -145,9 +153,16 @@ export const importService = {
         fd.append('file', file);
         return api.post('/import/infantes', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
     },
-    importarRegalos: (file) => {
+    importarRegalos: (file, params) => {
         const fd = new FormData();
         fd.append('file', file);
-        return api.post('/import/regalos', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+        return api.post('/import/regalos', fd, { 
+            params,
+            headers: { 'Content-Type': 'multipart/form-data' } 
+        }).then(r => r.data);
     },
+};
+
+export const dashboardService = {
+    getStats: () => api.get('/dashboard/stats').then(r => r.data),
 };

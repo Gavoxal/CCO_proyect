@@ -34,6 +34,10 @@ const COLUMN_MAP = {
     'enfermedades': 'enfermedades', 'enfermedad': 'enfermedades',
     'alergias': 'alergias', 'alergia': 'alergias',
     'cuidador': 'cuidador',
+    // Regalos
+    'estado': 'estado', 'status': 'estado', 'entregado': 'estado',
+    'fecha': 'fechaEntrega', 'fecha entrega': 'fechaEntrega', 'date': 'fechaEntrega',
+    'entregado por': 'entregadoPor', 'responsable': 'entregadoPor', 'quien entrego': 'entregadoPor', 'usuario': 'entregadoPor', 'user': 'entregadoPor',
 }
 
 /**
@@ -241,51 +245,91 @@ export async function importarRegalos(request, reply) {
     const buffer = await data.toBuffer()
     const rows = await parseFileBuffer(buffer, data.mimetype)
 
-    const resultados = { exitosos: 0, errores: [] }
-    const anio = new Date().getFullYear()
+    // Valores por defecto desde query params
+    const queryAnio = request.query.anio ? parseInt(request.query.anio) : new Date().getFullYear()
+    const queryTipo = request.query.tipo || 'regalo_navidad'
 
-    for (const [i, row] of rows.entries()) {
+    const resultados = { exitosos: 0, actualizados: 0, errores: [] }
+
+    for (const [i, rawRow] of rows.entries()) {
         try {
-            const codigoInfante = String(row.codigoInfante || '').trim()
-            if (!codigoInfante || !row.tipo) {
-                resultados.errores.push({ fila: i + 2, error: 'Falta codigoInfante o tipo' })
+            const row = normalizeRow(rawRow)
+            const codigoInfante = String(row.codigo || row.codigoinfante || row.id || '').trim()
+            
+            if (!codigoInfante) {
+                resultados.errores.push({ fila: i + 2, error: 'Falta codigo del infante' })
                 continue
             }
 
+            // 1. Buscar Infante
             const infante = await db.infante.findUnique({ where: { codigo: codigoInfante } })
             if (!infante) {
-                resultados.errores.push({ fila: i + 2, error: `Infante con código ${codigoInfante} no encontrado` })
+                resultados.errores.push({ fila: i + 2, error: `Infante ${codigoInfante} no encontrado` })
                 continue
             }
 
-            await db.regalo.upsert({
-                where: {
-                    // Buscar regalo del mismo año y tipo para el mismo infante
-                    id: 0  // Workaround: buscar primero
-                },
-                create: {
-                    tipo: row.tipo,
-                    estado: row.estado || 'pendiente',
-                    anio,
-                    infanteId: infante.id,
-                    observaciones: row.observaciones || null,
-                    fechaEntrega: row.fechaEntrega ? new Date(row.fechaEntrega) : null
-                },
-                update: {}
-            }).catch(async () => {
-                // Si no existe, crear
-                return db.regalo.create({
-                    data: {
-                        tipo: row.tipo, estado: row.estado || 'pendiente',
-                        anio, infanteId: infante.id,
-                        observaciones: row.observaciones || null,
-                        fechaEntrega: row.fechaEntrega ? new Date(row.fechaEntrega) : null
+            // 2. Procesar fecha
+            let fechaEntrega = null
+            if (row.fechaEntrega) {
+                if (typeof row.fechaEntrega === 'number') {
+                    const excelEpoch = new Date(1899, 11, 30)
+                    fechaEntrega = new Date(excelEpoch.getTime() + row.fechaEntrega * 86400000)
+                } else {
+                    const d = new Date(row.fechaEntrega)
+                    if (!isNaN(d.getTime())) fechaEntrega = d
+                }
+            }
+
+            // 3. Buscar Usuario que entregó
+            let entregadoPorId = null
+            if (row.entregadoPor) {
+                const search = String(row.entregadoPor).trim()
+                const u = await db.usuario.findFirst({
+                    where: {
+                        OR: [
+                            { username: { contains: search } },
+                            { persona: { nombres: { contains: search } } },
+                            { persona: { apellidos: { contains: search } } }
+                        ]
                     }
                 })
+                if (u) entregadoPorId = u.id
+            }
+
+            // 4. Determinar datos
+            const anio = row.anio ? parseInt(row.anio) : queryAnio
+            const tipo = row.tipo || queryTipo
+            const estadoStr = String(row.estado || 'pendiente').toLowerCase()
+            const estado = (estadoStr === 'entregado' || estadoStr === 'sí' || estadoStr === 'si' || estadoStr === '1') ? 'entregado' : 'pendiente'
+
+            const regaloData = {
+                tipo,
+                anio,
+                infanteId: infante.id,
+                estado,
+                fechaEntrega: estado === 'entregado' ? (fechaEntrega || new Date()) : null,
+                entregadoPorId: estado === 'entregado' ? entregadoPorId : null,
+                observaciones: row.observaciones || null
+            }
+
+            // 5. Upsert lógico por Infante/Tipo/Año
+            const existing = await db.regalo.findFirst({
+                where: { infanteId: infante.id, tipo, anio }
             })
 
-            resultados.exitosos++
+            if (existing) {
+                await db.regalo.update({
+                    where: { id: existing.id },
+                    data: regaloData
+                })
+                resultados.actualizados++
+            } else {
+                await db.regalo.create({ data: regaloData })
+                resultados.exitosos++
+            }
+
         } catch (err) {
+            request.server.log.error(`❌ Error importando regalo fila ${i + 2}: ${err.message}`)
             resultados.errores.push({ fila: i + 2, error: err.message })
         }
     }

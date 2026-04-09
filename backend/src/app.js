@@ -23,11 +23,10 @@ import visitasRoutes from './modules/visitas/visitas.routes.js'
 import materialesRoutes from './modules/inventario/materiales/materiales.routes.js'
 import incidentesRoutes from './modules/reporteIncidentes/reporteIncidentes.routes.js'
 import regalosRoutes from './modules/regalos/regalos.routes.js'
-import miembrosRoutes from './modules/miembros/miembros.routes.js'
-import casasPazRoutes from './modules/casasDePaz/casasDePaz.routes.js'
 import eventosRoutes from './modules/eventos/eventos.routes.js'
 import notificacionesRoutes from './modules/notificaciones/notificaciones.routes.js'
 import importRoutes from './modules/import/import.routes.js'
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
 
 export async function buildApp() {
     const app = Fastify({
@@ -99,11 +98,11 @@ export async function buildApp() {
     app.register(materialesRoutes, { prefix: `${API_PREFIX}/inventario/materiales` })
     app.register(incidentesRoutes, { prefix: `${API_PREFIX}/incidentes` })
     app.register(regalosRoutes, { prefix: `${API_PREFIX}/regalos` })
-    app.register(miembrosRoutes, { prefix: `${API_PREFIX}/miembros` })
-    app.register(casasPazRoutes, { prefix: `${API_PREFIX}/casas-de-paz` })
+
     app.register(eventosRoutes, { prefix: `${API_PREFIX}/eventos` })
     app.register(notificacionesRoutes, { prefix: `${API_PREFIX}/notificaciones` })
     app.register(importRoutes, { prefix: `${API_PREFIX}/import` })
+    app.register(dashboardRoutes, { prefix: `${API_PREFIX}/dashboard` })
 
     // ── Manejador de errores global ─────────────────────────
     app.setErrorHandler((error, request, reply) => {

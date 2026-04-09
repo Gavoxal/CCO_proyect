@@ -94,7 +94,7 @@ function App() {
                 <ProtectedRoute><RolGuard roles={ESCRITURA}><InfanteFormPage /></RolGuard></ProtectedRoute>
               } />
               <Route path="/infantes/:id/editar" element={
-                <ProtectedRoute><RolGuard roles={ESCRITURA}><InfanteFormPage /></RolGuard></ProtectedRoute>
+                <ProtectedRoute><RolGuard roles={[...ESCRITURA, 'tutor']}><InfanteFormPage /></RolGuard></ProtectedRoute>
               } />
 
 

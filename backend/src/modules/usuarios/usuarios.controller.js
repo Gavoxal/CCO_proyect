@@ -82,7 +82,7 @@ export async function crear(request, reply) {
     }
 
     const hash = await bcrypt.hash(password, 12)
-    const isTutor = rol === 'tutor' || rol === 'tutor_especial'
+    const isTutor = rol === 'tutor' || rol === 'tutor_especial' || rol === 'proteccion'
 
     const dataObj = {
         username, email,
@@ -149,7 +149,7 @@ export async function actualizar(request, reply) {
         })
 
         // Si es tutor y mandan profesion/fotografia, actualizar o crear el perfil Tutor
-        const isTutor = usuario.rol === 'tutor' || usuario.rol === 'tutor_especial';
+        const isTutor = usuario.rol === 'tutor' || usuario.rol === 'tutor_especial' || usuario.rol === 'proteccion';
         if (isTutor && usuario.personaId && (profesion !== undefined || fotografia !== undefined)) {
             const tutorData = {};
             if (profesion !== undefined) tutorData.profesion = profesion;
