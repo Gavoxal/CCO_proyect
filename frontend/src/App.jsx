@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { SnackbarProvider } from 'notistack';
 import { ThemeContextProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -21,14 +21,22 @@ import MiembrosPage from './pages/miembros/MiembrosPage';
 import CasasDePazPage from './pages/casasDePaz/CasasDePazPage';
 import CalendarioPage from './pages/calendario/CalendarioPage';
 import UsuariosPage from './pages/usuarios/UsuariosPage';
+import ProfilePage from './pages/usuarios/ProfilePage';
 import IncidentesPage from './pages/incidentes/IncidentesPage';
 import ReportarIncidentePage from './pages/incidentes/ReportarIncidentePage';
 
 // ─── Guards ─────────────────────────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
+  const location = useLocation();
+
   if (loading) return null;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  if (user?.passwordExpired && location.pathname !== '/perfil') {
+    return <Navigate to="/perfil" replace />;
+  }
+
   return children;
 };
 
@@ -65,6 +73,7 @@ function App() {
               <Route path="/visitas" element={<ProtectedRoute><VisitasPage /></ProtectedRoute>} />
               <Route path="/inventario/materiales" element={<ProtectedRoute><MaterialesPage /></ProtectedRoute>} />
               <Route path="/regalos" element={<ProtectedRoute><RegalosPage /></ProtectedRoute>} />
+              <Route path="/perfil" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
               {/* ── Reportar incidente (tutores y superiores) */}
               <Route path="/incidentes/nuevo" element={

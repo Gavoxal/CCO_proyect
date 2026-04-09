@@ -218,7 +218,20 @@ const Sidebar = () => {
 
             {/* ─── Usuario ────────────────────────────────────────────────── */}
             <Box sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, justifyContent: collapsed ? 'center' : 'flex-start' }}>
+                <Box 
+                    onClick={() => navigate('/perfil')}
+                    sx={{ 
+                        display: 'flex', alignItems: 'center', gap: 1.5, 
+                        justifyContent: collapsed ? 'center' : 'flex-start',
+                        cursor: 'pointer',
+                        p: 1,
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                            bgcolor: alpha(theme.palette.primary.main, 0.08)
+                        }
+                    }}
+                >
                     <Avatar sx={{
                         width: 36, height: 36, fontWeight: 700, fontSize: '0.9rem',
                         background: `linear-gradient(135deg, ${rolInfo.color} 0%, ${alpha(rolInfo.color, 0.6)} 100%)`,
@@ -241,8 +254,10 @@ const Sidebar = () => {
                             />
                         </Box>
                     )}
+                </Box>
+                <Box sx={{ mt: 1, display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
                     <Tooltip title="Cerrar sesión" arrow>
-                        <IconButton onClick={() => { logout(); navigate('/login'); }} size="small"
+                        <IconButton onClick={(e) => { e.stopPropagation(); logout(); navigate('/login'); }} size="small"
                             sx={{ color: 'text.secondary', '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) } }}
                         >
                             <LogoutIcon fontSize="small" />

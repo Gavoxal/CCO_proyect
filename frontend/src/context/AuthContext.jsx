@@ -38,10 +38,16 @@ export const AuthProvider = ({ children }) => {
         authService.logout();
     };
 
+    const updateUser = (userData) => {
+        const newUser = { ...user, ...userData };
+        setUser(newUser);
+        localStorage.setItem('user', JSON.stringify(newUser));
+    };
+
     const hasRole = (...roles) => user && roles.includes(user.rol);
 
     const value = useMemo(() => ({
-        user, loading, login, logout, hasRole,
+        user, loading, login, logout, updateUser, hasRole,
         isAuthenticated: !!user,
         isAdmin: user?.rol === 'admin',
         isDirector: user?.rol === 'director',

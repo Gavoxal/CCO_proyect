@@ -125,12 +125,17 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
         if (!form.email.trim()) errs.email = 'Campo requerido';
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email inválido';
         if (tipo === 'crear') {
-            if (!form.password) errs.password = 'La contraseña es requerida';
-            else if (form.password.length < 6) errs.password = 'Mínimo 6 caracteres';
-            if (form.password !== form.confirmarPassword) errs.confirmarPassword = 'Las contraseñas no coinciden';
-        } else if (form.password) {
-            if (form.password.length < 6) errs.password = 'Mínimo 6 caracteres';
-            if (form.password !== form.confirmarPassword) errs.confirmarPassword = 'Las contraseñas no coinciden';
+            if (!form.password) errs.password = 'Campo requerido';
+            if (form.password && form.password.length < 8) errs.password = 'Contraseña muy corta';
+        }
+        if (form.password) {
+            const robustPass = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]{8,}$/;
+            if (!robustPass.test(form.password)) {
+                errs.password = 'La contraseña debe incluir mayúsculas, minúsculas, números y caracteres especiales.';
+            }
+        }
+        if (form.password && form.password !== form.confirmarPassword) {
+            errs.confirmarPassword = 'Las contraseñas no coinciden';
         }
         setErrors(errs);
         return Object.keys(errs).length === 0;
