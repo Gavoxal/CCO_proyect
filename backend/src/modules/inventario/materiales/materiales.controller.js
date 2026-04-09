@@ -48,7 +48,7 @@ export async function listar(request, reply) {
     // Marcar items con stock bajo
     const itemsMarcados = items.map(item => ({
         ...item,
-        stockBajo: item.cantidadDisponible <= item.stockMinimo
+        stockBajo: item.cantidadDisponible < item.stockMinimo
     }))
 
     return paginated(reply, itemsMarcados, total, page, limit)
@@ -235,14 +235,14 @@ export async function alertas(request, reply) {
     const fechaLimite = new Date()
     fechaLimite.setDate(fechaLimite.getDate() - diasUmbral)
 
-    const [stockBajo, desactualizados] = await Promise.all([
-        db.inventarioMaterial.findMany({
-            where: { cantidadDisponible: { lte: 5 } }  // fallback simple
-        }),
+    const [todos, desactualizados] = await Promise.all([
+        db.inventarioMaterial.findMany(),
         db.inventarioMaterial.findMany({
             where: { fechaUltimaActualizacion: { lt: fechaLimite } }
         })
     ])
+
+    const stockBajo = todos.filter(i => i.cantidadDisponible < i.stockMinimo)
 
     return ok(reply, {
         stockBajo: stockBajo.map(i => ({ ...i, razon: 'Stock bajo' })),
