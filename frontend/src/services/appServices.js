@@ -99,12 +99,9 @@ export const incidentesService = {
     obtener: (id) => api.get(`/incidentes/${id}`).then(r => r.data),
     crear: (body) => api.post('/incidentes', body).then(r => r.data),
     eliminar: (id) => api.delete(`/incidentes/${id}`).then(r => r.data),
-    subirFoto: (id, file) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        return api.post(`/incidentes/${id}/foto`, fd, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        }).then(r => r.data);
+    agregarSeguimiento: async (id, texto) => {
+        const res = await api.post(`/incidentes/${id}/seguimiento`, { texto });
+        return res.data;
     },
 };
 

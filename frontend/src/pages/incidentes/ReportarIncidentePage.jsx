@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box, Typography, Card, CardContent, Button, Chip, Avatar,
     TextField, CircularProgress, Stack, Paper, Grid, Divider,
@@ -15,6 +15,7 @@ import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
+import { incidentesService, infantesService } from '../../services/appServices';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { rojo: '#d32f2f', naranja: '#FF8C00' };
@@ -22,24 +23,13 @@ const CCO = { rojo: '#d32f2f', naranja: '#FF8C00' };
 // ─── Tipos de abuso ───────────────────────────────────────────────────────────
 const TIPOS_ABUSO = ['Físico', 'Verbal', 'Emocional', 'Sexual', 'Negligencia', 'Otro'];
 
-// ─── Mock Infantes ─────────────────────────────────────────────────────────────
-const MOCK_INFANTES = [
-    { id: 1, codigo: 'INF-001', persona: { nombres: 'María Gabriela', apellidos: 'López Mendoza' } },
-    { id: 2, codigo: 'INF-002', persona: { nombres: 'José Andrés', apellidos: 'Pérez Villao' } },
-    { id: 3, codigo: 'INF-003', persona: { nombres: 'Camila Sofía', apellidos: 'Torres Aragundi' } },
-    { id: 4, codigo: 'INF-004', persona: { nombres: 'Sebastián', apellidos: 'Morales Intriago' } },
-    { id: 5, codigo: 'INF-005', persona: { nombres: 'Valentina', apellidos: 'Cedeño Bravo' } },
-    { id: 6, codigo: 'INF-006', persona: { nombres: 'Daniel Alejandro', apellidos: 'Ramírez Loor' } },
-    { id: 7, codigo: 'INF-007', persona: { nombres: 'Isabella', apellidos: 'Vélez Zambrano' } },
-    { id: 8, codigo: 'INF-008', persona: { nombres: 'Matías', apellidos: 'Suárez Pincay' } },
-];
+
 
 const INITIAL_FORM = {
     fecha: new Date().toISOString().split('T')[0],
     tipoAbuso: '',
     descripcion: '',
     infantesIds: [],
-    foto: null,
 };
 
 export default function ReportarIncidentePage() {
@@ -52,6 +42,22 @@ export default function ReportarIncidentePage() {
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [errors, setErrors] = useState({});
+    const [infantes, setInfantes] = useState([]);
+    const [fetchingInfantes, setFetchingInfantes] = useState(true);
+
+    useEffect(() => {
+        const loadInfantes = async () => {
+            try {
+                const res = await infantesService.listar({ limit: 1000 });
+                setInfantes(res.data);
+            } catch (err) {
+                enqueueSnackbar('Error al cargar lista de infantes', { variant: 'error' });
+            } finally {
+                setFetchingInfantes(false);
+            }
+        };
+        loadInfantes();
+    }, [enqueueSnackbar]);
 
     const handleInfantesChange = (_, newValue) => {
         setForm(p => ({ ...p, infantesIds: newValue }));
@@ -73,11 +79,19 @@ export default function ReportarIncidentePage() {
         if (Object.keys(e).length) { setErrors(e); return; }
 
         setLoading(true);
-        // Simula llamada al backend (incidentesService.crear)
-        await new Promise(res => setTimeout(res, 1200));
-        setLoading(false);
-        setSubmitted(true);
-        enqueueSnackbar('Reporte enviado exitosamente. El equipo de protección ha sido notificado.', { variant: 'success', autoHideDuration: 5000 });
+        try {
+            const payload = {
+                ...form,
+                infantesIds: form.infantesIds.map(i => i.id)
+            };
+            await incidentesService.crear(payload);
+            setSubmitted(true);
+            enqueueSnackbar('Reporte enviado exitosamente. El equipo de protección ha sido notificado.', { variant: 'success', autoHideDuration: 5000 });
+        } catch (err) {
+            enqueueSnackbar(err.response?.data?.message || 'Error al enviar el reporte', { variant: 'error' });
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleReset = () => {
@@ -188,10 +202,11 @@ export default function ReportarIncidentePage() {
                             <Autocomplete
                                 multiple
                                 size="small"
-                                options={MOCK_INFANTES}
+                                options={infantes}
+                                loading={fetchingInfantes}
                                 value={form.infantesIds}
                                 onChange={handleInfantesChange}
-                                getOptionLabel={i => `${i.persona.nombres} ${i.persona.apellidos} (${i.codigo})`}
+                                getOptionLabel={i => `${i.persona?.nombres} ${i.persona?.apellidos} (${i.codigo})`}
                                 isOptionEqualToValue={(opt, val) => opt.id === val.id}
                                 sx={{ width: '100%' }}
                                 renderInput={(params) => (
@@ -202,13 +217,22 @@ export default function ReportarIncidentePage() {
                                         error={!!errors.infantesIds}
                                         helperText={errors.infantesIds || ' '}
                                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                                        InputProps={{
+                                            ...params.InputProps,
+                                            endAdornment: (
+                                                <>
+                                                    {fetchingInfantes ? <CircularProgress color="inherit" size={20} /> : null}
+                                                    {params.InputProps.endAdornment}
+                                                </>
+                                            ),
+                                        }}
                                     />
                                 )}
                                 renderTags={(value, getTagProps) =>
                                     value.map((option, index) => (
                                         <Chip
                                             key={option.id}
-                                            label={`${option.persona.nombres} ${option.persona.apellidos}`}
+                                            label={`${option.persona?.nombres} ${option.persona?.apellidos}`}
                                             size="small"
                                             {...getTagProps({ index })}
                                             sx={{ borderRadius: 1 }}
@@ -232,12 +256,7 @@ export default function ReportarIncidentePage() {
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                             />
 
-                            {/* Nota sobre foto */}
-                            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.04) }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    📷 Si tienes evidencia fotográfica, podrás añadirla después de enviar el reporte contactando directamente al director o al equipo de protección.
-                                </Typography>
-                            </Paper>
+
                         </Stack>
 
 

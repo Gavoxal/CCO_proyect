@@ -42,6 +42,7 @@ model Usuario {
   updatedAt       DateTime           @updatedAt
   notificaciones  Notificacion[]
   reportesCreados ReporteIncidente[]
+  seguimientos     SeguimientoIncidente[]
   persona         Persona?           @relation(fields: [personaId], references: [id])
 
   @@map("usuarios")
@@ -143,20 +144,32 @@ model Visita {
 }
 
 model ReporteIncidente {
-  id             Int       @id @default(autoincrement())
-  fecha          DateTime  @db.Date
-  descripcion    String    @db.Text
-  tipoAbuso      String    @db.VarChar(100)
-  foto           String?   @db.VarChar(500)
+  id             Int                    @id @default(autoincrement())
+  fecha          DateTime               @db.Date
+  descripcion    String                 @db.Text
+  tipoAbuso      String                 @db.VarChar(100)
   reportadoPorId Int
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  reportadoPor   Usuario   @relation(fields: [reportadoPorId], references: [id])
-  infantes       Infante[] @relation("incidenteinfantes")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  reportadoPor   Usuario                @relation(fields: [reportadoPorId], references: [id])
+  infantes       Infante[]              @relation("incidenteinfantes")
+  seguimientos   SeguimientoIncidente[]
 
   @@index([fecha])
   @@index([reportadoPorId], map: "reportes_incidentes_reportadoPorId_fkey")
   @@map("reportes_incidentes")
+}
+
+model SeguimientoIncidente {
+  id          Int      @id @default(autoincrement())
+  texto       String   @db.Text
+  fecha       DateTime @default(now())
+  incidenteId Int
+  usuarioId   Int
+  incidente   ReporteIncidente @relation(fields: [incidenteId], references: [id], onDelete: Cascade)
+  usuario     Usuario          @relation(fields: [usuarioId], references: [id])
+
+  @@map("seguimientos_incidentes")
 }
 
 model InventarioMaterial {

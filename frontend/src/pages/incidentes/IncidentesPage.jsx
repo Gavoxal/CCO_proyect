@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     Box, Typography, Grid, Card, CardContent, Button, Chip, Avatar,
     Dialog, DialogTitle, DialogContent, DialogActions, TextField,
     CircularProgress, Stack, Paper, Table, TableBody, TableCell,
     TableHead, TableRow, TablePagination, IconButton, Tooltip, alpha,
-    useTheme, MenuItem, InputAdornment, Divider, Collapse,
+    useTheme, MenuItem, InputAdornment, Divider, Collapse, Skeleton
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -17,66 +17,18 @@ import {
     CalendarMonth as CalendarIcon,
     Person as PersonIcon,
     Warning as WarnIcon,
-    PhotoCamera as PhotoIcon,
     Comment as CommentIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { useParams, useNavigate } from 'react-router-dom';
+import { incidentesService } from '../../services/appServices';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { rojo: '#d32f2f', naranja: '#FF8C00', violeta: '#6A5ACD' };
 
-// ─── Tipos de abuso (mock) ────────────────────────────────────────────────────
-const TIPOS_ABUSO = ['Físico', 'Verbal', 'Emocional', 'Sexual', 'Negligencia', 'Otro'];
 
-// ─── Mock Infantes ─────────────────────────────────────────────────────────────
-const MOCK_INFANTES = [
-    { id: 1, codigo: 'INF-001', persona: { nombres: 'María Gabriela', apellidos: 'López Mendoza' } },
-    { id: 2, codigo: 'INF-002', persona: { nombres: 'José Andrés', apellidos: 'Pérez Villao' } },
-    { id: 3, codigo: 'INF-003', persona: { nombres: 'Camila Sofía', apellidos: 'Torres Aragundi' } },
-    { id: 4, codigo: 'INF-004', persona: { nombres: 'Sebastián', apellidos: 'Morales Intriago' } },
-    { id: 5, codigo: 'INF-005', persona: { nombres: 'Valentina', apellidos: 'Cedeño Bravo' } },
-];
-
-// ─── Mock Reportes ─────────────────────────────────────────────────────────────
-const MOCK_REPORTES = [
-    {
-        id: 1,
-        fecha: '2026-03-20',
-        tipoAbuso: 'Físico',
-        descripcion: 'El infante presentó marcas en el brazo derecho. Reportó que ocurrió en el hogar durante el fin de semana.',
-        foto: null,
-        reportadoPor: { username: 'tutor1', rol: 'tutor' },
-        infantes: [MOCK_INFANTES[0]],
-        comentarios: [
-            { autor: 'admin', texto: 'Se notificó a protección de menores. Seguimiento programado para el 25 de marzo.', fecha: '2026-03-21' }
-        ],
-    },
-    {
-        id: 2,
-        fecha: '2026-03-15',
-        tipoAbuso: 'Verbal',
-        descripcion: 'Se reportó lenguaje inapropiado dirigido al infante por parte de un familiar el día de la actividad.',
-        foto: null,
-        reportadoPor: { username: 'tutor_especial1', rol: 'tutor_especial' },
-        infantes: [MOCK_INFANTES[1], MOCK_INFANTES[2]],
-        comentarios: [],
-    },
-    {
-        id: 3,
-        fecha: '2026-03-10',
-        tipoAbuso: 'Negligencia',
-        descripcion: 'Infante presentó signos de desnutrición y ropa inadecuada para el clima. No fue recogido a tiempo en dos ocasiones.',
-        foto: null,
-        reportadoPor: { username: 'secretaria1', rol: 'secretaria' },
-        infantes: [MOCK_INFANTES[3]],
-        comentarios: [
-            { autor: 'director', texto: 'Se coordinó con trabajadora social para visita domiciliaria.', fecha: '2026-03-11' },
-        ],
-    },
-];
 
 // ─── CHIP de tipo de abuso ────────────────────────────────────────────────────
 const TIPO_COLORS = {
@@ -144,10 +96,9 @@ const ReporteCard = ({ reporte, onView }) => {
                         ))}
                     </Stack>
                     <Stack direction="row" spacing={0.5} alignItems="center">
-                        {reporte.comentarios.length > 0 && (
-                            <Chip size="small" icon={<CommentIcon sx={{ fontSize: '12px !important' }} />} label={reporte.comentarios.length} sx={{ height: 20, fontSize: '0.65rem' }} />
-                        )}
-                        <Chip size="small" icon={<PersonIcon sx={{ fontSize: '12px !important' }} />} label={reporte.reportadoPor.username} sx={{ height: 20, fontSize: '0.65rem' }} />
+
+                        <PersonIcon sx={{ fontSize: '12px !important' }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>{reporte.reportadoPor?.username}</Typography>
                     </Stack>
                 </Stack>
             </CardContent>
@@ -156,20 +107,24 @@ const ReporteCard = ({ reporte, onView }) => {
 };
 
 // ─── DIALOG de detalle ────────────────────────────────────────────────────────
-const DetalleDialog = ({ reporte, open, onClose, onComentarioAdd, canEdit }) => {
-    const [nuevoComentario, setNuevoComentario] = useState('');
+const DetalleDialog = ({ reporte, open, onClose, onSeguimientoAdd, canEdit }) => {
+    const theme = useTheme();
+    const [nuevoSeguimiento, setNuevoSeguimiento] = useState('');
+    const [loading, setLoading] = useState(false);
     const { user } = useAuth();
 
     if (!reporte) return null;
 
-    const handleAgregarComentario = () => {
-        if (!nuevoComentario.trim()) return;
-        onComentarioAdd(reporte.id, nuevoComentario.trim());
-        setNuevoComentario('');
+    const handleAgregarSeguimiento = async () => {
+        if (!nuevoSeguimiento.trim()) return;
+        setLoading(true);
+        await onSeguimientoAdd(reporte.id, nuevoSeguimiento.trim());
+        setNuevoSeguimiento('');
+        setLoading(false);
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
             <DialogTitle sx={{ pb: 1 }}>
                 <Stack direction="row" alignItems="center" spacing={1.5}>
                     <Avatar sx={{ bgcolor: alpha(CCO.rojo, 0.12), width: 40, height: 40 }}>
@@ -226,59 +181,71 @@ const DetalleDialog = ({ reporte, open, onClose, onComentarioAdd, canEdit }) => 
                         </Stack>
                     </Grid>
 
-                    {/* Foto */}
-                    {reporte.foto && (
-                        <Grid item xs={12}>
-                            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>Evidencia Fotográfica</Typography>
-                            <Box component="img" src={reporte.foto} alt="Evidencia" sx={{ mt: 0.5, maxWidth: '100%', maxHeight: 260, borderRadius: 2, objectFit: 'cover' }} />
-                        </Grid>
-                    )}
-
-                    {/* Comentarios / Seguimiento */}
+                    {/* Acciones Tomadas / Seguimiento */}
                     <Grid item xs={12}>
                         <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            Comentarios de Seguimiento ({reporte.comentarios.length})
+                            Acciones Tomadas ({reporte.seguimientos?.length || 0})
                         </Typography>
-                        <Stack spacing={1.5} mt={1}>
-                            {reporte.comentarios.length === 0 && (
-                                <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
-                                    Sin comentarios aún.
+                        <Stack spacing={2} mt={5} alignItems="center">
+                            {(!reporte.seguimientos || reporte.seguimientos.length === 0) && (
+                                <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+                                    No se han registrado acciones aún.
                                 </Typography>
                             )}
-                            {reporte.comentarios.map((c, i) => (
-                                <Paper key={i} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-                                    <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                                        <Typography variant="caption" sx={{ fontWeight: 700 }}>{c.autor}</Typography>
-                                        <Typography variant="caption" color="text.secondary">{c.fecha}</Typography>
+                            {reporte.seguimientos?.map((s, i) => (
+                                <Paper key={i} variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: alpha(theme.palette.success.main, 0.03), width: '100%', borderLeft: `1px solid ${theme.palette.success.main}` }}>
+                                    <Stack direction="row" justifyContent="space-between" mb={1}>
+                                        <Typography variant="caption" sx={{ fontWeight: 700, color: theme.palette.success.main, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            {s.usuario?.username}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {new Date(s.fecha).toLocaleString('es-EC', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </Typography>
                                     </Stack>
-                                    <Typography variant="body2">{c.texto}</Typography>
+                                    <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{s.texto}</Typography>
                                 </Paper>
                             ))}
 
                             {canEdit && (
-                                <Stack direction="row" spacing={1} mt={0.5}>
+                                <Box sx={{ mt: 5, p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.03), border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`, width: '100%' }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: 'block', color: theme.palette.primary.main }}>Nueva Acción</Typography>
                                     <TextField
                                         fullWidth
-                                        size="small"
-                                        placeholder="Agregar comentario de seguimiento..."
-                                        value={nuevoComentario}
-                                        onChange={e => setNuevoComentario(e.target.value)}
+                                        placeholder="Describe la acción realizada de forma clara..."
+                                        value={nuevoSeguimiento}
+                                        onChange={e => setNuevoSeguimiento(e.target.value)}
                                         multiline
-                                        rows={2}
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                                        rows={3}
+                                        sx={{
+                                            '& .MuiOutlinedInput-root': {
+                                                borderRadius: 2,
+                                                bgcolor: '#fff'
+                                            },
+                                            mb: 1.5
+                                        }}
                                     />
-                                    <Button
-                                        variant="contained"
-                                        onClick={handleAgregarComentario}
-                                        disabled={!nuevoComentario.trim()}
-                                        sx={{ alignSelf: 'flex-end', borderRadius: 2, minWidth: 90 }}
-                                    >
-                                        Agregar
-                                    </Button>
-                                </Stack>
+                                    <Stack direction="row" justifyContent="flex-end">
+                                        <Button
+                                            variant="contained"
+                                            onClick={handleAgregarSeguimiento}
+                                            disabled={!nuevoSeguimiento.trim() || loading}
+                                            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
+                                            sx={{
+                                                borderRadius: 2,
+                                                px: 4,
+                                                bgcolor: theme.palette.success.main,
+                                                '&:hover': { bgcolor: theme.palette.success.dark }
+                                            }}
+                                        >
+                                            Registrar Acción
+                                        </Button>
+                                    </Stack>
+                                </Box>
                             )}
                         </Stack>
                     </Grid>
+
+
                 </Grid>
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
@@ -289,48 +256,90 @@ const DetalleDialog = ({ reporte, open, onClose, onComentarioAdd, canEdit }) => 
 };
 
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
+const TIPOS_ABUSO = ['Físico', 'Verbal', 'Emocional', 'Sexual', 'Negligencia', 'Otro'];
+
 export default function IncidentesPage() {
     const theme = useTheme();
     const { user, hasRole } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const navigate = useNavigate();
 
-    const [reportes, setReportes] = useState(MOCK_REPORTES);
+    const [reportes, setReportes] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [total, setTotal] = useState(0);
     const [buscar, setBuscar] = useState('');
     const [filtroTipo, setFiltroTipo] = useState('all');
     const [selected, setSelected] = useState(null);
     const [page, setPage] = useState(0);
-    const rowsPerPage = 6;
+    const [rowsPerPage, setRowsPerPage] = useState(6);
 
     const canEdit = hasRole('admin', 'director', 'proteccion');
 
+    const fetchReportes = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = {
+                page: page + 1,
+                limit: rowsPerPage,
+                tipoAbuso: filtroTipo === 'all' ? undefined : filtroTipo,
+                // Puedes añadir búsqueda por texto aquí si el backend lo soporta
+            };
+            const res = await incidentesService.listar(params);
+            setReportes(res.data);
+            setTotal(res.total);
+        } catch (err) {
+            enqueueSnackbar('Error al cargar reportes', { variant: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    }, [page, rowsPerPage, filtroTipo, enqueueSnackbar]);
+
+    useEffect(() => {
+        fetchReportes();
+    }, [fetchReportes]);
+
     const filtered = useMemo(() => {
+        if (!buscar) return reportes;
         return reportes.filter(r => {
-            const matchTipo = filtroTipo === 'all' || r.tipoAbuso === filtroTipo;
-            const matchBuscar = !buscar || [
+            const matchBuscar = [
                 r.descripcion,
                 r.tipoAbuso,
-                r.reportadoPor.username,
-                ...r.infantes.map(i => `${i.persona.nombres} ${i.persona.apellidos}`)
+                r.reportadoPor?.username,
+                ...r.infantes.map(i => `${i.persona?.nombres} ${i.persona?.apellidos}`)
             ].some(s => s?.toLowerCase().includes(buscar.toLowerCase()));
-            return matchTipo && matchBuscar;
+            return matchBuscar;
         });
-    }, [reportes, buscar, filtroTipo]);
+    }, [reportes, buscar]);
 
-    const handleComentarioAdd = (reporteId, texto) => {
-        setReportes(prev => prev.map(r =>
-            r.id === reporteId
-                ? { ...r, comentarios: [...r.comentarios, { autor: user.username, texto, fecha: new Date().toISOString().split('T')[0] }] }
-                : r
-        ));
-        enqueueSnackbar('Comentario agregado', { variant: 'success' });
+    const handleSeguimientoAdd = async (id, texto) => {
+        try {
+            const res = await incidentesService.agregarSeguimiento(id, texto);
+            // El backend devuelve { success: true, data: { ...seguimiento } }
+            const nuevo = res.data;
+
+            setReportes(prev => prev.map(r => r.id === id ? {
+                ...r,
+                seguimientos: [...(r.seguimientos || []), nuevo]
+            } : r));
+
+            if (selected?.id === id) {
+                setSelected(prev => ({
+                    ...prev,
+                    seguimientos: [...(prev.seguimientos || []), nuevo]
+                }));
+            }
+
+            enqueueSnackbar('Acción registrada exitosamente', { variant: 'success' });
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Error al registrar la acción';
+            enqueueSnackbar(msg, { variant: 'error' });
+        }
     };
 
     const stats = {
-        total: reportes.length,
+        total: total,
         fisico: reportes.filter(r => r.tipoAbuso === 'Físico').length,
         verbal: reportes.filter(r => r.tipoAbuso === 'Verbal').length,
-        pending: reportes.filter(r => r.comentarios.length === 0).length,
     };
 
     return (
@@ -358,7 +367,6 @@ export default function IncidentesPage() {
                         { label: 'Total Reportes', value: stats.total, color: CCO.rojo },
                         { label: 'Agresión Física', value: stats.fisico, color: '#c62828' },
                         { label: 'Agresión Verbal', value: stats.verbal, color: '#f57f17' },
-                        { label: 'Sin Seguimiento', value: stats.pending, color: '#e65100' },
                     ].map(({ label, value, color }) => (
                         <Grid item xs={6} sm={3} key={label}>
                             <Card variant="outlined" sx={{ borderRadius: 3, borderColor: alpha(color, 0.3), textAlign: 'center', p: 2 }}>
@@ -393,14 +401,22 @@ export default function IncidentesPage() {
                 </Stack>
 
                 {/* ─── Lista de reportes ───────────────────────────────────────── */}
-                {filtered.length === 0 ? (
+                {loading ? (
+                    <Grid container spacing={2}>
+                        {[1, 2, 3].map(i => (
+                            <Grid item xs={12} sm={6} md={4} key={i}>
+                                <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 3 }} />
+                            </Grid>
+                        ))}
+                    </Grid>
+                ) : filtered.length === 0 ? (
                     <Paper variant="outlined" sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
                         <IncidenteIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
                         <Typography variant="h6" color="text.secondary">No se encontraron reportes</Typography>
                     </Paper>
                 ) : (
                     <Grid container spacing={2}>
-                        {filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage).map(r => (
+                        {filtered.map(r => (
                             <Grid item xs={12} sm={6} md={4} key={r.id}>
                                 <ReporteCard reporte={r} onView={rep => setSelected(rep)} />
                             </Grid>
@@ -408,16 +424,18 @@ export default function IncidentesPage() {
                     </Grid>
                 )}
 
-                {filtered.length > rowsPerPage && (
+                {total > rowsPerPage && (
                     <Box display="flex" justifyContent="center" mt={3}>
                         <TablePagination
                             component="div"
-                            count={filtered.length}
+                            count={total}
                             page={page}
                             rowsPerPage={rowsPerPage}
                             onPageChange={(_, p) => setPage(p)}
-                            rowsPerPageOptions={[]}
+                            onRowsPerPageChange={e => { setRowsPerPage(parseInt(e.target.value)); setPage(0); }}
+                            rowsPerPageOptions={[6, 12, 24]}
                             labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                            labelRowsPerPage="Filas por página"
                         />
                     </Box>
                 )}
@@ -428,7 +446,7 @@ export default function IncidentesPage() {
                 reporte={selected}
                 open={!!selected}
                 onClose={() => setSelected(null)}
-                onComentarioAdd={handleComentarioAdd}
+                onSeguimientoAdd={handleSeguimientoAdd}
                 canEdit={canEdit}
             />
         </MainLayout>

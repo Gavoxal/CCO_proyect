@@ -20,6 +20,9 @@ export const notFound = (reply, message = 'Recurso no encontrado') =>
 export const badRequest = (reply, message) =>
     reply.status(400).send({ success: false, error: message })
 
+export const forbidden = (reply, message = 'Acceso denegado') =>
+    reply.status(403).send({ success: false, error: message })
+
 export const paginated = (reply, data, total, page, limit, summary = null) => {
     const meta = {
         total,

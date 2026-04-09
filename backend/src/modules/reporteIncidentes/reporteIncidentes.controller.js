@@ -1,7 +1,8 @@
-import { ok, created, noContent, notFound, paginated } from '../../utils/response.js'
+import { ok, created, noContent, notFound, paginated, forbidden } from '../../utils/response.js'
 import { getPagination } from '../../utils/pagination.js'
 import path from 'path'
 import fs from 'fs/promises'
+import { notificationService } from '../../services/notification.service.js'
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
 
@@ -50,6 +51,19 @@ export async function crear(request, reply) {
         }
     })
 
+    // Notificar a Admin, Director y Protección
+    const destinatarios = await db.usuario.findMany({
+        where: { rol: { in: ['admin', 'director', 'proteccion'] }, activo: true },
+        select: { id: true }
+    })
+
+    if (destinatarios.length > 0) {
+        const ids = destinatarios.map(u => u.id)
+        const titulo = 'Nuevo Incidente Reportado'
+        const mensaje = `El usuario ${reporte.reportadoPor.username} ha reportado un incidente de tipo ${tipoAbuso}.`
+        await notificationService.crearNotificacionMasiva(ids, titulo, mensaje, 'ALERTA', reporte.id)
+    }
+
     return created(reply, reporte)
 }
 
@@ -86,6 +100,10 @@ export async function listar(request, reply) {
                     include: {
                         persona: { select: { nombres: true, apellidos: true } }
                     }
+                },
+                seguimientos: {
+                    include: { usuario: { select: { username: true } } },
+                    orderBy: { fecha: 'asc' }
                 }
             }
         })
@@ -103,6 +121,10 @@ export async function obtener(request, reply) {
             reportadoPor: { select: { id: true, username: true, rol: true } },
             infantes: {
                 include: { persona: true }
+            },
+            seguimientos: {
+                include: { usuario: { select: { username: true } } },
+                orderBy: { fecha: 'asc' }
             }
         }
     })
@@ -124,35 +146,33 @@ export async function eliminar(request, reply) {
     }
 }
 
-// POST /incidentes/:id/foto — Subida de evidencia fotográfica
-export async function subirFoto(request, reply) {
+// POST /incidentes/:id/seguimiento — Agrega acciones tomadas (solo admin/director/proteccion)
+export async function agregarSeguimiento(request, reply) {
     const db = request.server.db
-    const id = parseInt(request.params.id)
+    const incidenteId = parseInt(request.params.id)
+    const { texto } = request.body
+    const usuarioId = request.user.id
 
-    const reporte = await db.reporteIncidente.findUnique({ where: { id } })
-    if (!reporte) return notFound(reply)
-
-    const data = await request.file()
-    if (!data) return reply.status(400).send({ error: 'No se envió ningún archivo' })
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(data.mimetype)) {
-        return reply.status(400).send({ error: 'Solo se permiten imágenes JPG, PNG o WebP' })
+    if (!texto || texto.trim().length < 5) {
+        return reply.status(400).send({
+            error: 'Solicitud inválida',
+            message: 'El texto del seguimiento debe tener al menos 5 caracteres'
+        })
     }
 
-    const dir = path.join(UPLOAD_DIR, 'incidentes')
-    await fs.mkdir(dir, { recursive: true })
-    const ext = data.filename.split('.').pop()
-    const filename = `incidente-${id}-${Date.now()}.${ext}`
-    const filepath = path.join(dir, filename)
+    const reporte = await db.reporteIncidente.findUnique({ where: { id: incidenteId } })
+    if (!reporte) return notFound(reply)
 
-    await fs.writeFile(filepath, await data.toBuffer())
-
-    const rutaRelativa = `/uploads/incidentes/${filename}`
-    const actualizado = await db.reporteIncidente.update({
-        where: { id },
-        data: { foto: rutaRelativa }
+    const seguimiento = await db.seguimientoIncidente.create({
+        data: {
+            texto,
+            incidenteId,
+            usuarioId
+        },
+        include: {
+            usuario: { select: { username: true } }
+        }
     })
 
-    return ok(reply, { foto: actualizado.foto })
+    return created(reply, seguimiento)
 }
