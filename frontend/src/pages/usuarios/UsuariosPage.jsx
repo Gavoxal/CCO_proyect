@@ -30,43 +30,52 @@ import { usuariosService } from '../../services/appServices';
 
 // ─── Paleta CCO ──────────────────────────────────────────────
 const CCO = { naranja: '#FF6B35', azul: '#004E89', crema: '#EFEFD0', violeta: '#6B2D5C', celeste: '#7BAE7F' };
+const BASE_URL = 'http://localhost:3000'; // Ajustar según backend
 
 // ─── Config de Roles ─────────────────────────────────────────
 const ROLES = {
-    admin: { label: 'Administrador', color: '#7c4dff', emoji: '👑' },
-    director: { label: 'Director', color: '#00bcd4', emoji: '🎯' },
-    secretaria: { label: 'Secretaría', color: '#4caf50', emoji: '📋' },
-    tutor_especial: { label: 'Tutor Especial', color: '#ff9800', emoji: '⭐' },
-    tutor: { label: 'Tutor', color: '#9e9e9e', emoji: '👤' },
+    admin: { label: 'Administrador', color: '#7c4dff' },
+    director: { label: 'Director', color: '#00bcd4' },
+    secretaria: { label: 'Secretaría', color: '#4caf50' },
+    tutor_especial: { label: 'Tutor Especial', color: '#ff9800' },
+    tutor: { label: 'Tutor', color: '#9e9e9e' },
 };
 
 // ─── Backend Integrado API ────────────────────────────────────────────────
 
 // ─── Chip de Rol ─────────────────────────────────────────────
 function RolChip({ rol, size = 'small' }) {
-    const cfg = ROLES[rol] || { label: rol, color: '#777', emoji: '❓' };
+    const cfg = ROLES[rol] || { label: rol, color: '#777' };
     return (
         <Chip
-            label={`${cfg.emoji} ${cfg.label}`}
+            label={cfg.label}
             size={size}
             sx={{
                 bgcolor: alpha(cfg.color, 0.12), color: cfg.color,
                 fontWeight: 700, border: `1px solid ${alpha(cfg.color, 0.28)}`,
                 fontSize: size === 'small' ? 10 : 12,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5
             }}
         />
     );
 }
 
 // ─── Avatar inicial ───────────────────────────────────────────
-function UserAvatar({ nombre, rol, size = 40 }) {
+function UserAvatar({ nombre, rol, foto, size = 40 }) {
     const cfg = ROLES[rol] || { color: '#777' };
+    const imageUrl = foto ? `${BASE_URL}${foto}` : null;
+
     return (
-        <Avatar sx={{
-            width: size, height: size, fontSize: size * 0.4, fontWeight: 800,
-            background: `linear-gradient(135deg, ${cfg.color} 0%, ${alpha(cfg.color, 0.6)} 100%)`,
-        }}>
-            {(nombre || '?').charAt(0).toUpperCase()}
+        <Avatar 
+            src={imageUrl}
+            sx={{
+                width: size, height: size, fontSize: size * 0.4, fontWeight: 800,
+                background: !imageUrl ? `linear-gradient(135deg, ${cfg.color} 0%, ${alpha(cfg.color, 0.6)} 100%)` : 'transparent',
+                border: `2px solid ${alpha(cfg.color, 0.3)}`
+            }}
+        >
+            {!imageUrl && (nombre || '?').charAt(0).toUpperCase()}
         </Avatar>
     );
 }
@@ -74,7 +83,7 @@ function UserAvatar({ nombre, rol, size = 40 }) {
 // ─── MODAL: FORMULARIO ───────────────────────────────────────
 const EMPTY_FORM = {
     nombres: '', apellidos: '', cedula: '', telefono1: '', direccion: '',
-    username: '', email: '', rol: 'tutor',
+    email: '', rol: 'tutor',
     profesion: '', fotoFile: null,
     password: '', confirmarPassword: '', activo: true,
 };
@@ -113,7 +122,6 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
         if (!form.nombres.trim()) errs.nombres = 'Campo requerido';
         if (!form.apellidos.trim()) errs.apellidos = 'Campo requerido';
         if (!form.cedula.trim()) errs.cedula = 'Campo requerido';
-        if (!form.username.trim()) errs.username = 'Campo requerido';
         if (!form.email.trim()) errs.email = 'Campo requerido';
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email inválido';
         if (tipo === 'crear') {
@@ -186,21 +194,13 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
                         size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                     />
 
-                    {/* Username + Email */}
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        <TextField
-                            label="Usuario *" value={form.username}
-                            onChange={e => set('username', e.target.value.toLowerCase().replace(/\s/g, '.'))}
-                            error={!!errors.username} helperText={errors.username}
-                            size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-                        />
-                        <TextField
-                            label="Email *" value={form.email}
-                            onChange={e => set('email', e.target.value)}
-                            error={!!errors.email} helperText={errors.email}
-                            size="small" sx={{ flex: 1.3, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-                        />
-                    </Box>
+                    {/* Email */}
+                    <TextField
+                        label="Email *" value={form.email}
+                        onChange={e => set('email', e.target.value)}
+                        error={!!errors.email} helperText={errors.email}
+                        size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                    />
 
                     {/* Rol */}
                     <TextField select label="Rol" value={form.rol} onChange={e => set('rol', e.target.value)}
@@ -209,7 +209,7 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
                             <MenuItem key={k} value={k}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: v.color }} />
-                                    {v.emoji} {v.label}
+                                    {v.label}
                                 </Box>
                             </MenuItem>
                         ))}
@@ -315,33 +315,141 @@ function UsuarioFormModal({ open, tipo, item, onClose, onConfirm }) {
     );
 }
 
+// ─── MODAL: DETALLE ──────────────────────────────────────────
+function UsuarioDetailModal({ open, item, onClose }) {
+    if (!item) return null;
+    const cfg = ROLES[item.rol] || { label: item.rol, color: '#777' };
+    const nombreCompleto = item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username;
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+            <DialogContent sx={{ p: 0 }}>
+                {/* Cabecera con foto */}
+                <Box sx={{
+                    height: 140,
+                    background: `linear-gradient(45deg, ${cfg.color}, ${alpha(cfg.color, 0.6)})`,
+                    position: 'relative',
+                    mb: 7
+                }}>
+                    <Box sx={{
+                        position: 'absolute',
+                        bottom: -50,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        p: 0.5,
+                        bgcolor: 'background.paper',
+                        borderRadius: '50%',
+                        boxShadow: 3
+                    }}>
+                        <UserAvatar nombre={nombreCompleto} rol={item.rol} foto={item.persona?.tutor?.fotografia} size={100} />
+                    </Box>
+                </Box>
+
+                <Box sx={{ textAlign: 'center', px: 3, pb: 1 }}>
+                    <Typography variant="h5" fontWeight={900}>{nombreCompleto}</Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>{item.email}</Typography>
+                    <Box sx={{ mt: 1 }}>
+                        <RolChip rol={item.rol} size="medium" />
+                    </Box>
+                </Box>
+
+                <Stack spacing={3} sx={{ p: 3 }}>
+                    <Divider />
+                    
+                    {/* Sección: Información Personal */}
+                    <Box>
+                        <Typography variant="overline" color="text.secondary" fontWeight={800} display="block" gutterBottom>
+                            Información Personal
+                        </Typography>
+                        <Grid container spacing={2}>
+                            <Grid item xs={6}>
+                                <Typography variant="caption" color="text.secondary">Cédula</Typography>
+                                <Typography variant="body2" fontWeight={700}>{item.persona?.cedula || '—'}</Typography>
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Typography variant="caption" color="text.secondary">Teléfono</Typography>
+                                <Typography variant="body2" fontWeight={700}>{item.persona?.telefono1 || '—'}</Typography>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Typography variant="caption" color="text.secondary">Dirección</Typography>
+                                <Typography variant="body2" fontWeight={700}>{item.persona?.direccion || '—'}</Typography>
+                            </Grid>
+                        </Grid>
+                    </Box>
+
+                    {/* Sección: Información Institucional */}
+                    <Box>
+                        <Typography variant="overline" color="text.secondary" fontWeight={800} display="block" gutterBottom>
+                            Información Institucional
+                        </Typography>
+                        <Grid container spacing={2}>
+                            <Grid item xs={6}>
+                                <Typography variant="caption" color="text.secondary">Email Profesional</Typography>
+                                <Typography variant="body2" fontWeight={700}>{item.email}</Typography>
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Typography variant="caption" color="text.secondary">Estado de Cuenta</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: item.activo ? '#4caf50' : '#f44336' }} />
+                                    <Typography variant="body2" fontWeight={700}>{item.activo ? 'Activo' : 'Inactivo'}</Typography>
+                                </Box>
+                            </Grid>
+                            {(item.rol === 'tutor' || item.rol === 'tutor_especial') && (
+                                <Grid item xs={12}>
+                                    <Typography variant="caption" color="text.secondary">Profesión</Typography>
+                                    <Typography variant="body2" fontWeight={700}>{item.persona?.tutor?.profesion || '—'}</Typography>
+                                </Grid>
+                            )}
+                            <Grid item xs={12}>
+                                <Typography variant="caption" color="text.secondary">Fecha de Ingreso</Typography>
+                                <Typography variant="body2" fontWeight={700}>
+                                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
+                                </Typography>
+                            </Grid>
+                        </Grid>
+                    </Box>
+                </Stack>
+            </DialogContent>
+            <Divider />
+            <DialogActions sx={{ p: 2 }}>
+                <Button onClick={onClose} variant="contained" sx={{ borderRadius: 3, bgcolor: CCO.azul, px: 4 }}>
+                    Cerrar
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
 // ─── CARD DE USUARIO ─────────────────────────────────────────
-function UsuarioCard({ item, canEdit, onEditar, onEliminar, onToggleActivo }) {
+function UsuarioCard({ item, canEdit, onEditar, onEliminar, onToggleActivo, onVerDetalle }) {
     const theme = useTheme();
-    const cfg = ROLES[item.rol] || { label: item.rol, color: '#777', emoji: '❓' };
+    const cfg = ROLES[item.rol] || { label: item.rol, color: '#777' };
     return (
         <Card elevation={0} sx={{
             borderRadius: 3, border: '1.5px solid',
             borderColor: item.activo ? 'divider' : alpha('#f44336', 0.3),
             transition: 'all 0.2s ease', height: '100%', display: 'flex', flexDirection: 'column',
             opacity: item.activo ? 1 : 0.75,
+            cursor: 'pointer',
             '&:hover': {
                 borderColor: item.activo ? CCO.azul : '#f44336',
                 boxShadow: `0 6px 20px ${alpha(item.activo ? CCO.azul : '#f44336', 0.1)}`,
                 transform: 'translateY(-2px)',
             }
-        }}>
+        }} onClick={() => onVerDetalle(item)}>
             <CardContent sx={{ flex: 1, pb: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                    <UserAvatar nombre={item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username} rol={item.rol} size={44} />
+                    <UserAvatar 
+                        nombre={item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username} 
+                        rol={item.rol} 
+                        foto={item.persona?.tutor?.fotografia}
+                        size={44} 
+                    />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="body2" fontWeight={800} noWrap title={item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username}>
                             {item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" noWrap display="block">
-                            @{item.username}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ fontSize: 10 }}>
                             {item.email}
                         </Typography>
                     </Box>
@@ -358,7 +466,7 @@ function UsuarioCard({ item, canEdit, onEditar, onEliminar, onToggleActivo }) {
                 </Typography>
             </CardContent>
             {canEdit && (
-                <CardActions sx={{ px: 1.5, pb: 1.5, pt: 0, gap: 0.5 }}>
+                <CardActions sx={{ px: 1.5, pb: 1.5, pt: 0, gap: 0.5 }} onClick={e => e.stopPropagation()}>
                     <Tooltip title={item.activo ? 'Desactivar cuenta' : 'Activar cuenta'} arrow>
                         <IconButton size="small"
                             sx={{
@@ -408,8 +516,9 @@ export default function UsuariosPage() {
     // Vista
     const [vistaMode, setVistaMode] = useState('cards');
 
-    // Modal
+    // Modales
     const [formModal, setFormModal] = useState({ open: false, tipo: null, item: null });
+    const [detailModal, setDetailModal] = useState({ open: false, item: null });
 
     // ── Carga ─────────────────────────────────────────────────
     const cargar = useCallback(async () => {
@@ -445,8 +554,9 @@ export default function UsuariosPage() {
     // ── Handlers ──────────────────────────────────────────────
     const handleConfirm = async (form) => {
         try {
+            const generatedUsername = form.email.split('@')[0].toLowerCase().slice(0, 45) + Math.floor(Math.random() * 1000);
             const formData = {
-                username: form.username,
+                username: generatedUsername,
                 email: form.email,
                 rol: form.rol,
                 activo: form.activo,
@@ -518,11 +628,11 @@ export default function UsuariosPage() {
             renderCell: r => {
                 const nombreCompleto = r.persona ? `${r.persona.nombres} ${r.persona.apellidos}` : r.username;
                 return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <UserAvatar nombre={nombreCompleto} rol={r.rol} size={34} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer' }} onClick={() => setDetailModal({ open: true, item: r })}>
+                        <UserAvatar nombre={nombreCompleto} rol={r.rol} foto={r.persona?.tutor?.fotografia} size={34} />
                         <Box>
                             <Typography variant="body2" fontWeight={700}>{nombreCompleto}</Typography>
-                            <Typography variant="caption" color="text.secondary">@{r.username} · {r.email}</Typography>
+                            <Typography variant="caption" color="text.secondary">{r.email}</Typography>
                         </Box>
                     </Box>
                 )
@@ -642,7 +752,7 @@ export default function UsuariosPage() {
                 <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', p: 2, mb: 3 }}>
                     <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                         <TextField
-                            size="small" placeholder="Buscar por nombre, usuario o email..."
+                            size="small" placeholder="Buscar por nombre o email..."
                             value={buscar} onChange={e => setBuscar(e.target.value)}
                             sx={{ flex: 1, minWidth: 220, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
                             InputProps={{
@@ -658,14 +768,14 @@ export default function UsuariosPage() {
                             sx={{ minWidth: 170, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
                             <MenuItem value="">Todos los roles</MenuItem>
                             {Object.entries(ROLES).map(([k, v]) => (
-                                <MenuItem key={k} value={k}>{v.emoji} {v.label}</MenuItem>
+                                <MenuItem key={k} value={k}>{v.label}</MenuItem>
                             ))}
                         </TextField>
                         <TextField select size="small" label="Estado" value={filtroActivo} onChange={e => setFiltroActivo(e.target.value)}
                             sx={{ minWidth: 130, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
                             <MenuItem value="">Todos</MenuItem>
-                            <MenuItem value="activo">✅ Activos</MenuItem>
-                            <MenuItem value="inactivo">🔒 Inactivos</MenuItem>
+                            <MenuItem value="activo">Activos</MenuItem>
+                            <MenuItem value="inactivo">Inactivos</MenuItem>
                         </TextField>
                         {hayFiltros && (
                             <Tooltip title="Limpiar filtros" arrow>
@@ -689,8 +799,8 @@ export default function UsuariosPage() {
                     {hayFiltros && (
                         <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                             <Typography variant="caption" color="text.secondary" fontWeight={600}>Filtros:</Typography>
-                            {filtroRol && <Chip label={`${ROLES[filtroRol]?.emoji} ${ROLES[filtroRol]?.label}`} size="small" onDelete={() => setFiltroRol('')} sx={{ fontWeight: 700 }} />}
-                            {filtroActivo && <Chip label={filtroActivo === 'activo' ? '✅ Activos' : '🔒 Inactivos'} size="small" onDelete={() => setFiltroActivo('')} sx={{ fontWeight: 700 }} />}
+                            {filtroRol && <Chip label={ROLES[filtroRol]?.label} size="small" onDelete={() => setFiltroRol('')} sx={{ fontWeight: 700 }} />}
+                            {filtroActivo && <Chip label={filtroActivo === 'activo' ? 'Activos' : 'Inactivos'} size="small" onDelete={() => setFiltroActivo('')} sx={{ fontWeight: 700 }} />}
                             <Chip label={`${filtered.length} resultados`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
                         </Box>
                     )}
@@ -706,7 +816,7 @@ export default function UsuariosPage() {
                 {vistaMode === 'cards' && (
                     filtered.length === 0 ? (
                         <Box sx={{ textAlign: 'center', py: 8 }}>
-                            <Typography fontSize={48}>🔍</Typography>
+                            <UsuariosIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
                             <Typography variant="h6" fontWeight={700} color="text.secondary">No se encontraron usuarios</Typography>
                             <Typography variant="body2" color="text.secondary">Prueba con otros términos o limpia los filtros</Typography>
                         </Box>
@@ -719,6 +829,7 @@ export default function UsuariosPage() {
                                         onEditar={(r) => setFormModal({ open: true, tipo: 'editar', item: r })}
                                         onEliminar={handleEliminar}
                                         onToggleActivo={handleToggleActivo}
+                                        onVerDetalle={(r) => setDetailModal({ open: true, item: r })}
                                     />
                                 </Grid>
                             ))}
@@ -738,13 +849,19 @@ export default function UsuariosPage() {
                 )}
             </Box>
 
-            {/* ── Modal ── */}
             <UsuarioFormModal
                 open={formModal.open}
                 tipo={formModal.tipo}
                 item={formModal.item}
                 onClose={() => setFormModal(m => ({ ...m, open: false }))}
                 onConfirm={handleConfirm}
+            />
+
+            {/* ── Modal Detalle ── */}
+            <UsuarioDetailModal
+                open={detailModal.open}
+                item={detailModal.item}
+                onClose={() => setDetailModal(m => ({ ...m, open: false, item: null }))}
             />
         </MainLayout>
     );
