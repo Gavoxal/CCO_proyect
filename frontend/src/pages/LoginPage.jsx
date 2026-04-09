@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, TextField, Button, Typography, InputAdornment,
     IconButton, Alert, alpha, useTheme, CircularProgress,
+    Dialog, DialogTitle, DialogContent, DialogActions, Stack
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
+import { authService } from '../services/appServices';
 import {
     Person as PersonIcon,
     Lock as LockIcon,
@@ -56,6 +59,34 @@ const LoginPage = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // ── Recuperar Contraseña ──────────────────────────────────────────────
+    const { enqueueSnackbar } = useSnackbar();
+    const [openRecovery, setOpenRecovery] = useState(false);
+    const [emailRecovery, setEmailRecovery] = useState('');
+    const [recoveryLoading, setRecoveryLoading] = useState(false);
+
+    const handleRecovery = async () => {
+        if (!emailRecovery) {
+            enqueueSnackbar('Ingresa tu correo electrónico', { variant: 'warning' });
+            return;
+        }
+        setRecoveryLoading(true);
+        try {
+            const res = await authService.recuperarPassword(emailRecovery);
+            if (res.success !== false) {
+                enqueueSnackbar('Correo enviado con éxito. Revisa tu bandeja de entrada.', { variant: 'success' });
+                setOpenRecovery(false);
+                setEmailRecovery('');
+            } else {
+                enqueueSnackbar(res.message || 'Error al procesar la solicitud', { variant: 'error' });
+            }
+        } catch (error) {
+            enqueueSnackbar('Ocurrió un error inesperado', { variant: 'error' });
+        } finally {
+            setRecoveryLoading(false);
+        }
+    };
 
     // ── Carrusel ────────────────────────────────────────────────────────────
     const [slide, setSlide] = useState(0);
@@ -176,6 +207,20 @@ const LoginPage = () => {
                             }}
                             placeholder="••••••••" autoComplete="current-password" />
 
+                        <Box sx={{ mt: -2, mb: 3, textAlign: 'right' }}>
+                            <Button 
+                                variant="text" size="medium" 
+                                onClick={() => setOpenRecovery(true)}
+                                sx={{ 
+                                    textTransform: 'none', color: isDark ? alpha('#fff', 0.6) : alpha('#000', 0.5), 
+                                    fontWeight: 600, fontSize: '0.875rem',
+                                    '&:hover': { color: CCO.violeta, background: 'transparent' }
+                                }}
+                            >
+                                ¿Olvidaste tu contraseña?
+                            </Button>
+                        </Box>
+
                         <Button type="submit" fullWidth variant="contained" size="large"
                             disabled={loading} endIcon={!loading && <ArrowIcon />}
                             sx={{
@@ -287,6 +332,53 @@ const LoginPage = () => {
                     </Box>
                 </Box>
             </Box>
+
+            {/* ── DIALOG RECUPERACIÓN ──────────────────────────────────────── */}
+            <Dialog 
+                open={openRecovery} 
+                onClose={() => !recoveryLoading && setOpenRecovery(false)}
+                PaperProps={{ sx: { borderRadius: '20px', p: 1, width: '100%', maxWidth: 400 } }}
+            >
+                <DialogTitle sx={{ fontWeight: 800, fontSize: '1.5rem', pb: 1 }}>
+                    Recuperar acceso
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                        Ingresa el correo electrónico asociado a tu cuenta. Te enviaremos una contraseña temporal de inmediato.
+                    </Typography>
+                    <TextField
+                        fullWidth autoFocus
+                        label="Correo Electrónico"
+                        type="email"
+                        value={emailRecovery}
+                        onChange={(e) => setEmailRecovery(e.target.value)}
+                        placeholder="ejemplo@cco.org"
+                        disabled={recoveryLoading}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ p: 3, pt: 0 }}>
+                    <Button 
+                        onClick={() => setOpenRecovery(false)} 
+                        disabled={recoveryLoading}
+                        sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button 
+                        onClick={handleRecovery}
+                        variant="contained"
+                        disabled={recoveryLoading}
+                        sx={{ 
+                            borderRadius: '12px', fontWeight: 800, px: 3, textTransform: 'none',
+                            background: `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
+                            '&:hover': { opacity: 0.9 }
+                        }}
+                    >
+                        {recoveryLoading ? <CircularProgress size={20} color="inherit" /> : 'Enviar Contraseña'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

@@ -38,6 +38,7 @@ model Usuario {
   ultimoAcceso    DateTime?
   tokenVersion    Int                @default(0)
   personaId       Int?               @unique
+  passwordUpdatedAt DateTime           @default(now())
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   notificaciones  Notificacion[]

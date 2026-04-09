@@ -217,53 +217,78 @@ const Sidebar = () => {
             <Divider sx={{ mx: 1, opacity: 0.4 }} />
 
             {/* ─── Usuario ────────────────────────────────────────────────── */}
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ p: 1, mt: 'auto' }}>
                 <Box 
-                    onClick={() => navigate('/perfil')}
                     sx={{ 
-                        display: 'flex', alignItems: 'center', gap: 1.5, 
+                        display: 'flex', alignItems: 'center', 
                         justifyContent: collapsed ? 'center' : 'flex-start',
-                        cursor: 'pointer',
+                        gap: 1,
                         p: 1,
-                        borderRadius: 2,
+                        borderRadius: '12px',
+                        bgcolor: theme.palette.mode === 'dark' ? alpha('#fff', 0.03) : alpha('#000', 0.02),
+                        border: `1px solid ${theme.palette.divider}`,
                         transition: 'all 0.2s ease',
-                        '&:hover': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.08)
-                        }
                     }}
                 >
-                    <Avatar sx={{
-                        width: 36, height: 36, fontWeight: 700, fontSize: '0.9rem',
-                        background: `linear-gradient(135deg, ${rolInfo.color} 0%, ${alpha(rolInfo.color, 0.6)} 100%)`,
-                    }}>
-                        {(user?.nombre || user?.username || '?').charAt(0).toUpperCase()}
-                    </Avatar>
+                    <Box 
+                        onClick={() => navigate('/perfil')}
+                        sx={{ 
+                            display: 'flex', alignItems: 'center', gap: 1.5, 
+                            flex: 1, minWidth: 0, cursor: 'pointer',
+                            '&:hover': { opacity: 0.8 }
+                        }}
+                    >
+                        <Avatar sx={{
+                            width: 34, height: 34, fontWeight: 700, fontSize: '0.85rem',
+                            background: `linear-gradient(135deg, ${rolInfo.color} 0%, ${alpha(rolInfo.color, 0.6)} 100%)`,
+                        }}>
+                            {(user?.nombre || user?.username || '?').charAt(0).toUpperCase()}
+                        </Avatar>
+                        {!collapsed && (
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.1, fontSize: '0.8rem' }} noWrap>
+                                    {user?.nombre || user?.username}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: rolInfo.color, fontWeight: 700, fontSize: '0.65rem' }}>
+                                    {rolInfo.label}
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+                    
                     {!collapsed && (
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
-                                {user?.nombre || user?.username}
-                            </Typography>
-                            <Chip
-                                label={rolInfo.label}
+                        <Tooltip title="Cerrar sesión" arrow>
+                            <IconButton 
+                                onClick={(e) => { e.stopPropagation(); logout(); navigate('/login'); }} 
                                 size="small"
-                                sx={{
-                                    height: 16, fontSize: '0.6rem', fontWeight: 600,
-                                    bgcolor: alpha(rolInfo.color, 0.15), color: rolInfo.color,
-                                    '& .MuiChip-label': { px: 0.75 },
+                                sx={{ 
+                                    color: 'text.secondary',
+                                    '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
                                 }}
-                            />
-                        </Box>
+                            >
+                                <LogoutIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                        </Tooltip>
                     )}
                 </Box>
-                <Box sx={{ mt: 1, display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
-                    <Tooltip title="Cerrar sesión" arrow>
-                        <IconButton onClick={(e) => { e.stopPropagation(); logout(); navigate('/login'); }} size="small"
-                            sx={{ color: 'text.secondary', '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) } }}
-                        >
-                            <LogoutIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </Box>
+                
+                {collapsed && (
+                    <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
+                        <Tooltip title="Cerrar sesión" arrow placement="right">
+                            <IconButton 
+                                onClick={(e) => { e.stopPropagation(); logout(); navigate('/login'); }} 
+                                size="small"
+                                sx={{ 
+                                    width: 40, height: 40,
+                                    color: 'text.secondary',
+                                    '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                                }}
+                            >
+                                <LogoutIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                )}
             </Box>
         </Drawer>
     );

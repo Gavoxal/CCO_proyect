@@ -34,7 +34,8 @@ export const sendEmail = async (to, subject, html) => {
         console.log(`✉️ Correo enviado a ${to}: ${info.messageId}`);
         return true;
     } catch (error) {
-        console.error('❌ Error enviando correo a', to, error);
+        console.error('❌ Error enviando correo a', to);
+        console.error('Detalle del error SMTP:', error.message);
         return false;
     }
 };

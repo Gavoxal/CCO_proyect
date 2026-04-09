@@ -1,4 +1,4 @@
-import { login, me } from './auth.controller.js'
+import { login, me, recuperarPassword } from './auth.controller.js'
 
 export default async function authRoutes(fastify) {
     // POST /api/v1/auth/login
@@ -17,4 +17,17 @@ export default async function authRoutes(fastify) {
 
     // GET /api/v1/auth/me  (requiere token)
     fastify.get('/me', { preHandler: [fastify.authenticate] }, me)
+
+    // POST /api/v1/auth/recuperar-password
+    fastify.post('/recuperar-password', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                    email: { type: 'string', format: 'email' }
+                }
+            }
+        }
+    }, recuperarPassword)
 }

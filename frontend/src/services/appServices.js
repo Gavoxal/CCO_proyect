@@ -22,6 +22,16 @@ export const authService = {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
     },
+
+    recuperarPassword: async (email) => {
+        try {
+            const { data } = await api.post('/auth/recuperar-password', { email });
+            return data;
+        } catch (err) {
+            const message = err.response?.data?.error || 'No se pudo conectar con el servidor';
+            return { success: false, message };
+        }
+    }
 };
 
 export const usuariosService = {

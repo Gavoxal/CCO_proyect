@@ -17,8 +17,12 @@ export async function listar(request, reply) {
             skip, take: limit,
             select: {
                 id: true, username: true, email: true,
-                rol: true, activo: true, ultimoAcceso: true,
-                persona: { select: { nombres: true, apellidos: true, telefono1: true, tutor: { select: { id: true } } } }
+                rol: true, activo: true, ultimoAcceso: true, createdAt: true,
+                persona: { 
+                    include: { 
+                        tutor: { select: { fotografia: true, profesion: true } } 
+                    } 
+                }
             },
             orderBy: { createdAt: 'desc' }
         })
@@ -42,12 +46,23 @@ export async function listarTutores(request, reply) {
 // GET /usuarios/:id
 export async function obtener(request, reply) {
     const db = request.server.db
+    const id = parseInt(request.params.id)
+
+    // Seguridad: Un usuario solo puede verse a sí mismo si no es admin
+    const isSelf = request.user.id === id
+    const isAdmin = ROLES.SUPER_ADMINS.includes(request.user.rol)
+    if (!isSelf && !isAdmin) {
+        return reply.status(403).send({ error: 'Acceso denegado a este perfil' })
+    }
+
     const usuario = await db.usuario.findUnique({
-        where: { id: parseInt(request.params.id) },
+        where: { id },
         select: {
             id: true, username: true, email: true,
             rol: true, activo: true, ultimoAcceso: true, createdAt: true,
-            persona: true
+            persona: {
+                include: { tutor: true }
+            }
         }
     })
     if (!usuario) return notFound(reply)
@@ -99,13 +114,31 @@ export async function crear(request, reply) {
 export async function actualizar(request, reply) {
     const db = request.server.db
     const id = parseInt(request.params.id)
+
+    // Seguridad: Solo el dueño o admins pueden editar
+    const isSelf = request.user.id === id
+    const isAdmin = ROLES.SUPER_ADMINS.includes(request.user.rol)
+    if (!isSelf && !isAdmin) {
+        return reply.status(403).send({ error: 'No tienes permiso para editar este perfil' })
+    }
+
     const { email, rol, activo, persona, password, profesion, fotografia } = request.body
 
     const data = {}
     if (email) data.email = email
     if (rol) data.rol = rol
     if (activo !== undefined) data.activo = activo
-    if (password) data.password = await bcrypt.hash(password, 12)
+    if (password) {
+        const usuarioActual = await db.usuario.findUnique({ where: { id }, select: { password: true } })
+        if (usuarioActual) {
+            const matches = await bcrypt.compare(password, usuarioActual.password)
+            if (matches) {
+                return reply.status(400).send({ error: 'La nueva contraseña no puede ser igual a la anterior' })
+            }
+        }
+        data.password = await bcrypt.hash(password, 12)
+        data.passwordUpdatedAt = new Date()
+    }
     if (persona) data.persona = { update: persona }
 
     try {
@@ -154,6 +187,13 @@ export async function eliminar(request, reply) {
 export async function subirFoto(request, reply) {
     const db = request.server.db
     const id = parseInt(request.params.id)
+
+    // Seguridad: Solo el dueño o admins pueden subir foto
+    const isSelf = request.user.id === id
+    const isAdmin = ROLES.SUPER_ADMINS.includes(request.user.rol)
+    if (!isSelf && !isAdmin) {
+        return reply.status(403).send({ error: 'No tienes permiso para subir fotos a este perfil' })
+    }
 
     // Buscar si es un usuario válido
     const usuario = await db.usuario.findUnique({
