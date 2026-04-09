@@ -9,17 +9,11 @@ import { Badge } from '@mui/material';
 import {
     PeopleAlt as InfantesIcon,
     Inventory2 as InvIcon,
-    Church as ChurchIcon,
     CardGiftcard as GiftIcon,
     HomeWork as VisitaIcon,
     CheckCircle as CheckIcon,
-    TrendingUp as TrendIcon,
-    People as MiembrosIcon,
-    CalendarMonth as CalIcon,
     WarningAmber as WarningIcon,
-    Star as StarIcon,
-    House as HouseIcon,
-    Badge as BadgeIcon,
+    CalendarMonth as CalIcon,
     ManageAccounts as UsuariosIcon,
     AssignmentTurnedIn as AsistenciaIcon,
 } from '@mui/icons-material';
@@ -90,21 +84,6 @@ const getDashboardData = () => {
         { id: 3, nombre: 'Pegamento en barra', cantidad: 2, min: 5 },
     ];
 
-    const miembros = leer('cco_miembros', []);
-    const mActivos = miembros.filter(m => m.tipoMembresia === 'Activo').length || 320;
-    const mRegulares = miembros.filter(m => m.tipoMembresia === 'Regular').length || 210;
-    const mLideres = miembros.filter(m => m.tipoMembresia === 'Lider').length || 34;
-    const mDiaconos = miembros.filter(m => m.tipoMembresia === 'Diacono').length || 8;
-    const totalMiembros = miembros.length || 530;
-
-    const casas = leer('cco_casas_paz', []);
-    const casasProgreso = casas.filter(c => c.estado === 'EnProgreso').length || 18;
-    const casasCompletadas = casas.filter(c => c.estado === 'Completada').length || 12;
-    const casasCanceladas = casas.filter(c => c.estado === 'Cancelada').length || 2;
-    const totalIntegrantes = casas.reduce((acc, c) => acc + (c.integrantes?.length || 0), 0) || 287;
-    const consolidandose = casas.filter(c => c.casaConsolidandose).length;
-    const totalCasas = casas.length || 32;
-
     const usuarios = leer('cco_usuarios', []);
     const usrActivos = usuarios.filter(u => u.activo).length || 5;
     const tutores = usuarios.filter(u => ['tutor', 'tutor_especial'].includes(u.rol)).length || 3;
@@ -116,8 +95,9 @@ const getDashboardData = () => {
         cumplesMes: cumplesMes.length > 0 ? cumplesMes : cumplesFallback,
         matTotal, stockBajo: stockBajo.length > 0 ? stockBajo : stockFallback,
         usrActivos, tutores,
-        mActivos, mRegulares, mLideres, mDiaconos, totalMiembros,
-        casasProgreso, casasCompletadas, casasCanceladas, totalIntegrantes, consolidandose, totalCasas,
+        cumplesMes: cumplesMes.length > 0 ? cumplesMes : cumplesFallback,
+        matTotal, stockBajo: stockBajo.length > 0 ? stockBajo : stockFallback,
+        usrActivos, tutores,
     };
 };
 
@@ -437,117 +417,7 @@ const TabInventario = ({ d }) => {
     );
 };
 
-// ─── TAB 3: IGLESIA CCO ──────────────────────────────────────
-const TabCCO = ({ d }) => {
-    const theme = useTheme();
-    const navigate = useNavigate();
 
-    const proximosEventos = [
-        { id: 1, titulo: 'Culto Dominical', tipo: 'Iglesia', fecha: '2026-03-23T10:00:00', desc: 'Servicio dominical general' },
-        { id: 2, titulo: 'Entrega Kits Escolares', tipo: 'Ministerio', fecha: '2026-03-27T09:00:00', desc: 'Entrega masiva de kits escolares' },
-        { id: 3, titulo: 'Reunión de Líderes', tipo: 'Iglesia', fecha: '2026-03-29T18:00:00', desc: 'Reunión mensual de líderes CCO' },
-        { id: 4, titulo: 'Visitas Ministerio', tipo: 'Ministerio', fecha: '2026-03-30T08:00:00', desc: 'Visitas domiciliarias programadas' },
-    ];
-    const colorEv = { Ministerio: CCO.violeta, Iglesia: '#4caf50', Emergencia: '#ef5350' };
-
-    return (
-        <Box>
-            {/* Miembros */}
-            <SectionTitle action={<GoBtn to="/miembros" label="Ver miembros" />}>⛪ Membresía de la Iglesia</SectionTitle>
-            <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                {[
-                    { label: 'Total Miembros', value: d.totalMiembros, color: CCO.azul, icon: <MiembrosIcon sx={{ color: CCO.azul, fontSize: 26 }} />, sub: 'Registrados en el sistema' },
-                    { label: 'Activos', value: d.mActivos, color: '#4caf50', icon: <CheckIcon sx={{ color: '#4caf50', fontSize: 26 }} />, sub: 'Membresía activa confirmada' },
-                    { label: 'Líderes', value: d.mLideres, color: CCO.violeta, icon: <StarIcon sx={{ color: CCO.violeta, fontSize: 26 }} />, sub: 'Líderes confirmados' },
-                    { label: 'Diáconos', value: d.mDiaconos, color: CCO.naranja, icon: <BadgeIcon sx={{ color: CCO.naranja, fontSize: 26 }} />, sub: 'En servicio activo' },
-                ].map(kpi => (
-                    <Grid item xs={6} sm={3} key={kpi.label}>
-                        <StatCard icon={kpi.icon} title={kpi.label} value={kpi.value}
-                            subtitle={kpi.sub} color={kpi.color} onClick={() => navigate('/miembros')} />
-                    </Grid>
-                ))}
-            </Grid>
-
-            <Grid container spacing={2.5}>
-                {/* Casas de Paz */}
-                <Grid item xs={12} md={5}>
-                    <SectionTitle action={<GoBtn to="/casas-de-paz" label="Ver casas" />}>🏠 Casas de Paz</SectionTitle>
-                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3 }}>
-                        <CardContent sx={{ p: 3 }}>
-                            {[
-                                { label: 'En Progreso', value: d.casasProgreso, color: CCO.naranja },
-                                { label: 'Completadas', value: d.casasCompletadas, color: '#4caf50' },
-                                { label: 'Canceladas', value: d.casasCanceladas, color: '#f44336' },
-                                { label: 'Total integrantes', value: d.totalIntegrantes, color: CCO.azul },
-                                ...(d.consolidandose > 0 ? [{ label: 'Consolidándose', value: d.consolidandose, color: CCO.celeste }] : []),
-                            ].map((row, i, arr) => (
-                                <Box key={row.label}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
-                                        <Typography variant="body2" color="text.secondary" fontWeight={600}>{row.label}</Typography>
-                                        <Typography variant="h6" fontWeight={900} sx={{ color: row.color }}>{row.value}</Typography>
-                                    </Box>
-                                    {i < arr.length - 1 && <Divider />}
-                                </Box>
-                            ))}
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                {/* Próximos Eventos */}
-                <Grid item xs={12} md={7}>
-                    <SectionTitle action={<GoBtn to="/calendario" label="Ver calendario" />}>📅 Próximos Eventos</SectionTitle>
-                    <Card elevation={0} sx={{ border: '1.5px solid', borderColor: 'divider', borderRadius: 3 }}>
-                        <CardContent sx={{ p: 3 }}>
-                            <List disablePadding>
-                                {proximosEventos.map((ev, i) => {
-                                    const color = colorEv[ev.tipo] || '#9e9e9e';
-                                    const f = new Date(ev.fecha);
-                                    return (
-                                        <Box key={ev.id}>
-                                            <ListItem disableGutters sx={{ py: 1.5, alignItems: 'flex-start' }}>
-                                                <ListItemAvatar>
-                                                    <Box sx={{
-                                                        width: 48, height: 48, borderRadius: 2,
-                                                        bgcolor: alpha(color, 0.12),
-                                                        border: `1px solid ${alpha(color, 0.25)}`,
-                                                        display: 'flex', flexDirection: 'column',
-                                                        alignItems: 'center', justifyContent: 'center',
-                                                        flexShrink: 0,
-                                                    }}>
-                                                        <Typography sx={{ fontSize: 15, fontWeight: 900, color, lineHeight: 1 }}>
-                                                            {f.getDate()}
-                                                        </Typography>
-                                                        <Typography sx={{ fontSize: 9, fontWeight: 700, color, lineHeight: 1, mt: 0.25, opacity: 0.85 }}>
-                                                            {f.toLocaleString('es-EC', { month: 'short' }).toUpperCase()}
-                                                        </Typography>
-                                                    </Box>
-                                                </ListItemAvatar>
-                                                <ListItemText
-                                                    primary={ev.titulo}
-                                                    secondary={ev.desc}
-                                                    primaryTypographyProps={{ fontWeight: 800, fontSize: '0.9rem' }}
-                                                    secondaryTypographyProps={{ fontSize: '0.8rem' }}
-                                                    sx={{ pl: 1 }}
-                                                />
-                                                <Chip label={ev.tipo} size="small"
-                                                    sx={{
-                                                        bgcolor: alpha(color, 0.12), color, fontSize: '0.65rem',
-                                                        fontWeight: 700, border: `1px solid ${alpha(color, 0.3)}`,
-                                                        flexShrink: 0, mt: 0.5
-                                                    }} />
-                                            </ListItem>
-                                            {i < proximosEventos.length - 1 && <Divider />}
-                                        </Box>
-                                    );
-                                })}
-                            </List>
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
-        </Box>
-    );
-};
 
 // ─── Página principal ─────────────────────────────────────────
 export default function DashboardPage() {
@@ -560,7 +430,6 @@ export default function DashboardPage() {
     const TABS = [
         { label: '👶 Ministerio', badge: 0 },
         { label: '📦 Inventario', badge: d.stockBajo.length },
-        { label: '⛪ Iglesia CCO', badge: 0 },
     ];
 
     const hora = new Date().getHours();
@@ -625,7 +494,6 @@ export default function DashboardPage() {
                 }}>
                     {tab === 0 && <TabMinisterio d={d} />}
                     {tab === 1 && <TabInventario d={d} />}
-                    {tab === 2 && <TabCCO d={d} />}
                 </Box>
 
             </Box>

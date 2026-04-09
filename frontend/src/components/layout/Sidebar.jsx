@@ -58,14 +58,7 @@ const menuGroups = [
             { text: 'Reportar Incidente', icon: <IncidentesIcon />, path: '/incidentes/nuevo', roles: ['tutor', 'tutor_especial'] },
         ],
     },
-    {
-        label: 'Iglesia CCO',
-        roles: ['admin', 'director', 'proteccion'],
-        items: [
-            { text: 'Miembros', icon: <MiembrosIcon />, path: '/miembros' },
-            { text: 'Casas de Paz', icon: <CasasPazIcon />, path: '/casas-de-paz' },
-        ],
-    },
+
     {
         label: 'Administración',
         roles: ['admin', 'director', 'proteccion'],

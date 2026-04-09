@@ -55,29 +55,13 @@ const TIPO_CONFIG = {
         bg: '#e53935',
         icon: <EmergencyIcon fontSize="small" />,
     },
-};
-
-// ─── Feriados Ecuador 2026 (solo locales, no van al backend) ──────────────────
-const FERIADOS_ECUADOR = [
-    { id: 'fer-1', title: '🇪🇨 Año Nuevo', start: new Date(2026, 0, 1), end: new Date(2026, 0, 1, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Día de Año Nuevo.', allDay: true },
-    { id: 'fer-2', title: '🎭 Carnaval (Lunes)', start: new Date(2026, 1, 16), end: new Date(2026, 1, 16, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Lunes de Carnaval.', allDay: true },
-    { id: 'fer-3', title: '🎭 Carnaval (Martes)', start: new Date(2026, 1, 17), end: new Date(2026, 1, 17, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Martes de Carnaval.', allDay: true },
-    { id: 'fer-4', title: '✝️ Viernes Santo', start: new Date(2026, 3, 3), end: new Date(2026, 3, 3, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Viernes Santo.', allDay: true },
-    { id: 'fer-5', title: '👷 Día del Trabajo', start: new Date(2026, 4, 1), end: new Date(2026, 4, 1, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Día Internacional del Trabajo.', allDay: true },
-    { id: 'fer-6', title: '⚔️ Batalla de Pichincha', start: new Date(2026, 4, 24), end: new Date(2026, 4, 24, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Batalla de Pichincha (1822).', allDay: true },
-    { id: 'fer-7', title: '🇪🇨 Primer Grito de Independencia', start: new Date(2026, 7, 10), end: new Date(2026, 7, 10, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Primer Grito de Independencia de Quito (1809).', allDay: true },
-    { id: 'fer-8', title: '🇪🇨 Independencia de Guayaquil', start: new Date(2026, 9, 9), end: new Date(2026, 9, 9, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Independencia de Guayaquil (1820).', allDay: true },
-    { id: 'fer-9', title: '💀 Día de los Difuntos', start: new Date(2026, 10, 2), end: new Date(2026, 10, 2, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Día de los Difuntos.', allDay: true },
-    { id: 'fer-10', title: '🇪🇨 Independencia de Cuenca', start: new Date(2026, 10, 3), end: new Date(2026, 10, 3, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Independencia de Cuenca (1820).', allDay: true },
-    { id: 'fer-11', title: '🎄 Navidad', start: new Date(2026, 11, 25), end: new Date(2026, 11, 25, 23, 59), tipo: '_Feriado', descripcion: 'Feriado nacional — Navidad.', allDay: true },
-];
-
-const FERIADO_CFG = {
-    label: 'Feriado Nacional',
-    short: 'Feriado',
-    color: '#ff6f00',
-    bg: '#ff8f00',
-    icon: <EventIcon fontSize="small" />,
+    Feriado: {
+        label: 'Feriado Nacional',
+        short: 'Feriado',
+        color: '#ff6f00',
+        bg: '#ff8f00',
+        icon: <EventIcon fontSize="small" />,
+    },
 };
 
 // ─── Localizer date-fns en español ────────────────────────────────────────────
@@ -169,18 +153,17 @@ export default function CalendarioPage() {
     useEffect(() => { cargar(); }, [cargar]);
 
     // ── Combinar backend + feriados locales ───────────────────────────────────
-    const allEvents = useMemo(() => [...backendEvents, ...FERIADOS_ECUADOR], [backendEvents]);
+    const allEvents = useMemo(() => backendEvents, [backendEvents]);
 
     // ── Filtro ────────────────────────────────────────────────────────────────
     const filteredEvents = useMemo(() => {
         if (filtro === 'all') return allEvents;
-        if (filtro === '_Feriado') return allEvents.filter(e => e.tipo === '_Feriado');
         return allEvents.filter(e => e.tipo === filtro);
     }, [allEvents, filtro]);
 
     // ── Estilo por evento ─────────────────────────────────────────────────────
     const eventStyleGetter = useCallback((event) => {
-        const cfg = event.tipo === '_Feriado' ? FERIADO_CFG : (TIPO_CONFIG[event.tipo] || TIPO_CONFIG.Iglesia);
+        const cfg = TIPO_CONFIG[event.tipo] || TIPO_CONFIG.Iglesia;
         return {
             style: {
                 backgroundColor: cfg.bg,
@@ -199,7 +182,7 @@ export default function CalendarioPage() {
     const handleSelectEvent = useCallback((event) => setSelectedEvent(event), []);
 
     const handleOpenForm = (eventToEdit = null) => {
-        if (eventToEdit && !eventToEdit.id?.toString().startsWith('fer-')) {
+        if (eventToEdit) {
             const pad = (n) => n.toString().padStart(2, '0');
             const formatLocal = (d) => {
                 const date = new Date(d);
@@ -271,7 +254,6 @@ export default function CalendarioPage() {
     };
 
     const handleDeleteEvent = async (id) => {
-        if (typeof id === 'string' && id.startsWith('fer-')) return; // No eliminar feriados locales
         if (!window.confirm('¿Eliminar este evento permanentemente?')) return;
         try {
             await eventosService.eliminar(id);
@@ -391,19 +373,6 @@ export default function CalendarioPage() {
                             }}
                         />
                     ))}
-                    <Chip
-                        label={isMobile ? 'Feriados' : 'Feriados Nacionales'}
-                        icon={FERIADO_CFG.icon}
-                        onClick={() => setFiltro(filtro === '_Feriado' ? 'all' : '_Feriado')}
-                        variant={filtro === '_Feriado' ? 'filled' : 'outlined'}
-                        sx={{
-                            fontWeight: 700,
-                            borderColor: FERIADO_CFG.color,
-                            color: filtro === '_Feriado' ? '#fff' : FERIADO_CFG.color,
-                            ...(filtro === '_Feriado' && { bgcolor: FERIADO_CFG.bg, '&:hover': { bgcolor: FERIADO_CFG.color } }),
-                            ...(filtro !== '_Feriado' && { '&:hover': { bgcolor: alpha(FERIADO_CFG.color, 0.08) } }),
-                        }}
-                    />
                     <Box sx={{ flex: 1 }} />
                     <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
                         {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}
@@ -461,8 +430,7 @@ export default function CalendarioPage() {
                     PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
                 >
                     {selectedEvent && (() => {
-                        const cfg = selectedEvent.tipo === '_Feriado' ? FERIADO_CFG : (TIPO_CONFIG[selectedEvent.tipo] || TIPO_CONFIG.Iglesia);
-                        const isFeriado = selectedEvent.tipo === '_Feriado';
+                        const cfg = TIPO_CONFIG[selectedEvent.tipo] || TIPO_CONFIG.Iglesia;
                         return (
                             <>
                                 {/* Banner de color */}
@@ -514,24 +482,22 @@ export default function CalendarioPage() {
                                     </Stack>
                                 </DialogContent>
                                 <DialogActions sx={{ px: 3, pb: 2.5 }}>
-                                    {!isFeriado && (
-                                        <Box sx={{ display: 'flex', gap: 1, mr: 'auto' }}>
-                                            <Button
-                                                startIcon={<EditIcon />}
-                                                color="primary"
-                                                onClick={() => handleOpenForm(selectedEvent)}
-                                            >
-                                                Editar
-                                            </Button>
-                                            <Button
-                                                startIcon={<DeleteIcon />}
-                                                color="error"
-                                                onClick={() => handleDeleteEvent(selectedEvent.id)}
-                                            >
-                                                Eliminar
-                                            </Button>
-                                        </Box>
-                                    )}
+                                    <Box sx={{ display: 'flex', gap: 1, mr: 'auto' }}>
+                                        <Button
+                                            startIcon={<EditIcon />}
+                                            color="primary"
+                                            onClick={() => handleOpenForm(selectedEvent)}
+                                        >
+                                            Editar
+                                        </Button>
+                                        <Button
+                                            startIcon={<DeleteIcon />}
+                                            color="error"
+                                            onClick={() => handleDeleteEvent(selectedEvent.id)}
+                                        >
+                                            Eliminar
+                                        </Button>
+                                    </Box>
                                     <Button variant="outlined" onClick={() => setSelectedEvent(null)}>
                                         Cerrar
                                     </Button>

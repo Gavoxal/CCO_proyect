@@ -124,19 +124,7 @@ export const regalosService = {
     eliminar: (id) => api.delete(`/regalos/${id}`).then(r => r.data),
 };
 
-export const miembrosService = {
-    listar: (params) => api.get('/miembros', { params }).then(r => r.data),
-    crear: (body) => api.post('/miembros', body).then(r => r.data),
-    actualizar: (id, body) => api.put(`/miembros/${id}`, body).then(r => r.data),
-    eliminar: (id) => api.delete(`/miembros/${id}`).then(r => r.data),
-};
 
-export const casasPazService = {
-    listar: (params) => api.get('/casas-de-paz', { params }).then(r => r.data),
-    crear: (body) => api.post('/casas-de-paz', body).then(r => r.data),
-    actualizar: (id, body) => api.put(`/casas-de-paz/${id}`, body).then(r => r.data),
-    eliminar: (id) => api.delete(`/casas-de-paz/${id}`).then(r => r.data),
-};
 
 export const eventosService = {
     listar: (params) => api.get('/eventos', { params }).then(r => r.data),

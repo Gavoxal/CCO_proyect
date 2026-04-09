@@ -17,8 +17,6 @@ import AsistenciaHistorialPage from './pages/asistencia/AsistenciaHistorialPage'
 import VisitasPage from './pages/visitas/VisitasPage';
 import MaterialesPage from './pages/inventario/MaterialesPage';
 import RegalosPage from './pages/regalos/RegalosPage';
-import MiembrosPage from './pages/miembros/MiembrosPage';
-import CasasDePazPage from './pages/casasDePaz/CasasDePazPage';
 import CalendarioPage from './pages/calendario/CalendarioPage';
 import UsuariosPage from './pages/usuarios/UsuariosPage';
 import ProfilePage from './pages/usuarios/ProfilePage';
@@ -99,13 +97,7 @@ function App() {
                 <ProtectedRoute><RolGuard roles={ESCRITURA}><InfanteFormPage /></RolGuard></ProtectedRoute>
               } />
 
-              {/* ── Solo Admin / Director / Protección ────────────────────── */}
-              <Route path="/miembros" element={
-                <ProtectedRoute><RolGuard roles={SOLO_ADMINS}><MiembrosPage /></RolGuard></ProtectedRoute>
-              } />
-              <Route path="/casas-de-paz" element={
-                <ProtectedRoute><RolGuard roles={SOLO_ADMINS}><CasasDePazPage /></RolGuard></ProtectedRoute>
-              } />
+
               <Route path="/usuarios" element={
                 <ProtectedRoute><RolGuard roles={SOLO_ADMINS}><UsuariosPage /></RolGuard></ProtectedRoute>
               } />
