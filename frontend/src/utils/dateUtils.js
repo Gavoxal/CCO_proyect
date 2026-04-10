@@ -40,9 +40,9 @@ export function formatDateToDDMMYYYY(date) {
     const d = new Date(date)
     if (isNaN(d.getTime())) return ''
     
-    const day = String(d.getDate()).padStart(2, '0')
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const year = d.getFullYear()
+    const day = String(d.getUTCDate()).padStart(2, '0')
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const year = d.getUTCFullYear()
     
     return `${day}/${month}/${year}`
 }
@@ -57,5 +57,76 @@ export function formatLongDate(date) {
     const d = new Date(date)
     if (isNaN(d.getTime())) return ''
     
-    return d.toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' })
+    return d.toLocaleDateString('es-EC', { 
+        day: '2-digit', 
+        month: 'long', 
+        year: 'numeric',
+        timeZone: 'UTC'
+    })
+}
+/**
+ * Returns the range for the calendar month of a given date.
+ */
+export function getMonthRange(date = new Date()) {
+    const d = new Date(date);
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    
+    const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    return { 
+        start: formatDate(start), 
+        end: formatDate(end) 
+    };
+}
+
+/**
+ * Returns the range for the ISO week (Monday to Sunday) of a given date.
+ */
+export function getISOWeekRange(date = new Date()) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const start = new Date(d.setDate(diff));
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+
+    const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    return { 
+        start: formatDate(start), 
+        end: formatDate(end) 
+    };
+}
+
+/**
+ * Returns the range for the current calendar quarter.
+ */
+export function getQuarterRange(date = new Date()) {
+    const d = new Date(date);
+    const quarter = Math.floor(d.getMonth() / 3);
+    const start = new Date(d.getFullYear(), quarter * 3, 1);
+    const end = new Date(d.getFullYear(), (quarter + 1) * 3, 0);
+
+    const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    return { 
+        start: formatDate(start), 
+        end: formatDate(end) 
+    };
 }

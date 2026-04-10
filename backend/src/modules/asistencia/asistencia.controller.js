@@ -5,27 +5,32 @@ import { getSchoolYearRange } from '../../utils/date.js'
 // GET /asistencia?infanteId=1&fecha=2026-03-01&tutorId=2
 export async function listar(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { infanteId, fecha, fechaInicio, fechaFin, estado, tutorId } = request.query
+    const { infanteId, fecha, fechaInicio, fechaFin, estado, tutorId, esPatrocinado } = request.query
     const db = request.server.db
 
     const where = {}
     if (infanteId) where.infanteId = parseInt(infanteId)
     if (estado) where.estado = estado
     
+    // Filtro por patrocinio
+    if (esPatrocinado !== undefined && esPatrocinado !== 'all') {
+        where.infante = { ...where.infante, esPatrocinado: esPatrocinado === 'true' }
+    }
+    
     if (fecha) {
         // Normalizar a UTC 00:00:00 para coincidir con el tipo @db.Date de Prisma/MySQL
         where.fecha = new Date(fecha + 'T00:00:00.000Z')
     } else if (fechaInicio || fechaFin) {
         where.fecha = {}
-        if (fechaInicio) where.fecha.gte = new Date(fechaInicio)
-        if (fechaFin) where.fecha.lte = new Date(fechaFin)
+        if (fechaInicio) where.fecha.gte = new Date(fechaInicio + 'T00:00:00.000Z')
+        if (fechaFin) where.fecha.lte = new Date(fechaFin + 'T00:00:00.000Z')
     }
 
     if (tutorId) {
         where.infante = { tutorId: parseInt(tutorId) }
     }
 
-    const [total, registros, summaryRaw] = await Promise.all([
+    const [total, registros, summaryRaw, uniqueInfantesRaw] = await Promise.all([
         db.asistencia.count({ where }),
         db.asistencia.findMany({
             where, skip, take: limit,
@@ -38,13 +43,26 @@ export async function listar(request, reply) {
             by: ['estado'],
             where,
             _count: { estado: true }
+        }),
+        db.asistencia.groupBy({
+            by: ['infanteId'],
+            where: { 
+                ...where,
+                estado: { in: ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'] }
+            }
         })
     ])
 
-    const summary = { Presente: 0, Ausente: 0, Justificado: 0 }
+    const totalInfantesDiferentes = uniqueInfantesRaw.length
+
+    const summary = { Mes: 0, Semana: 0, PagoDia: 0, Pendiente: 0, Punto: 0, Ausente: 0 }
     summaryRaw.forEach(item => {
         summary[item.estado] = item._count.estado
     })
+
+    // Añadir totales agrupados para compatibilidad con dashboards simples
+    summary.totalPresentes = summary.Mes + summary.Semana + summary.PagoDia + summary.Pendiente + summary.Punto
+    summary.totalInfantesAtendidos = totalInfantesDiferentes
 
     return paginated(reply, registros, total, page, limit, summary)
 }
@@ -104,12 +122,19 @@ export async function resumen(request, reply) {
 
     const { start, end } = range;
 
-    const [total, presentes, ausentes, justificados] = await Promise.all([
+    const [total, presentesC, ausentes] = await Promise.all([
         db.asistencia.count({ where: { infanteId: parseInt(infanteId), fecha: { gte: start, lte: end } } }),
-        db.asistencia.count({ where: { infanteId: parseInt(infanteId), fecha: { gte: start, lte: end }, estado: 'Presente' } }),
-        db.asistencia.count({ where: { infanteId: parseInt(infanteId), fecha: { gte: start, lte: end }, estado: 'Ausente' } }),
-        db.asistencia.count({ where: { infanteId: parseInt(infanteId), fecha: { gte: start, lte: end }, estado: 'Justificado' } })
+        db.asistencia.count({ 
+            where: { 
+                infanteId: parseInt(infanteId), 
+                fecha: { gte: start, lte: end }, 
+                estado: { in: ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'] } 
+            } 
+        }),
+        db.asistencia.count({ where: { infanteId: parseInt(infanteId), fecha: { gte: start, lte: end }, estado: 'Ausente' } })
     ])
+
+    return ok(reply, { label: `${start.getFullYear()}-${end.getFullYear()}`, total, presentes: presentesC, ausentes, justificados: 0 })
 
     return ok(reply, { label: `${start.getFullYear()}-${end.getFullYear()}`, total, presentes, ausentes, justificados })
 }

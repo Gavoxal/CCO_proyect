@@ -2,14 +2,17 @@ import { ok, created, noContent, notFound, paginated, badRequest } from '../../u
 import { getPagination } from '../../utils/pagination.js'
 import path from 'path'
 import fs from 'fs/promises'
+import { getMonthRange, getWeekRange } from '../../utils/date.js'
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
 
 // GET /infantes  — con filtros: esPatrocinado, tipoPrograma, tutorId
 export async function listar(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { esPatrocinado, tipoPrograma, tutorId, buscar } = request.query
+    const { esPatrocinado, tipoPrograma, tutorId, buscar, referencia } = request.query
     const db = request.server.db
+
+    const refDate = referencia ? new Date(referencia + 'T12:00:00') : new Date()
 
     const where = {}
     if (esPatrocinado !== undefined) where.esPatrocinado = esPatrocinado === 'true'
@@ -39,7 +42,39 @@ export async function listar(request, reply) {
             })
         ])
 
-        return paginated(reply, infantes, total, page, limit)
+        const { start: mStart, end: mEnd } = getMonthRange(refDate)
+        const { start: wStart, end: wEnd } = getWeekRange(refDate)
+
+        const infantesConStatus = await Promise.all(infantes.map(async (infante) => {
+            const [asistenciasPendientes, pagoMes, pagoSemana] = await Promise.all([
+                db.asistencia.count({
+                    where: { infanteId: infante.id, estado: 'Pendiente' }
+                }),
+                db.asistencia.count({
+                    where: { 
+                        infanteId: infante.id, 
+                        estado: 'Mes', 
+                        fecha: { gte: mStart, lte: mEnd } 
+                    }
+                }),
+                db.asistencia.count({
+                    where: { 
+                        infanteId: infante.id, 
+                        estado: 'Semana', 
+                        fecha: { gte: wStart, lte: wEnd } 
+                    }
+                })
+            ])
+
+            return {
+                ...infante,
+                deudaTotal: asistenciasPendientes * parseFloat(infante.tarifaDiaria),
+                pagoMesActivo: pagoMes > 0,
+                pagoSemanaActivo: pagoSemana > 0
+            }
+        }))
+
+        return paginated(reply, infantesConStatus, total, page, limit)
     } catch (error) {
         request.server.log.error('Error al listar infantes:', error)
         return reply.status(500).send({
@@ -64,7 +99,16 @@ export async function obtener(request, reply) {
         }
     })
     if (!infante) return notFound(reply)
-    return ok(reply, infante)
+
+    const asistenciasPendientes = await db.asistencia.count({
+        where: { infanteId: infante.id, estado: 'Pendiente' }
+    })
+    const infanteConDeuda = {
+        ...infante,
+        deudaTotal: asistenciasPendientes * parseFloat(infante.tarifaDiaria)
+    }
+
+    return ok(reply, infanteConDeuda)
 }
 
 // POST /infantes

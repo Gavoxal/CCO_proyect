@@ -38,6 +38,7 @@ const EMPTY_FORM = {
     enfermedades: '',
     alergias: '',
     tutorId: '',
+    tarifaDiaria: 0.50,
     persona: {
         nombres: '', apellidos: '',
         fechaNacimiento: '',
@@ -161,6 +162,7 @@ const InfanteFormPage = () => {
                         fuentePatrocinio: db.fuentePatrocinio || 'Ninguno',
                         enfermedades: db.enfermedades || '',
                         alergias: db.alergias || '',
+                        tarifaDiaria: db.tarifaDiaria || 0.50,
                         persona: {
                             nombres: db.persona?.nombres || '',
                             apellidos: db.persona?.apellidos || '',
@@ -198,6 +200,7 @@ const InfanteFormPage = () => {
                 enfermedades: form.enfermedades,
                 alergias: form.alergias,
                 tutorId: form.tutorId || null,
+                tarifaDiaria: parseFloat(form.tarifaDiaria),
                 persona: {
                     nombres: form.persona.nombres || 'Sin nombre',
                     apellidos: form.persona.apellidos,
@@ -317,7 +320,15 @@ const InfanteFormPage = () => {
                                     transition: 'all .2s ease', cursor: (isTutor && isEditing) ? 'default' : 'pointer',
                                     height: '100%', minHeight: 48,
                                     opacity: (isTutor && isEditing) ? 0.8 : 1
-                                }} onClick={() => !(isTutor && isEditing) && set('esPatrocinado', !form.esPatrocinado)}>
+                                }} onClick={() => {
+                                    if (isTutor && isEditing) return;
+                                    const next = !form.esPatrocinado;
+                                    setForm(f => ({
+                                        ...f,
+                                        esPatrocinado: next,
+                                        fuentePatrocinio: next ? 'Compassion' : 'Ninguno'
+                                    }));
+                                }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         {form.esPatrocinado
                                             ? <CheckedIcon sx={{ color: 'success.main', fontSize: 20 }} />
@@ -332,7 +343,20 @@ const InfanteFormPage = () => {
                                             </Typography>
                                         </Box>
                                     </Box>
-                                    <Switch checked={form.esPatrocinado} disabled={isTutor && isEditing} onChange={e => { e.stopPropagation(); set('esPatrocinado', e.target.checked); }} color="success" />
+                                    <Switch
+                                        checked={form.esPatrocinado}
+                                        disabled={isTutor && isEditing}
+                                        onChange={e => {
+                                            e.stopPropagation();
+                                            const val = e.target.checked;
+                                            setForm(f => ({
+                                                ...f,
+                                                esPatrocinado: val,
+                                                fuentePatrocinio: val ? 'Compassion' : 'Ninguno'
+                                            }));
+                                        }}
+                                        color="success"
+                                    />
                                 </Box>
                             </Grid>
 
@@ -344,7 +368,6 @@ const InfanteFormPage = () => {
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value="Ninguno" disabled><em>Ninguno</em></MenuItem>
                                     <MenuItem value="Compassion">Compassion</MenuItem>
-                                    <MenuItem value="Plan">Plan Global</MenuItem>
                                 </TextField>
                             </Grid>
 
@@ -397,6 +420,16 @@ const InfanteFormPage = () => {
                                     disabled={isTutor && isEditing}
                                     onChange={e => set('alergias', e.target.value)} size="small" multiline rows={2}
                                     placeholder="Ninguna conocida..." />
+                            </Grid>
+
+                            {/* Tarifa Diaria Comedor */}
+                            <Grid item xs={12} sm={6}>
+                                <TextField fullWidth label="Tarifa Diaria Comedor ($)" value={form.tarifaDiaria}
+                                    type="number"
+                                    inputProps={{ step: 0.25 }}
+                                    disabled={isTutor && isEditing}
+                                    onChange={e => set('tarifaDiaria', e.target.value)} size="small"
+                                    helperText="Valor que paga el niño por cada día de asistencia (Ej: 0.50 o 1.00)" />
                             </Grid>
 
                         </Grid>

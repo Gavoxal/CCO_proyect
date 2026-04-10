@@ -268,7 +268,6 @@ export default function RegalosPage() {
     const tipoLabel = {
         'regalo_navidad': 'Navidad',
         'kit_escolar': 'Kit Escolar',
-        'atencion_especial': 'Atención Especial'
     }[tipo] || tipo;
 
     const columns = [
@@ -490,7 +489,6 @@ export default function RegalosPage() {
                                         >
                                             <MenuItem value="regalo_navidad">Regalo de Navidad</MenuItem>
                                             <MenuItem value="kit_escolar">Kit Escolar</MenuItem>
-                                            <MenuItem value="atencion_especial">Atención Especial</MenuItem>
                                         </TextField>
                                     </Grid>
                                     <Grid item xs={12} sm={6}>

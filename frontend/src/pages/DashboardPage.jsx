@@ -170,8 +170,6 @@ const TabMinisterio = ({ d }) => {
                         <CardContent sx={{ p: 3 }}>
                             <ProgressBar label="Regalos de Navidad" value={d.regalos.navidad.entregados} total={d.regalos.navidad.total} color="#ef5350" />
                             <ProgressBar label="Kits Escolares" value={d.regalos.kits.entregados} total={d.regalos.kits.total} color={CCO.azul} />
-                            <ProgressBar label="Atención Especial (est.)"
-                                value={Math.round(d.infantes.total * 0.15)} total={d.infantes.total} color={CCO.celeste} />
                         </CardContent>
                     </Card>
                 </Grid>

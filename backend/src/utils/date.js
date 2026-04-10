@@ -29,3 +29,30 @@ export function getSchoolYearRange(date = new Date()) {
         end: new Date(`${endYear}-06-30T23:59:59`)
     }
 }
+
+/**
+ * Returns the range for the calendar month of a given date.
+ */
+export function getMonthRange(date = new Date()) {
+    const d = new Date(date);
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+    return { start, end };
+}
+
+/**
+ * Returns the range for the ISO week (Monday to Sunday) of a given date.
+ */
+export function getWeekRange(date = new Date()) {
+    const d = new Date(date);
+    const day = d.getDay(); // 0 (Sun) to 6 (Sat)
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const start = new Date(d.setDate(diff));
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+}

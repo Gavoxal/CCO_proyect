@@ -16,40 +16,69 @@ import {
     FileDownload as ExportIcon, Close as CloseIcon,
     Group as GroupIcon, CheckCircle as CheckIcon,
     Cancel as CancelIcon, WatchLater as PendingIcon,
+    Payment as PaymentIcon, Edit as EditIcon,
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
 import infanteService from '../../services/infanteService';
 import asistenciaService from '../../services/asistenciaService';
-import { getSchoolYearRange, formatDateToDDMMYYYY } from '../../utils/dateUtils';
+import { 
+    getSchoolYearRange, formatDateToDDMMYYYY, 
+    getISOWeekRange, getMonthRange, getQuarterRange 
+} from '../../utils/dateUtils';
 
 // ─── Paleta CCO ───────────────────────────────────────────────────────────────
 const CCO = { amarillo: '#FFD700', naranja: '#FF8C00', violeta: '#6A5ACD', azul: '#4169E1' };
 const AVATAR_COLORS = ['#7c4dff', '#00bcd4', '#ff5722', '#4caf50', '#ff9800', '#e91e63', '#3f51b5', '#009688'];
-const ESTADO_COLORS = { Presente: 'success', Ausente: 'error', Justificado: 'warning' };
-const ESTADO_ICONS = { 
-    Presente: <CheckIcon fontSize="small" />, 
-    Ausente: <CancelIcon fontSize="small" />, 
-    Justificado: <PendingIcon fontSize="small" /> 
+const ESTADO_LABELS = {
+    Mes: 'MES',
+    Semana: 'SEM',
+    PagoDia: 'PAGO',
+    Pendiente: 'P (DEBE)',
+    Punto: 'S',
+    Ausente: 'FALTA'
 };
-const EMOJI = { Presente: '✅', Ausente: '❌', Justificado: '⚠️' };
+const EMOJI = { Mes: '💰', Semana: '📅', PagoDia: '💵', Pendiente: '🛑', Punto: '📋', Ausente: '❌' };
+const ESTADO_COLORS = {
+    Mes: 'success',
+    Semana: 'primary',
+    PagoDia: 'info',
+    Pendiente: 'error',
+    Punto: 'secondary',
+    Ausente: 'default'
+};
+const ESTADO_DISPLAY = {
+    Mes: 'Mes',
+    Semana: 'Semana',
+    PagoDia: 'Pago Diario',
+    Pendiente: 'Deuda (P)',
+    Punto: 'Seguimiento (S)',
+    Ausente: 'Falta (F)'
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getInitials = (inf) => `${inf.persona?.nombres?.charAt(0) || ''}${inf.persona?.apellidos?.charAt(0) || ''}`;
 
 // ─── Helpers de exportación ───────────────────────────────────────────────────
 const PERIODOS = [
+    { value: 'semana', label: 'Esta semana' },
     { value: 'mes', label: 'Este mes' },
     { value: 'trimestre', label: 'Trimestre actual' },
     { value: 'semestre', label: 'Semestre actual' },
     { value: 'anual', label: 'Año completo' },
+    { value: 'custom', label: 'Personalizado' },
 ];
 
 const getFechaInicio = (periodo) => {
     const hoy = new Date();
     const schoolYear = getSchoolYearRange();
     switch (periodo) {
+        case 'semana': {
+            const day = hoy.getDay();
+            const diff = hoy.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(hoy.setDate(diff)).toISOString().split('T')[0];
+        }
         case 'mes': return new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
         case 'trimestre': return new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 3) * 3, 1).toISOString().split('T')[0];
         case 'semestre': return new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 6) * 6, 1).toISOString().split('T')[0];
@@ -67,27 +96,32 @@ const AsistenciaPage = () => {
 
     const hoy = new Date().toISOString().split('T')[0];
 
-    const [tabIndex, setTabIndex] = useState(0); 
+    const [tabIndex, setTabIndex] = useState(0);
     const [fecha, setFecha] = useState(hoy);
     const [searchToma, setSearchToma] = useState('');
     const [totalHist, setTotalHist] = useState(0);
-    const [histSummary, setHistSummary] = useState({ Presente: 0, Ausente: 0, Justificado: 0 });
+    const [histSummary, setHistSummary] = useState({ Mes: 0, Semana: 0, PagoDia: 0, Pendiente: 0, Punto: 0, Ausente: 0, totalInfantesAtendidos: 0 });
     const [searchHist, setSearchHist] = useState('');
-    
+
     const [infantes, setInfantes] = useState([]);
     const [estados, setEstados] = useState({});
     const [historial, setHistorial] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-
-    // Exportar Excel
+    const [exportando, setExportando] = useState(false);
     const [exportModal, setExportModal] = useState(false);
     const [exportPeriodo, setExportPeriodo] = useState('mes');
-    const [exportando, setExportando] = useState(false);
+    const [exportFechaInicio, setExportFechaInicio] = useState(getMonthRange().start);
+    const [exportFechaFin, setExportFechaFin] = useState(hoy);
+
+    // Historial - Filtros de rango
+    const [histFechaInicio, setHistFechaInicio] = useState(getMonthRange().start);
+    const [histFechaFin, setHistFechaFin] = useState(hoy);
+    const [histFiltroPatrocinio, setHistFiltroPatrocinio] = useState('all');
+
 
     // Historial state
     const [histFiltroEstado, setHistFiltroEstado] = useState('');
-    const [histFiltroFecha, setHistFiltroFecha] = useState('');
     const [histPage, setHistPage] = useState(0);
     const [histRowsPerPage, setHistRowsPerPage] = useState(15);
 
@@ -95,21 +129,22 @@ const AsistenciaPage = () => {
     const [tomaPage, setTomaPage] = useState(0);
     const [tomaRowsPerPage, setTomaRowsPerPage] = useState(25);
 
-    // Cargar Infantes
+    // Cargar Infantes dinámicamente según la fecha para actualizar badges de pago
+    const cargarDatosInfantes = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await infanteService.listar({ limit: 1000, referencia: fecha });
+            setInfantes(res.data || []);
+        } catch (error) {
+            enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    }, [fecha, enqueueSnackbar]);
+
     useEffect(() => {
-        const cargarDatosBase = async () => {
-            setLoading(true);
-            try {
-                const res = await infanteService.listar({ limit: 1000 });
-                setInfantes(res.data || []);
-            } catch (error) {
-                enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
-            } finally {
-                setLoading(false);
-            }
-        };
-        cargarDatosBase();
-    }, [enqueueSnackbar]);
+        cargarDatosInfantes();
+    }, [cargarDatosInfantes]);
 
     // Cargar asistencia de la fecha seleccionada
     const cargarTomaFecha = useCallback(async () => {
@@ -141,16 +176,18 @@ const AsistenciaPage = () => {
                 page: histPage + 1,
                 limit: histRowsPerPage,
                 estado: histFiltroEstado || undefined,
-                fecha: histFiltroFecha || undefined,
+                esPatrocinado: histFiltroPatrocinio !== 'all' ? histFiltroPatrocinio : undefined,
+                fechaInicio: histFechaInicio || undefined,
+                fechaFin: histFechaFin || undefined,
                 search: searchHist || undefined
             });
             setHistorial(res.data || []);
             setTotalHist(res.meta?.total || 0);
-            setHistSummary(res.meta?.summary || { Presente: 0, Ausente: 0, Justificado: 0 });
+            setHistSummary(res.meta?.summary || { Mes: 0, Semana: 0, PagoDia: 0, Pendiente: 0, Punto: 0, Ausente: 0, totalInfantesAtendidos: 0 });
         } catch (error) {
             console.error('Error cargando historial:', error);
         }
-    }, [histPage, histRowsPerPage, histFiltroEstado, histFiltroFecha, searchHist]);
+    }, [histPage, histRowsPerPage, histFiltroEstado, histFiltroPatrocinio, histFechaInicio, histFechaFin, searchHist]);
 
     useEffect(() => {
         if (tabIndex === 1) cargarHistorial();
@@ -173,12 +210,13 @@ const AsistenciaPage = () => {
     const conteo = useMemo(() =>
         Object.values(estados).reduce(
             (acc, e) => { acc[e] = (acc[e] || 0) + 1; return acc; },
-            { Presente: 0, Ausente: 0, Justificado: 0 }
+            { Mes: 0, Semana: 0, PagoDia: 0, Pendiente: 0, Punto: 0, Ausente: 0 }
         ), [estados]
     );
 
     const totalInf = infantes.length;
-    const porcentajeAsist = totalInf > 0 ? Math.round((conteo.Presente / totalInf) * 100) : 0;
+    const presentesHoy = conteo.Mes + conteo.Semana + conteo.PagoDia + conteo.Pendiente + conteo.Punto;
+    const porcentajeAsist = totalInf > 0 ? Math.round((presentesHoy / totalInf) * 100) : 0;
 
     const handleEstado = (infanteId, nuevoEstado) => {
         if (!nuevoEstado) return;
@@ -201,6 +239,7 @@ const AsistenciaPage = () => {
             await asistenciaService.registrarBulk(fecha, payload);
             const fechaStr = new Date(fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
             enqueueSnackbar(`Asistencia del ${fechaStr} guardada correctamente`, { variant: 'success' });
+            cargarTomaFecha(); // Recargar toma actual
             if (tabIndex === 1) cargarHistorial();
         } catch (error) {
             enqueueSnackbar('Error al guardar asistencia', { variant: 'error' });
@@ -215,10 +254,22 @@ const AsistenciaPage = () => {
 
     // Estadísticas del historial global (basadas en el resumen del servidor)
     const histStats = useMemo(() => {
-        const { Presente: p, Ausente: a, Justificado: j } = histSummary;
-        const total = p + a + j;
-        return { total, p, a, j, pct: total > 0 ? Math.round((p / total) * 100) : 0 };
-    }, [histSummary]);
+        const { Mes, Semana, PagoDia, Pendiente, Punto, Ausente, totalInfantesAtendidos } = histSummary;
+        const p = Mes + Semana + PagoDia + Pendiente + Punto;
+        const total = p + Ausente;
+        const atendidos = totalInfantesAtendidos || 0;
+        
+        // Calcular población total según el filtro aplicado
+        const totalPoblacion = infantes.filter(i => 
+            histFiltroPatrocinio === 'all' || i.esPatrocinado === (histFiltroPatrocinio === 'true')
+        ).length;
+
+        return { 
+            total, p, a: Ausente, 
+            atendidos,
+            pctCobertura: totalPoblacion > 0 ? Math.round((atendidos / totalPoblacion) * 100) : 0 
+        };
+    }, [histSummary, infantes, histFiltroPatrocinio]);
 
     // ── Estadísticas del Año Lectivo ─────────────────────────────────────────
     const statsDestesMes = useMemo(() => {
@@ -227,21 +278,20 @@ const AsistenciaPage = () => {
             const f = new Date(r.fecha);
             return f >= start && f <= end;
         });
+        const presenciasIds = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
+        const totalPresencias = registrosAño.filter(r => presenciasIds.includes(r.estado)).length;
+        const totalAusencias = registrosAño.filter(r => r.estado === 'Ausente').length;
         const infantesConAsistencia = new Set(
-            registrosAño.filter(r => r.estado === 'Presente').map(r => r.infanteId)
+            registrosAño.filter(r => presenciasIds.includes(r.estado)).map(r => r.infanteId)
         );
         const diasUnicos = new Set(registrosAño.map(r => r.fecha.split('T')[0])).size;
-        const totalPresencias = registrosAño.filter(r => r.estado === 'Presente').length;
-        const totalAusencias = registrosAño.filter(r => r.estado === 'Ausente').length;
-        const totalJustificados = registrosAño.filter(r => r.estado === 'Justificado').length;
         return {
             infantesAsistidos: infantesConAsistencia.size,
             totalInfantes: infantes.length,
             pct: infantes.length > 0 ? Math.round((infantesConAsistencia.size / infantes.length) * 100) : 0,
             dias: diasUnicos,
             presencias: totalPresencias,
-            ausencias: totalAusencias,
-            justificados: totalJustificados,
+            ausencias: totalAusencias
         };
     }, [historial, infantes]);
 
@@ -249,18 +299,17 @@ const AsistenciaPage = () => {
     const handleExportar = async () => {
         setExportando(true);
         try {
-            const fechaInicio = getFechaInicio(exportPeriodo);
             // 1. Obtener todos los registros del periodo
-            const res = await asistenciaService.listar({ 
-                fechaInicio, 
+            const res = await asistenciaService.listar({
+                fechaInicio: exportFechaInicio,
+                fechaFin: exportFechaFin,
                 limit: 10000 // Aumentar límite para reporte completo
             });
             const registros = res.data || [];
 
             // 2. Identificar fechas únicas y ordenarlas
             const fechasUnicas = [...new Set(registros.map(r => r.fecha.split('T')[0]))].sort();
-            
-            // 3. Organizar datos por infante
+
             const asistenciaMap = {}; // { infanteId: { fecha: estado } }
             registros.forEach(r => {
                 if (!asistenciaMap[r.infanteId]) asistenciaMap[r.infanteId] = {};
@@ -268,6 +317,7 @@ const AsistenciaPage = () => {
             });
 
             // 4. Construir filas para Excel
+            const headerRow = ['Código', 'Nombres', 'Apellidos'];
             fechasUnicas.forEach(f => {
                 headerRow.push(formatDateToDDMMYYYY(f));
             });
@@ -283,9 +333,18 @@ const AsistenciaPage = () => {
 
                 fechasUnicas.forEach(f => {
                     const estado = asistenciaMap[inf.id]?.[f] || '-';
-                    row.push(estado === 'Presente' ? 'SI' : estado === 'Ausente' ? 'NO' : estado === 'Justificado' ? 'J' : '-');
+                    const presenciasIds = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
+                    let label = '-';
+                    if (estado === 'Mes') label = 'MES';
+                    else if (estado === 'Semana') label = 'SEM';
+                    else if (estado === 'PagoDia') label = inf.tarifaDiaria || '0.50';
+                    else if (estado === 'Pendiente') label = 'P';
+                    else if (estado === 'Punto') label = 'S';
+                    else if (estado === 'Ausente') label = 'F';
+
+                    row.push(label);
                     if (estado !== '-') diasConRegistro++;
-                    if (estado === 'Presente') presencias++;
+                    if (presenciasIds.includes(estado)) presencias++;
                 });
 
                 const pct = diasConRegistro > 0 ? Math.round((presencias / diasConRegistro) * 100) : 0;
@@ -299,8 +358,9 @@ const AsistenciaPage = () => {
                 [`Periodo: ${PERIODOS.find(p => p.value === exportPeriodo)?.label}`],
                 [`Fecha de Generación: ${new Date().toLocaleString()}`],
                 [],
-                [`Total Infantes: ${infantes.length}`],
+                [`Total Infantes En el Sistema: ${infantes.length}`],
                 [`Promedio Asistencia Grupal: ${statsDestesMes.pct}%`],
+                [`Total Diferentes Infantes Atendidos: ${[...new Set(registros.filter(r => ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'].includes(r.estado)).map(r => r.infanteId))].length}`],
                 [],
                 headerRow
             ];
@@ -310,7 +370,7 @@ const AsistenciaPage = () => {
 
             // Ajustes de diseño básico
             ws['!cols'] = [
-                { wch: 12 }, { wch: 25 }, { wch: 25 }, 
+                { wch: 12 }, { wch: 25 }, { wch: 25 },
                 ...fechasUnicas.map(() => ({ wch: 6 })),
                 { wch: 10 }, { wch: 10 }
             ];
@@ -318,8 +378,11 @@ const AsistenciaPage = () => {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Reporte Matriz');
 
-            const periodoLabel = PERIODOS.find(p => p.value === exportPeriodo)?.label || exportPeriodo;
-            const nombreArchivo = `Reporte_Asistencia_${periodoLabel.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const periodoLabel = exportPeriodo === 'custom' 
+                ? `${formatDateToDDMMYYYY(exportFechaInicio)} - ${formatDateToDDMMYYYY(exportFechaFin)}`
+                : (PERIODOS.find(p => p.value === exportPeriodo)?.label || exportPeriodo);
+            
+            const nombreArchivo = `Reporte_Asistencia_${periodoLabel.replace(/[\/\s]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
             XLSX.writeFile(wb, nombreArchivo);
             enqueueSnackbar(`Reporte exportado correctamente`, { variant: 'success' });
 
@@ -451,9 +514,8 @@ const AsistenciaPage = () => {
                                     <Grid item xs={12} md={6}>
                                         <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
                                             {[
-                                                { label: 'Presencias', value: statsDestesMes.presencias, color: '#4caf50', emoji: '✅' },
-                                                { label: 'Ausencias', value: statsDestesMes.ausencias, color: '#ef5350', emoji: '❌' },
-                                                { label: 'Justificados', value: statsDestesMes.justificados, color: '#ff9800', emoji: '⚠️' },
+                                                { label: 'Presentes (Total)', value: statsDestesMes.presencias, color: '#4caf50', emoji: '🥗' },
+                                                { label: 'Faltas', value: statsDestesMes.ausencias, color: '#ef5350', emoji: '❌' },
                                             ].map(k => (
                                                 <Box key={k.label} sx={{
                                                     textAlign: 'center', p: 1.5, borderRadius: 2,
@@ -478,11 +540,10 @@ const AsistenciaPage = () => {
                                     {Object.entries(conteo).map(([estado, cnt]) => (
                                         <Tooltip key={estado} title={`Marcar todos como ${estado}`}>
                                             <Chip
-                                                icon={ESTADO_ICONS[estado]}
-                                                label={`${cnt} ${estado}`}
+                                                label={`${cnt} ${ESTADO_LABELS[estado]}`}
                                                 color={ESTADO_COLORS[estado]}
                                                 variant="outlined"
-                                                sx={{ fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem', '& .MuiChip-icon': { ml: 1 } }}
+                                                sx={{ fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}
                                                 onClick={() => marcarTodos(estado)}
                                             />
                                         </Tooltip>
@@ -508,8 +569,9 @@ const AsistenciaPage = () => {
                                     <TableRow>
                                         <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 40 }}>#</TableCell>
                                         <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Infante</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 100 }}>Código</TableCell>
-                                        <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 240 }}>Estado</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 100 }}>Estatus Pago</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 80 }}>Deuda</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', minWidth: 400 }}>Estado / Pago</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -546,23 +608,47 @@ const AsistenciaPage = () => {
                                                         >
                                                             {getInitials(inf)}
                                                         </Avatar>
-                                                        <Typography variant="body2" fontWeight={600}>
-                                                            {inf.persona?.nombres} {inf.persona?.apellidos}
-                                                        </Typography>
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={600}>
+                                                                {inf.persona?.nombres} {inf.persona?.apellidos}
+                                                            </Typography>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                                                    Cod: {inf.codigo} • Tarifa: ${inf.tarifaDiaria}
+                                                                </Typography>
+                                                                <Tooltip title="Editar datos/tarifa">
+                                                                    <IconButton size="small" onClick={() => navigate(`/infantes/${inf.id}/editar`)} sx={{ p: 0.2 }}>
+                                                                        <EditIcon sx={{ fontSize: 14 }} />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            </Box>
+                                                        </Box>
                                                     </Box>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Chip label={inf.codigo} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
+                                                    <Stack direction="row" spacing={0.5}>
+                                                        {inf.pagoMesActivo && <Chip label="MES" size="small" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />}
+                                                        {inf.pagoSemanaActivo && <Chip label="SEM" size="small" color="primary" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />}
+                                                        {!inf.pagoMesActivo && !inf.pagoSemanaActivo && <Typography variant="caption" color="text.disabled">Pendiente</Typography>}
+                                                    </Stack>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight={800} color={inf.deudaTotal > 0 ? 'error.main' : 'success.main'}>
+                                                        ${inf.deudaTotal?.toFixed(2) || '0.00'}
+                                                    </Typography>
                                                 </TableCell>
                                                 <TableCell align="center">
                                                     <ToggleButtonGroup
                                                         value={estado} exclusive size="small"
                                                         onChange={(_, val) => handleEstado(inf.id, val)}
-                                                        sx={{ '& .MuiToggleButton-root': { px: 1.5, py: 0.4, fontSize: '0.72rem', fontWeight: 700 } }}
+                                                        sx={{ '& .MuiToggleButton-root': { px: 1.2, py: 0.5, fontSize: '0.7rem', fontWeight: 800 } }}
                                                     >
-                                                        <ToggleButton value="Presente" color="success">{ESTADO_ICONS.Presente} &nbsp; Presente</ToggleButton>
-                                                        <ToggleButton value="Ausente" color="error">{ESTADO_ICONS.Ausente} &nbsp; Ausente</ToggleButton>
-                                                        <ToggleButton value="Justificado" color="warning">{ESTADO_ICONS.Justificado} &nbsp; Justif.</ToggleButton>
+                                                        <ToggleButton value="Mes" color="success">MES</ToggleButton>
+                                                        <ToggleButton value="Semana" color="primary">SEM</ToggleButton>
+                                                        <ToggleButton value="PagoDia" color="info">${inf.tarifaDiaria || '0.50'}</ToggleButton>
+                                                        <ToggleButton value="Pendiente" color="error">P</ToggleButton>
+                                                        <ToggleButton value="Punto" color="secondary">S</ToggleButton>
+                                                        <ToggleButton value="Ausente">F</ToggleButton>
                                                     </ToggleButtonGroup>
                                                 </TableCell>
                                             </TableRow>
@@ -593,9 +679,9 @@ const AsistenciaPage = () => {
                         <Grid container spacing={2} sx={{ mb: 3 }}>
                             {[
                                 { label: 'Total Registros', value: histStats.total, icon: <ChartIcon />, color: CCO.azul },
-                                { label: 'Presentes', value: histStats.p, icon: <>{EMOJI.Presente}</>, color: '#4caf50' },
-                                { label: 'Ausentes', value: histStats.a, icon: <>{EMOJI.Ausente}</>, color: '#ef5350' },
-                                { label: 'Justificados', value: histStats.j, icon: <>{EMOJI.Justificado}</>, color: '#ff9800' },
+                                { label: 'Infantes Atendidos', value: histStats.atendidos, icon: <span>🧒</span>, color: CCO.naranja },
+                                { label: 'Presentes (Total)', value: histStats.p, icon: <span>🥗</span>, color: '#4caf50' },
+                                { label: 'Ausentes (Total)', value: histStats.a, icon: <span>❌</span>, color: '#ef5350' },
                             ].map(stat => (
                                 <Grid item xs={6} md={3} key={stat.label}>
                                     <Card elevation={0} sx={{
@@ -615,18 +701,18 @@ const AsistenciaPage = () => {
                         <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3 }}>
                             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                    <Typography variant="subtitle2" fontWeight={700}>Porcentaje General de Asistencia</Typography>
-                                    <Chip label={`${histStats.pct}%`} size="small"
-                                        color={histStats.pct >= 80 ? 'success' : histStats.pct >= 50 ? 'warning' : 'error'}
+                                    <Typography variant="subtitle2" fontWeight={700}>Cobertura de Atención (Infantes Atendidos / Total Población)</Typography>
+                                    <Chip label={`${histStats.pctCobertura}%`} size="small"
+                                        color={histStats.pctCobertura >= 80 ? 'success' : histStats.pctCobertura >= 40 ? 'warning' : 'info'}
                                         sx={{ fontWeight: 700 }} />
                                 </Box>
-                                <LinearProgress variant="determinate" value={histStats.pct}
+                                <LinearProgress variant="determinate" value={histStats.pctCobertura}
                                     sx={{
                                         height: 10, borderRadius: 5,
                                         bgcolor: alpha('#000', 0.08),
                                         '& .MuiLinearProgress-bar': {
                                             borderRadius: 5,
-                                            bgcolor: histStats.pct >= 80 ? '#4caf50' : histStats.pct >= 50 ? '#ff9800' : '#ef5350',
+                                            bgcolor: histStats.pctCobertura >= 80 ? '#4caf50' : histStats.pctCobertura >= 40 ? '#ff9800' : '#4169E1',
                                         },
                                     }} />
                             </CardContent>
@@ -640,21 +726,33 @@ const AsistenciaPage = () => {
                                 sx={{ flex: 1, minWidth: 200 }}
                                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
                             />
+                            <TextField
+                                type="date" size="small" label="Desde" value={histFechaInicio}
+                                onChange={e => { setHistFechaInicio(e.target.value); setHistPage(0); }}
+                                slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                            <TextField
+                                type="date" size="small" label="Hasta" value={histFechaFin}
+                                onChange={e => { setHistFechaFin(e.target.value); setHistPage(0); }}
+                                slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                            <TextField select size="small" label="Población" value={histFiltroPatrocinio}
+                                onChange={e => { setHistFiltroPatrocinio(e.target.value); setHistPage(0); }}
+                                sx={{ minWidth: 160 }}>
+                                <MenuItem value="all">Todos los Niños</MenuItem>
+                                <MenuItem value="true">Solo Patrocinados</MenuItem>
+                                <MenuItem value="false">No Patrocinados</MenuItem>
+                            </TextField>
                             <TextField select size="small" label="Estado" value={histFiltroEstado}
                                 onChange={e => { setHistFiltroEstado(e.target.value); setHistPage(0); }}
                                 sx={{ minWidth: 160 }}>
-                                <MenuItem value="">Todos</MenuItem>
-                                <MenuItem value="Presente">Presente</MenuItem>
-                                <MenuItem value="Ausente">Ausente</MenuItem>
-                                <MenuItem value="Justificado">Justificado</MenuItem>
+                                <MenuItem value="Mes">Mes (Pago completo)</MenuItem>
+                                <MenuItem value="Semana">Semana</MenuItem>
+                                <MenuItem value="PagoDia">Pago Diario</MenuItem>
+                                <MenuItem value="Pendiente">Deuda (P)</MenuItem>
+                                <MenuItem value="Punto">Seguimiento (S)</MenuItem>
+                                <MenuItem value="Ausente">Falta (F)</MenuItem>
                             </TextField>
-                            <TextField
-                                type="date" size="small" label="Filtrar fecha"
-                                value={histFiltroFecha}
-                                onChange={e => { setHistFiltroFecha(e.target.value); setHistPage(0); }}
-                                slotProps={{ inputLabel: { shrink: true } }}
-                                sx={{ minWidth: 180 }}
-                            />
                         </Stack>
 
                         {/* Tabla historial */}
@@ -704,12 +802,12 @@ const AsistenciaPage = () => {
                                                 <Chip label={r.infante?.codigo} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
                                             </TableCell>
                                             <TableCell>
-                                                <Chip 
-                                                    label={r.estado} 
+                                                <Chip
+                                                    label={ESTADO_DISPLAY[r.estado] || r.estado}
                                                     size="small"
-                                                    color={ESTADO_COLORS[r.estado]} 
+                                                    color={ESTADO_COLORS[r.estado]}
                                                     variant="outlined"
-                                                    sx={{ fontWeight: 600 }} 
+                                                    sx={{ fontWeight: 600 }}
                                                 />
                                             </TableCell>
                                         </TableRow>
@@ -743,38 +841,76 @@ const AsistenciaPage = () => {
                 <Divider />
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, mt: 1 }}>
-                        Selecciona el período de asistencia que deseas exportar al archivo Excel.
+                        Selecciona el período o rango de fechas que deseas exportar.
                     </Typography>
-                    <Stack spacing={1.5}>
-                        {PERIODOS.map(p => {
-                            return (
-                                <Box
-                                    key={p.value}
-                                    onClick={() => setExportPeriodo(p.value)}
-                                    sx={{
-                                        p: 1.75, borderRadius: 2.5, cursor: 'pointer',
-                                        border: `2px solid`,
-                                        borderColor: exportPeriodo === p.value ? '#2e7d32' : 'divider',
-                                        bgcolor: exportPeriodo === p.value ? alpha('#2e7d32', 0.06) : 'transparent',
-                                        transition: 'all 0.15s ease',
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        '&:hover': { borderColor: '#2e7d32', bgcolor: alpha('#2e7d32', 0.04) }
-                                    }}
-                                >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        {exportPeriodo === p.value
-                                            ? <CheckIcon sx={{ color: '#2e7d32', fontSize: 20 }} />
-                                            : <Box sx={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid', borderColor: 'divider' }} />
-                                        }
-                                        <Typography fontWeight={700} fontSize={14}>{p.label}</Typography>
-                                    </Box>
-                                </Box>
-                            );
-                        })}
+
+                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={6}>
+                            <TextField
+                                fullWidth type="date" size="small" label="Desde"
+                                value={exportFechaInicio}
+                                onChange={(e) => {
+                                    setExportFechaInicio(e.target.value);
+                                    setExportPeriodo('custom');
+                                }}
+                                slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                        </Grid>
+                        <Grid item xs={6}>
+                            <TextField
+                                fullWidth type="date" size="small" label="Hasta"
+                                value={exportFechaFin}
+                                onChange={(e) => {
+                                    setExportFechaFin(e.target.value);
+                                    setExportPeriodo('custom');
+                                }}
+                                slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                        </Grid>
+                    </Grid>
+
+                    <Stack spacing={1} direction="row" flexWrap="wrap" sx={{ mb: 2 }}>
+                        {PERIODOS.filter(p => p.value !== 'custom').map(p => (
+                            <Chip
+                                key={p.value}
+                                label={p.label}
+                                onClick={() => {
+                                    setExportPeriodo(p.value);
+                                    const now = new Date();
+                                    const schoolYear = getSchoolYearRange();
+                                    if (p.value === 'semana') {
+                                        const range = getISOWeekRange(now);
+                                        setExportFechaInicio(range.start);
+                                        setExportFechaFin(range.end);
+                                    } else if (p.value === 'mes') {
+                                        const range = getMonthRange(now);
+                                        setExportFechaInicio(range.start);
+                                        setExportFechaFin(range.end);
+                                    } else if (p.value === 'trimestre') {
+                                        const range = getQuarterRange(now);
+                                        setExportFechaInicio(range.start);
+                                        setExportFechaFin(range.end);
+                                    } else if (p.value === 'semestre') {
+                                        const quarter = Math.floor(now.getMonth() / 6);
+                                        const start = new Date(now.getFullYear(), quarter * 6, 1);
+                                        const end = new Date(now.getFullYear(), (quarter + 1) * 6, 0);
+                                        setExportFechaInicio(start.toISOString().split('T')[0]);
+                                        setExportFechaFin(end.toISOString().split('T')[0]);
+                                    } else if (p.value === 'anual') {
+                                        setExportFechaInicio(schoolYear.start.toISOString().split('T')[0]);
+                                        setExportFechaFin(schoolYear.end.toISOString().split('T')[0]);
+                                    }
+                                }}
+                                color={exportPeriodo === p.value ? 'success' : 'default'}
+                                variant={exportPeriodo === p.value ? 'filled' : 'outlined'}
+                                sx={{ fontWeight: 600, mb: 1 }}
+                            />
+                        ))}
                     </Stack>
-                    <Box sx={{ mt: 2.5, p: 1.5, borderRadius: 2, bgcolor: alpha('#2e7d32', 0.05) }}>
+                    
+                    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha('#2e7d32', 0.05) }}>
                         <Typography variant="caption" color="text.secondary">
-                            📄 Se generará un archivo <strong>.xlsx</strong> con fecha, código, nombre, apellidos y estado de asistencia.
+                            📄 Se generará un reporte en formato <strong>Matriz</strong> (Días vs Infantes) para el rango seleccionado.
                         </Typography>
                     </Box>
                 </DialogContent>
