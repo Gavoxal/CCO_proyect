@@ -98,7 +98,7 @@ const InfantesPage = () => {
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    const { user } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const fileInputRef = useRef(null);
 
@@ -440,7 +440,7 @@ const InfantesPage = () => {
                                                     }
                                                 >
                                                     <Avatar
-                                                        src={row.fotografia || undefined}
+                                                        src={row.fotografia ? getImageUrl(row.fotografia) : undefined}
                                                         sx={{
                                                             width: 42, height: 42, fontWeight: 700, fontSize: '0.82rem',
                                                             bgcolor: AVATAR_COLORS[row.id % AVATAR_COLORS.length],

@@ -3,7 +3,8 @@ import {
     Box, Typography, Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, MenuItem, Stack, IconButton, Tooltip, Avatar, Grid, Card, CardContent,
     CardActions, LinearProgress, Badge, InputAdornment, ToggleButtonGroup,
-    ToggleButton, Divider, Skeleton, Alert, Paper, TableContainer
+    ToggleButton, Divider, Skeleton, Alert, Paper, TableContainer, TablePagination,
+    CircularProgress
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -66,6 +67,7 @@ const DEFAULT_ICON = <InventoryIcon />;
 
 // ─── CARD DE MATERIAL ─────────────────────────────────────────
 function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEditar, onEliminar, onVerFoto }) {
+    const { getImageUrl } = useAuth();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const porcentaje = item.stockMinimo > 0 ? Math.min(100, Math.round((item.cantidadDisponible / (item.stockMinimo * 3)) * 100)) : 100;
@@ -121,7 +123,7 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
                         }}
                     >
                         {item.fotografia ? (
-                            <Box component="img" src={item.fotografia} sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 2 }} />
+                            <Box component="img" src={getImageUrl(item.fotografia)} sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 2 }} />
                         ) : (
                             <Box sx={{ color: alpha(CCO.azul, 0.5) }}>{icono}</Box>
                         )}
@@ -400,6 +402,7 @@ function StockModal({ open, tipo, item, onClose, onConfirm }) {
 
 // ─── MODAL: FOTO ──────────────────────────────────────────────
 function FotoModal({ open, item, onClose, onSubirFoto }) {
+    const { getImageUrl } = useAuth();
     const fileRef = useRef();
     const [preview, setPreview] = useState(null);
     const [uploading, setUploading] = useState(false);
@@ -444,7 +447,7 @@ function FotoModal({ open, item, onClose, onSubirFoto }) {
                     }}
                 >
                     {preview ? (
-                        <Box component="img" src={preview} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <Box component="img" src={preview.startsWith('blob:') ? preview : getImageUrl(preview)} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                         <Stack alignItems="center" spacing={1}>
                             <PhotoIcon sx={{ fontSize: 48, color: alpha(CCO.azul, 0.4) }} />
@@ -476,7 +479,7 @@ function FotoModal({ open, item, onClose, onSubirFoto }) {
 export default function MaterialesPage() {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    const { user } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const canWrite = !user?.rol || ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
     const canDelete = !user?.rol || ['admin', 'director'].includes(user?.rol);
@@ -487,12 +490,23 @@ export default function MaterialesPage() {
     const [loading, setLoading] = useState(true);
     const [alertas, setAlertas] = useState({ stockBajo: [], desactualizados: [] });
 
+    // Paginación
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(24);
+
     // Filtros
     const [buscar, setBuscar] = useState('');
+    const [debouncedBuscar, setDebouncedBuscar] = useState('');
     const [filtroCategoria, setFiltroCategoria] = useState('');
     const [filtroStock, setFiltroStock] = useState(''); // 'bajo' | 'ok' | ''
     const [filtroFungible, setFiltroFungible] = useState(''); // 'Fungible' | 'No Fungible' | ''
     const [filtroPertenece, setFiltroPertenece] = useState(''); // 'Iglesia' | 'Ministerio' | ''
+
+    // Debounce búsqueda
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedBuscar(buscar), 400);
+        return () => clearTimeout(t);
+    }, [buscar]);
 
     // Vista
     const [vistaMode, setVistaMode] = useState('cards'); // 'cards' | 'tabla'
@@ -510,46 +524,49 @@ export default function MaterialesPage() {
     const [importColumns, setImportColumns] = useState([]);
     const [importFileName, setImportFileName] = useState('');
     const [lastSelectedFile, setLastSelectedFile] = useState(null);
+    const [exportando, setExportando] = useState(false);
 
     // ── Carga ─────────────────────────────────────────────────
     const cargar = useCallback(async () => {
         setLoading(true);
         try {
+            const params = {
+                page: page + 1,
+                limit: rowsPerPage,
+                buscar: debouncedBuscar,
+                categoria: filtroCategoria,
+                stockBajo: filtroStock === 'bajo' ? 'true' : undefined,
+                fungible: filtroFungible,
+                pertenece: filtroPertenece
+            };
+
             const [res, alertRes] = await Promise.all([
-                materialesService.listar({ limit: 1000 }),
+                materialesService.listar(params),
                 materialesService.alertas(),
             ]);
-            const data = res.data || [];
-            setRows(data);
-            setTotal(res.meta?.total || data.length);
-            setAlertas(alertRes.data || { stockBajo: [], desactualizados: [] });
+            
+            setRows(res.data || []);
+            setTotal(res.meta?.total || 0);
+            setAlertas(alertRes.data || { stockBajoCount: 0, desactualizados: [] });
         } catch (err) {
             enqueueSnackbar('Error al cargar datos del inventario', { variant: 'error' });
             setRows([]);
             setTotal(0);
-            setAlertas({ stockBajo: [], desactualizados: [] });
+            setAlertas({ stockBajoCount: 0, desactualizados: [] });
         } finally {
             setLoading(false);
         }
-    }, [enqueueSnackbar]);
+    }, [enqueueSnackbar, page, rowsPerPage, debouncedBuscar, filtroCategoria, filtroStock, filtroFungible, filtroPertenece]);
 
     useEffect(() => { cargar(); }, [cargar]);
 
-    // ── Filtrado client-side ──────────────────────────────────
-    const filtered = useMemo(() => {
-        return rows.filter(r => {
-            const txt = `${r.nombreMaterial} ${r.codigo} ${r.categoria}`.toLowerCase();
-            if (buscar && !txt.includes(buscar.toLowerCase())) return false;
-            if (filtroCategoria && r.categoria !== filtroCategoria) return false;
-            if (filtroStock === 'bajo' && !r.stockBajo) return false;
-            if (filtroStock === 'ok' && r.stockBajo) return false;
-            if (filtroFungible && r.fungible !== filtroFungible) return false;
-            if (filtroPertenece && r.pertenece !== filtroPertenece) return false;
-            return true;
-        });
-    }, [rows, buscar, filtroCategoria, filtroStock, filtroFungible, filtroPertenece]);
+    useEffect(() => {
+        // Reset page on filter change
+        setPage(0);
+    }, [debouncedBuscar, filtroCategoria, filtroStock, filtroFungible, filtroPertenece]);
 
-    // Categorías únicas para los filtros
+    // Categorías únicas (En un sistema con paginación, idealmente esto vendría de un endpoint de maestros, 
+    // pero por ahora lo sacamos de los rows actuales o una lista estática si es necesario)
     const categorias = useMemo(() => [...new Set(rows.map(r => r.categoria).filter(Boolean))].sort(), [rows]);
 
     const hayFiltros = buscar || filtroCategoria || filtroStock || filtroFungible || filtroPertenece;
@@ -582,6 +599,59 @@ export default function MaterialesPage() {
         if (!window.confirm('¿Eliminar este material del inventario?')) return;
         try { await materialesService.eliminar(id); enqueueSnackbar('Material eliminado', { variant: 'success' }); cargar(); }
         catch { enqueueSnackbar('Error al eliminar', { variant: 'error' }); }
+    };
+
+    const handleExportarExcel = async () => {
+        setExportando(true);
+        try {
+            const params = {
+                page: 1,
+                limit: 1000, // Límite máximo soportado por el backend para asegurar que se descarguen TODOS
+                // Eliminamos los filtros para que exporte el inventario total como solicitó el usuario
+            };
+
+            const res = await materialesService.listar(params);
+            const data = res.data || [];
+
+            if (data.length === 0) {
+                enqueueSnackbar('No hay datos para exportar', { variant: 'info' });
+                return;
+            }
+
+            const excelData = data.map(item => ({
+                'Código': item.codigo,
+                'Nombre del Material': item.nombreMaterial,
+                'Categoría': item.categoria,
+                'Stock Actual': item.cantidadDisponible,
+                'Stock Mínimo': item.stockMinimo,
+                'Estado Stock': item.stockBajo ? 'BAJO' : 'OK',
+                'Tipo': item.fungible || 'N/A',
+                'Pertenece a': item.pertenece || 'N/A',
+                'Costo Unidad ($)': item.costoUnidad || 0,
+                'Valor Inventario ($)': (item.cantidadDisponible * (item.costoUnidad || 0)).toFixed(2),
+                'Descripción': item.descripcion || '',
+                'Última Actualización': item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('es-EC') : 'N/A'
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            
+            // Estilo básico de columnas
+            ws['!cols'] = [
+                { wch: 15 }, { wch: 35 }, { wch: 20 }, { wch: 12 }, { wch: 12 },
+                { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 18 },
+                { wch: 40 }, { wch: 18 }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+            XLSX.writeFile(wb, `Inventario_Materiales_${new Date().toISOString().split('T')[0]}.xlsx`);
+            enqueueSnackbar('Exportación completada', { variant: 'success' });
+        } catch (err) {
+            console.error("Export error:", err);
+            enqueueSnackbar('Error al exportar a Excel', { variant: 'error' });
+        } finally {
+            setExportando(false);
+        }
     };
 
     const handleSubirFoto = async (id, file) => {
@@ -660,7 +730,7 @@ export default function MaterialesPage() {
                         overflow: 'hidden'
                     }}>
                         {r.fotografia
-                            ? <Box component="img" src={r.fotografia} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ? <Box component="img" src={getImageUrl(r.fotografia)} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : <Typography fontSize={18}>{CATEGORIA_ICON[r.categoria] || '📦'}</Typography>
                         }
                     </Box>
@@ -768,7 +838,7 @@ export default function MaterialesPage() {
         },
     ];
 
-    const stockBajoCount = rows.filter(r => r.stockBajo).length;
+    const stockBajoCount = alertas.stockBajoCount || 0;
 
     return (
         <MainLayout>
@@ -796,7 +866,20 @@ export default function MaterialesPage() {
                                 onClick={() => importRef.current?.click()}
                                 sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', borderColor: CCO.azul, color: CCO.azul, '&:hover': { bgcolor: alpha(CCO.azul, 0.05) } }}
                             >
-                                {importing ? 'Importando...' : '📥 Importar Excel'}
+                                {importing ? 'Importando...' : '📥 Importar'}
+                            </Button>
+                            
+                            <Button variant="outlined"
+                                disabled={exportando}
+                                onClick={handleExportarExcel}
+                                startIcon={exportando ? <CircularProgress size={16} color="inherit" /> : <GridViewIcon />}
+                                sx={{ 
+                                    borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', 
+                                    borderColor: '#2e7d32', color: '#2e7d32', 
+                                    '&:hover': { bgcolor: alpha('#2e7d32', 0.05), borderColor: '#1b5e20' } 
+                                }}
+                            >
+                                {exportando ? 'Exportando...' : '📄 Exportar Excel'}
                             </Button>
                             <input type="file" ref={importRef} accept=".xlsx, .xls" hidden onChange={handleFileSelect} />
 
@@ -815,7 +898,7 @@ export default function MaterialesPage() {
                         { label: 'Total Items', value: total, icon: <InventoryIcon />, color: CCO.azul },
                         { label: 'Stock Crítico', value: stockBajoCount, icon: <WarningIcon />, color: '#f44336' },
                         { label: 'Categorías', value: categorias.length, icon: <FilterIcon />, color: CCO.celeste },
-                        { label: 'Mostrando', value: filtered.length, icon: <OkIcon />, color: '#4caf50' },
+                        { label: 'Mostrando', value: rows.length, icon: <OkIcon />, color: '#4caf50' },
                     ].map(kpi => (
                         <Grid item xs={6} sm={3} key={kpi.label}>
                             <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', p: 2 }}>
@@ -834,6 +917,13 @@ export default function MaterialesPage() {
                         </Grid>
                     ))}
                 </Grid>
+
+                {/* KPI Adicional: Stale Info */}
+                {alertas.desactualizados?.length > 0 && (
+                    <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
+                        Hay {alertas.desactualizados.length} materiales que no se han actualizado en más de 30 días.
+                    </Alert>
+                )}
 
                 {/* ── Barra de filtros ── */}
                 <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', p: 2, mb: 3 }}>
@@ -919,7 +1009,7 @@ export default function MaterialesPage() {
                             {filtroStock && <Chip label={filtroStock === 'bajo' ? 'Stock bajo' : 'Stock OK'} size="small" onDelete={() => setFiltroStock('')} sx={{ fontWeight: 700 }} />}
                             {filtroFungible && <Chip label={filtroFungible === 'Fungible' ? 'Fungible' : 'No Fungible'} size="small" onDelete={() => setFiltroFungible('')} sx={{ fontWeight: 700 }} />}
                             {filtroPertenece && <Chip label={filtroPertenece === 'Iglesia' ? 'Iglesia' : 'Ministerio'} size="small" onDelete={() => setFiltroPertenece('')} sx={{ fontWeight: 700 }} />}
-                            <Chip label={`${filtered.length} resultados`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
+                            <Chip label={`${total} resultados`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
                         </Box>
                     )}
                 </Paper>
@@ -934,7 +1024,7 @@ export default function MaterialesPage() {
                                 </Grid>
                             ))}
                         </Grid>
-                    ) : filtered.length === 0 ? (
+                    ) : rows.length === 0 ? (
                         <Box sx={{ textAlign: 'center', py: 8 }}>
                             <SearchIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
                             <Typography variant="h6" fontWeight={700} color="text.secondary">No se encontraron materiales</Typography>
@@ -942,7 +1032,7 @@ export default function MaterialesPage() {
                         </Box>
                     ) : (
                         <Grid container spacing={2} alignItems="stretch">
-                            {filtered.map(item => (
+                            {rows.map(item => (
                                 <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={item.id} sx={{ display: 'flex' }}>
                                     <MaterialCard
                                         item={item}
@@ -962,14 +1052,33 @@ export default function MaterialesPage() {
 
                 {/* ── Vista Tabla ── */}
                 {vistaMode === 'tabla' && (
-                    <DataTable
-                        columns={columns}
-                        rows={filtered}
-                        loading={loading}
-                        searchPlaceholder="Buscar en resultados..."
-                        actions={false}
-                    />
+                    <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid', borderColor: 'divider' }}>
+                            <Typography variant="subtitle2" fontWeight={800}>Lista de Materiales</Typography>
+                        </Box>
+                        <DataTable
+                            columns={columns}
+                            rows={rows}
+                            loading={loading}
+                            searchPlaceholder="Buscar en resultados..."
+                            actions={false}
+                        />
+                    </TableContainer>
                 )}
+
+                {/* ── Paginación Común ── */}
+                <TablePagination
+                    component="div"
+                    count={total}
+                    page={page}
+                    onPageChange={(_, p) => setPage(p)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={e => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+                    rowsPerPageOptions={[12, 24, 48, 96]}
+                    labelRowsPerPage="Items por página:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                    sx={{ mt: 2, borderTop: '1px solid', borderColor: 'divider' }}
+                />
             </Box>
 
             {/* ── Modales ── */}

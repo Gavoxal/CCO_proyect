@@ -54,7 +54,7 @@ const RAZONES = ['Inasistencia', 'Enfermedad', 'Otra Causa', 'Seguimiento'];
 const SITUACIONES = ['Continuación en el Ministerio', 'Dar de Baja', 'Otra'];
 
 export default function VisitasPage() {
-    const { user } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const location = useLocation();
     const { enqueueSnackbar } = useSnackbar();
     const theme = useTheme();
@@ -176,7 +176,7 @@ export default function VisitasPage() {
                 Fecha: new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' }),
                 Código: v.infante.codigo,
                 Infante: `${v.infante.persona.nombres} ${v.infante.persona.apellidos}`,
-                Tutor: v.tutor?.nombre || 'N/A',
+                Tutor: v.tutor?.nombre || (v.infante.tutor ? `${v.infante.tutor.persona.nombres} ${v.infante.tutor.persona.apellidos}` : 'N/A'),
                 Razón: v.razon,
                 Realizada: v.visitaExitosa,
                 Situación: v.situacion,
@@ -315,7 +315,9 @@ export default function VisitasPage() {
         doc.text(`Nombre: ${v.infante.persona.nombres} ${v.infante.persona.apellidos}`, 20, 65);
         doc.text(`Código: ${v.infante.codigo}`, 20, 72);
         doc.text(`Fecha de Visita: ${new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' })}`, 120, 65);
-        doc.text(`Tutor Responsable: ${v.tutor?.nombre || 'N/A'}`, 120, 72);
+        
+        const tutorNombre = v.tutor?.nombre || (v.infante.tutor ? `${v.infante.tutor.persona.nombres} ${v.infante.tutor.persona.apellidos}` : 'N/A');
+        doc.text(`Tutor Responsable: ${tutorNombre}`, 120, 72);
 
         // Detalles de la Visita
         doc.setFont('helvetica', 'bold');
@@ -351,7 +353,7 @@ export default function VisitasPage() {
         if (v.fotoVisita) {
             try {
                 // El fotoVisita es una URL relativa, necesitamos la absoluta para jsPDF
-                const imgUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${v.fotoVisita}`;
+                const imgUrl = getImageUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${v.fotoVisita}`);
 
                 // Cargar imagen
                 const img = await new Promise((resolve, reject) => {
@@ -527,22 +529,28 @@ export default function VisitasPage() {
                                                     <TableCell sx={{ fontWeight: 500 }}>
                                                         {new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell sx={{ minWidth: 200 }}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                            <Avatar sx={{
-                                                                width: 32, height: 32, fontSize: '0.8rem', fontWeight: 700,
-                                                                bgcolor: AVATAR_COLORS[v.infanteId % AVATAR_COLORS.length],
-                                                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                                                            }}>
+                                                            <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', fontWeight: 800, bgcolor: alpha(CCO.violeta, 0.1), color: CCO.violeta }}>
                                                                 {v.infante.persona.nombres.charAt(0)}
                                                             </Avatar>
+                                                            {v.infante.fotografia && (
+                                                                <Avatar 
+                                                                    src={getImageUrl(v.infante.fotografia)} 
+                                                                    sx={{ width: 32, height: 32, position: 'absolute' }} 
+                                                                />
+                                                            )}
                                                             <Box>
                                                                 <Typography variant="body2" fontWeight={700}>{v.infante.persona.nombres} {v.infante.persona.apellidos}</Typography>
                                                                 <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 1 }}>{v.infante.codigo}</Typography>
                                                             </Box>
                                                         </Box>
                                                     </TableCell>
-                                                    {isAdmin && <TableCell variant="body2">{v.tutor?.nombre || 'S/T'}</TableCell>}
+                                                    {isAdmin && (
+                                                        <TableCell variant="body2">
+                                                            {v.tutor?.nombre || (v.infante.tutor ? `${v.infante.tutor.persona.nombres.split(' ')[0]} ${v.infante.tutor.persona.apellidos.split(' ')[0]}` : 'S/T')}
+                                                        </TableCell>
+                                                    )}
                                                     <TableCell>
                                                         <Chip
                                                             label={v.razon}
@@ -778,7 +786,14 @@ export default function VisitasPage() {
                                                             options={infantes}
                                                             getOptionLabel={(option) => `${option.codigo} - ${option.persona?.apellidos} ${option.persona?.nombres}`}
                                                             value={infantes.find(i => i.id === form.infanteId) || null}
-                                                            onChange={(_, newValue) => setForm(f => ({ ...f, infanteId: newValue?.id || null }))}
+                                                            onChange={(_, newValue) => {
+                                                                setForm(f => ({ 
+                                                                    ...f, 
+                                                                    infanteId: newValue?.id || null,
+                                                                    // Auto-seleccionar el tutor si el infante tiene uno asignado
+                                                                    tutorId: newValue?.tutorId || f.tutorId 
+                                                                }));
+                                                            }}
                                                             renderInput={(params) => (
                                                                 <TextField
                                                                     {...params}
@@ -964,7 +979,7 @@ export default function VisitasPage() {
                                                             {fotoPreview ? (
                                                                 <>
                                                                     <img
-                                                                        src={fotoPreview}
+                                                                        src={fotoPreview.startsWith('blob:') ? fotoPreview : getImageUrl(fotoPreview)}
                                                                         alt="Vista previa"
                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                                     />

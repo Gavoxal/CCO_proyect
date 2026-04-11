@@ -87,7 +87,7 @@ const InfanteFormPage = () => {
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    const { user } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const isEditing = !!id;
     const isTutor = user?.rol === 'tutor';
@@ -376,7 +376,7 @@ const InfanteFormPage = () => {
                                 <Typography variant="body2" fontWeight={700} sx={{ mb: 1.5 }}>Foto del Infante</Typography>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
                                     <Avatar
-                                        src={form.foto || undefined}
+                                        src={form.foto ? (form.foto.startsWith('data:') ? form.foto : getImageUrl(form.foto)) : undefined}
                                         sx={{
                                             width: 100, height: 100, border: `2px dashed`,
                                             borderColor: form.foto ? alpha(CCO.violeta, 0.5) : theme.palette.divider,

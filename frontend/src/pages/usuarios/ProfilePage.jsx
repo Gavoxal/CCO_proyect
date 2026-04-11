@@ -25,7 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { usuariosService } from '../../services/appServices';
 
-const BASE_URL = 'http://localhost:3000';
+
 
 const ROLES = {
     admin: { label: 'Administrador', color: '#7c4dff' },
@@ -69,7 +69,7 @@ export default function ProfilePage() {
                 profesion: data.persona?.tutor?.profesion || '',
                 password: '', confirmarPassword: '',
                 foto: null,
-                previewUrl: data.persona?.tutor?.fotografia ? `${BASE_URL}${data.persona.tutor.fotografia}` : null
+                previewUrl: data.persona?.tutor?.fotografia ? getImageUrl(data.persona.tutor.fotografia) : null
             });
         } catch (error) {
             enqueueSnackbar('Error al cargar perfil', { variant: 'error' });
@@ -216,7 +216,7 @@ export default function ProfilePage() {
                     <Box sx={{ textAlign: 'center', mt: -8, pb: 4, px: 3, position: 'relative' }}>
                         <Box sx={{ position: 'relative', display: 'inline-block' }}>
                             <Avatar 
-                                src={form.previewUrl}
+                                src={form.previewUrl ? (form.previewUrl.startsWith('blob:') ? form.previewUrl : getImageUrl(form.previewUrl)) : undefined}
                                 sx={{ 
                                     width: { xs: 120, md: 160 }, height: { xs: 120, md: 160 }, 
                                     border: '6px solid', borderColor: 'background.paper',

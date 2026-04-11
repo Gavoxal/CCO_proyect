@@ -21,6 +21,7 @@ import {
 import * as XLSX from 'xlsx';
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
+import { useAuth } from '../../context/AuthContext';
 import infanteService from '../../services/infanteService';
 import asistenciaService from '../../services/asistenciaService';
 import { 
@@ -92,6 +93,7 @@ const AsistenciaPage = () => {
     const navigate = useNavigate();
     const { enqueueSnackbar } = useSnackbar();
     const theme = useTheme();
+    const { getImageUrl } = useAuth();
     const isDark = theme.palette.mode === 'dark';
 
     const hoy = new Date().toISOString().split('T')[0];
@@ -470,68 +472,6 @@ const AsistenciaPage = () => {
                             </Button>
                         </Stack>
 
-                        {/* ── Estadísticas del mes actual ── */}
-                        <Card elevation={0} sx={{
-                            border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3,
-                            background: isDark
-                                ? `linear-gradient(135deg, ${alpha(CCO.azul, 0.12)}, ${alpha(CCO.violeta, 0.08)})`
-                                : `linear-gradient(135deg, ${alpha(CCO.azul, 0.04)}, ${alpha(CCO.violeta, 0.03)})`,
-                        }}>
-                            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <GroupIcon fontSize="small" sx={{ color: CCO.azul }} />
-                                    Participación Año Lectivo · {getSchoolYearRange().label}
-                                </Typography>
-                                <Grid container spacing={2} alignItems="center">
-                                    {/* Barra principal infantes */}
-                                    <Grid item xs={12} md={6}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                                            <Typography variant="body2" color="text.secondary">Participación en el año lectivo</Typography>
-                                            <Typography variant="body2" fontWeight={800} color={statsDestesMes.pct >= 80 ? 'success.main' : statsDestesMes.pct >= 50 ? 'warning.main' : 'error.main'}>
-                                                {statsDestesMes.infantesAsistidos} / {statsDestesMes.totalInfantes}
-                                            </Typography>
-                                        </Box>
-                                        <LinearProgress
-                                            variant="determinate" value={statsDestesMes.pct}
-                                            sx={{
-                                                height: 12, borderRadius: 6,
-                                                bgcolor: alpha(statsDestesMes.pct >= 80 ? '#4caf50' : statsDestesMes.pct >= 50 ? '#ff9800' : '#ef5350', 0.15),
-                                                '& .MuiLinearProgress-bar': {
-                                                    borderRadius: 6,
-                                                    background: statsDestesMes.pct >= 80
-                                                        ? 'linear-gradient(90deg, #4caf50, #81c784)'
-                                                        : statsDestesMes.pct >= 50
-                                                            ? 'linear-gradient(90deg, #ff9800, #ffb74d)'
-                                                            : 'linear-gradient(90deg, #ef5350, #e57373)',
-                                                }
-                                            }}
-                                        />
-                                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                                            {statsDestesMes.pct}% de participación · {statsDestesMes.dias} día(s) registrado(s)
-                                        </Typography>
-                                    </Grid>
-                                    {/* Mini KPIs del mes */}
-                                    <Grid item xs={12} md={6}>
-                                        <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
-                                            {[
-                                                { label: 'Presentes (Total)', value: statsDestesMes.presencias, color: '#4caf50', emoji: '🥗' },
-                                                { label: 'Faltas', value: statsDestesMes.ausencias, color: '#ef5350', emoji: '❌' },
-                                            ].map(k => (
-                                                <Box key={k.label} sx={{
-                                                    textAlign: 'center', p: 1.5, borderRadius: 2,
-                                                    bgcolor: alpha(k.color, 0.08), minWidth: 80,
-                                                    border: `1px solid ${alpha(k.color, 0.2)}`
-                                                }}>
-                                                    <Typography fontSize={18}>{k.emoji}</Typography>
-                                                    <Typography fontWeight={900} fontSize={20} color={k.color}>{k.value}</Typography>
-                                                    <Typography variant="caption" color="text.secondary" fontWeight={600}>{k.label}</Typography>
-                                                </Box>
-                                            ))}
-                                        </Stack>
-                                    </Grid>
-                                </Grid>
-                            </CardContent>
-                        </Card>
 
                         {/* ── Conteo del día actual + Marcar todos ── */}
                         <Card elevation={0} sx={{ flex: 1, border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3 }}>
@@ -600,7 +540,7 @@ const AsistenciaPage = () => {
                                                 <TableCell>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                                         <Avatar
-                                                            src={inf.fotografia ? `http://localhost:3000${inf.fotografia}` : undefined}
+                                                            src={inf.fotografia ? getImageUrl(inf.fotografia) : undefined}
                                                             sx={{
                                                                 width: 36, height: 36, fontSize: '0.78rem', fontWeight: 700,
                                                                 bgcolor: AVATAR_COLORS[inf.id % AVATAR_COLORS.length],

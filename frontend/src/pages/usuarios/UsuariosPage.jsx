@@ -30,7 +30,7 @@ import { usuariosService } from '../../services/appServices';
 
 // ─── Paleta CCO ──────────────────────────────────────────────
 const CCO = { naranja: '#FF6B35', azul: '#004E89', crema: '#EFEFD0', violeta: '#6B2D5C', celeste: '#7BAE7F' };
-const BASE_URL = 'http://localhost:3000'; // Ajustar según backend
+
 
 // ─── Config de Roles ─────────────────────────────────────────
 const ROLES = {
@@ -64,7 +64,8 @@ function RolChip({ rol, size = 'small' }) {
 // ─── Avatar inicial ───────────────────────────────────────────
 function UserAvatar({ nombre, rol, foto, size = 40 }) {
     const cfg = ROLES[rol] || { color: '#777' };
-    const imageUrl = foto ? `${BASE_URL}${foto}` : null;
+    const { getImageUrl } = useAuth();
+    const imageUrl = foto ? getImageUrl(foto) : null;
 
     return (
         <Avatar 

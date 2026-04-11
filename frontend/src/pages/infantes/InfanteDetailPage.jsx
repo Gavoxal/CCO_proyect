@@ -57,7 +57,7 @@ const InfanteDetailPage = () => {
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    const { user } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
 
     // Estados primarios
@@ -191,7 +191,7 @@ const InfanteDetailPage = () => {
                                     }
                                 >
                                     <Avatar
-                                        src={currentFoto || undefined}
+                                        src={currentFoto ? (currentFoto.startsWith('blob:') ? currentFoto : getImageUrl(currentFoto)) : undefined}
                                         onClick={() => currentFoto && setVisorFoto(true)}
                                         sx={{ width: 110, height: 110, fontSize: '2.2rem', fontWeight: 800, bgcolor: AVATAR_COLORS[infante.id % AVATAR_COLORS.length], border: `3px solid ${fotoInfo.color}`, cursor: currentFoto ? 'pointer' : 'default' }}
                                     >
@@ -364,7 +364,7 @@ const InfanteDetailPage = () => {
                 <Dialog open={visorFoto} onClose={() => setVisorFoto(false)} maxWidth="sm" fullWidth>
                     <Box sx={{ position: 'relative', bgcolor: '#000' }}>
                         <IconButton onClick={() => setVisorFoto(false)} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}><CloseIcon /></IconButton>
-                        <img src={currentFoto} alt="Foto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
+                        <img src={currentFoto ? (currentFoto.startsWith('blob:') ? currentFoto : getImageUrl(currentFoto)) : undefined} alt="Foto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
                     </Box>
                 </Dialog>
             </Box>
