@@ -4,13 +4,23 @@
  * @returns {{ start: Date, end: Date, label: string }}
  */
 export function getSchoolYearRange(date = new Date()) {
-    // Si se pasa un número de 4 dígitos, tratarlo como el año
-    let d
-    if (typeof date === 'number' && date > 1900 && date < 2100) {
-        d = new Date(`${date}-01-01T12:00:00`)
-    } else {
-        d = new Date(date)
+    // Si se pasa un año explícito (número o string YYYY), usarlo como inicio del ciclo.
+    const numericYear = Number(date)
+    const isExplicitYear =
+        (typeof date === 'number' && Number.isInteger(date) && date > 1900 && date < 2100) ||
+        (typeof date === 'string' && /^\d{4}$/.test(date) && numericYear > 1900 && numericYear < 2100)
+
+    if (isExplicitYear) {
+        const startYear = numericYear
+        const endYear = startYear + 1
+        return {
+            start: new Date(startYear, 6, 1, 0, 0, 0),
+            end: new Date(endYear, 5, 30, 23, 59, 59),
+            label: `${startYear}-${endYear}`
+        }
     }
+
+    const d = new Date(date)
     const month = d.getMonth() + 1 // 1-12
     const year = d.getFullYear()
 

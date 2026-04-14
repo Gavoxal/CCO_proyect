@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Grid, Card, CardContent, Button, Chip, Avatar,
     Alert, Divider, Dialog, DialogTitle, DialogContent,
@@ -55,13 +56,15 @@ const SITUACIONES = ['Continuación en el Ministerio', 'Dar de Baja', 'Otra'];
 
 export default function VisitasPage() {
     const { user, getImageUrl } = useAuth();
+    const navigate = useNavigate();
     const location = useLocation();
     const { enqueueSnackbar } = useSnackbar();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
 
     const isAdmin = ['admin', 'director', 'pastor'].includes(user?.rol);
-    const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial', 'tutor'].includes(user?.rol);
+    const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial', 'tutor', 'proteccion'].includes(user?.rol);
+    const canDelete = ['admin', 'director', 'secretaria', 'proteccion'].includes(user?.rol);
 
     const [tabIndex, setTabIndex] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -76,10 +79,11 @@ export default function VisitasPage() {
     const [tutoresLista, setTutoresLista] = useState([]);
 
     // Filtros Historial
-    const currentYear = new Date().getFullYear();
+    const currentSchoolYearStart = getSchoolYearRange().start.getFullYear();
     const [searchHist, setSearchHist] = useState('');
     const [filtroTutor, setFiltroTutor] = useState('');
-    const [filtroAnio, setFiltroAnio] = useState(currentYear.toString());
+    const [filtroAnio, setFiltroAnio] = useState(currentSchoolYearStart.toString());
+    const [filtroMes, setFiltroMes] = useState('all');
     const [histPage, setHistPage] = useState(0);
     const [histRowsPerPage, setHistRowsPerPage] = useState(10);
     const [pendPage, setPendPage] = useState(0);
@@ -97,6 +101,8 @@ export default function VisitasPage() {
                 fechaFin: schoolYear.end.toISOString(),
                 search: searchHist,
                 tutorId: filtroTutor,
+                mes: filtroMes,
+                anioLectivo: filtroAnio,
                 page: histPage + 1,
                 limit: histRowsPerPage
             });
@@ -168,11 +174,24 @@ export default function VisitasPage() {
             setEditId(null);
             resetForm();
         }
-    }, [tabIndex, filtroAnio, searchHist, filtroTutor, histPage, histRowsPerPage, pendPage, pendRowsPerPage, searchPend, filtroTutorPend]);
+    }, [tabIndex, filtroAnio, filtroMes, searchHist, filtroTutor, histPage, histRowsPerPage, pendPage, pendRowsPerPage, searchPend, filtroTutorPend]);
 
     const handleExportExcel = () => {
         try {
-            const dataToExport = visitas.map(v => ({
+            const exportAll = async () => {
+                const res = await visitaService.listar({
+                    fechaInicio: schoolYear.start.toISOString(),
+                    fechaFin: schoolYear.end.toISOString(),
+                    search: searchHist,
+                    tutorId: filtroTutor,
+                    mes: filtroMes,
+                    anioLectivo: filtroAnio,
+                    page: 1,
+                    limit: 100000
+                });
+
+                const registros = res.data || [];
+                const dataToExport = registros.map(v => ({
                 Fecha: new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' }),
                 Código: v.infante.codigo,
                 Infante: `${v.infante.persona.nombres} ${v.infante.persona.apellidos}`,
@@ -184,16 +203,22 @@ export default function VisitasPage() {
                 Observaciones: v.observaciones
             }));
 
-            if (dataToExport.length === 0) {
-                enqueueSnackbar('No hay datos para exportar', { variant: 'info' });
-                return;
-            }
+                if (dataToExport.length === 0) {
+                    enqueueSnackbar('No hay datos para exportar', { variant: 'info' });
+                    return;
+                }
 
-            const ws = XLSX.utils.json_to_sheet(dataToExport);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Visitas");
-            XLSX.writeFile(wb, `Reporte_Visitas_${filtroAnio}.xlsx`);
-            enqueueSnackbar('Excel exportado correctamente', { variant: 'success' });
+                const ws = XLSX.utils.json_to_sheet(dataToExport);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Visitas");
+                XLSX.writeFile(wb, `Reporte_Visitas_${filtroAnio}.xlsx`);
+                enqueueSnackbar(`Excel exportado correctamente (${dataToExport.length} registros)`, { variant: 'success' });
+            };
+
+            exportAll().catch((error) => {
+                console.error(error);
+                enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
+            });
         } catch (error) {
             enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
         }
@@ -290,7 +315,7 @@ export default function VisitasPage() {
 
     const generarPDF = async (v) => {
         const doc = new jsPDF();
-        const primaryColor = [65, 105, 225]; // CCO Azul
+        const primaryColor = [255, 140, 0]; // Naranja institucional
 
         // Membrete/Título
         doc.setFillColor(...primaryColor);
@@ -300,7 +325,7 @@ export default function VisitasPage() {
         doc.setFont('helvetica', 'bold');
         doc.text('HOJA DE VISITA DOMICILIARIA', 105, 20, { align: 'center' });
         doc.setFontSize(10);
-        doc.text('CENTRO CRISTIANO DE OBRAPIA (CCO)', 105, 30, { align: 'center' });
+        doc.text('MINISTERIO VIDAS EN ACCION', 105, 30, { align: 'center' });
 
         // Información General
         doc.setTextColor(0, 0, 0);
@@ -352,19 +377,27 @@ export default function VisitasPage() {
         // Foto (si existe)
         if (v.fotoVisita) {
             try {
-                // El fotoVisita es una URL relativa, necesitamos la absoluta para jsPDF
-                const imgUrl = getImageUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${v.fotoVisita}`);
-
-                // Cargar imagen
-                const img = await new Promise((resolve, reject) => {
-                    const i = new Image();
-                    i.crossOrigin = 'Anonymous';
-                    i.onload = () => resolve(i);
-                    i.onerror = reject;
-                    i.src = imgUrl;
+                // Cargar imagen protegida con token y convertirla a data URL para incrustarla en PDF.
+                const imgUrl = getImageUrl(v.fotoVisita);
+                const response = await fetch(imgUrl);
+                if (!response.ok) throw new Error('No se pudo descargar la evidencia fotográfica');
+                const blob = await response.blob();
+                const mimeType = blob.type || 'image/jpeg';
+                const imageFormat = mimeType.includes('png') ? 'PNG' : mimeType.includes('webp') ? 'WEBP' : 'JPEG';
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
                 });
 
-                // Calcular dimensiones para que quepa (max 100x60)
+                // Cargar dimensiones reales para mantener proporción (max 100x60)
+                const img = await new Promise((resolve, reject) => {
+                    const i = new Image();
+                    i.onload = () => resolve(i);
+                    i.onerror = reject;
+                    i.src = dataUrl;
+                });
                 const ratio = img.width / img.height;
                 let imgW = 100;
                 let imgH = imgW / ratio;
@@ -380,7 +413,7 @@ export default function VisitasPage() {
 
                 doc.setFont('helvetica', 'bold');
                 doc.text('EVIDENCIA FOTOGRÁFICA:', 20, currentY);
-                doc.addImage(img, 'JPEG', 55, currentY + 5, imgW, imgH);
+                doc.addImage(dataUrl, imageFormat, 55, currentY + 5, imgW, imgH);
             } catch (e) {
                 console.error("Error cargando imagen para PDF", e);
             }
@@ -499,6 +532,40 @@ export default function VisitasPage() {
                                             Rango: {formatLongDate(schoolYear.start)} - {formatLongDate(schoolYear.end)}
                                         </Typography>
                                     </Grid>
+                                    <Grid item xs={12} md={4}>
+                                        <TextField
+                                            select
+                                            fullWidth
+                                            size="small"
+                                            label="Mes"
+                                            value={filtroMes}
+                                            onChange={e => { setFiltroMes(e.target.value); setHistPage(0); }}
+                                            InputProps={{ sx: { borderRadius: 2 } }}
+                                        >
+                                            {MESES.map(m => (
+                                                <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+                                            ))}
+                                        </TextField>
+                                    </Grid>
+                                    <Grid item xs={12} md={4}>
+                                        <Autocomplete
+                                            size="small"
+                                            options={tutoresLista}
+                                            getOptionLabel={(option) => `${option.persona?.nombres} ${option.persona?.apellidos}`}
+                                            value={tutoresLista.find(t => t.id === filtroTutor) || null}
+                                            onChange={(_, newValue) => { setFiltroTutor(newValue?.id || ''); setHistPage(0); }}
+                                            renderInput={(params) => (
+                                                <TextField
+                                                    {...params}
+                                                    label="Filtrar por Tutor"
+                                                    InputProps={{
+                                                        ...params.InputProps,
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            )}
+                                        />
+                                    </Grid>
                                 </Grid>
 
                                 <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
@@ -606,7 +673,7 @@ export default function VisitasPage() {
                                                                     </IconButton>
                                                                 </Tooltip>
                                                             )}
-                                                            {canWrite && (
+                                                            {canDelete && (
                                                                 <Tooltip title="Eliminar Visita">
                                                                     <IconButton
                                                                         size="small"
@@ -704,9 +771,31 @@ export default function VisitasPage() {
                                             {pendientes.map((inf) => (
                                                 <TableRow key={inf.id} hover>
                                                     <TableCell>
-                                                        <Typography variant="body2" fontWeight={700}>
-                                                            {inf.persona.apellidos} {inf.persona.nombres}
-                                                        </Typography>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                            <MuiAvatar
+                                                                src={inf.fotografia ? getImageUrl(inf.fotografia) : undefined}
+                                                                sx={{
+                                                                    width: 36,
+                                                                    height: 36,
+                                                                    fontSize: '0.8rem',
+                                                                    fontWeight: 700,
+                                                                    bgcolor: AVATAR_COLORS[inf.id % AVATAR_COLORS.length],
+                                                                }}
+                                                            >
+                                                                {inf.persona?.nombres?.charAt(0)}{inf.persona?.apellidos?.charAt(0)}
+                                                            </MuiAvatar>
+                                                            <Typography
+                                                                variant="body2"
+                                                                fontWeight={700}
+                                                                onClick={() => navigate(`/infantes/${inf.id}`)}
+                                                                sx={{
+                                                                    cursor: 'pointer',
+                                                                    '&:hover': { textDecoration: 'underline', color: 'primary.main' }
+                                                                }}
+                                                            >
+                                                                {inf.persona.apellidos} {inf.persona.nombres}
+                                                            </Typography>
+                                                        </Box>
                                                     </TableCell>
                                                     <TableCell>{inf.codigo}</TableCell>
                                                     <TableCell align="right">

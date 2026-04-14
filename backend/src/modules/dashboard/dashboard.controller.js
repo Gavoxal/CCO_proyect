@@ -23,13 +23,20 @@ export async function getStats(request, reply) {
         });
 
         // 3. Asistencia este mes
+        // Regla: porcentaje = (infantes que asistieron al menos 1 vez en el mes actual / total infantes) * 100
+        // Se consideran asistencias válidas todos los estados distintos de "Ausente".
         const startOfMonth = new Date(currentYear, currentMonth, 1);
-        const asistencias = await db.asistencia.findMany({
-            where: { fecha: { gte: startOfMonth } }
+        const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+        const asistenciaValidaEstados = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
+        const infantesAsistieronMes = await db.asistencia.groupBy({
+            by: ['infanteId'],
+            where: {
+                fecha: { gte: startOfMonth, lte: endOfMonth },
+                estado: { in: asistenciaValidaEstados }
+            }
         });
-        const totalAsist = asistencias.length;
-        const presentes = asistencias.filter(a => a.estado === 'Presente').length;
-        const pctAsistencia = totalAsist > 0 ? Math.round((presentes / totalAsist) * 100) : 100;
+        const asistentesUnicosMes = infantesAsistieronMes.length;
+        const pctAsistencia = totalInfantes > 0 ? Math.round((asistentesUnicosMes / totalInfantes) * 100) : 0;
 
         // 4. Regalos y Kits (este año)
         const regalosRaw = await db.regalo.groupBy({
@@ -103,7 +110,8 @@ export async function getStats(request, reply) {
                 noPatrocinados: totalInfantes - patrocinados
             },
             asistencia: {
-                pct: pctAsistencia
+                pct: pctAsistencia,
+                asistentesMes: asistentesUnicosMes
             },
             visitas: {
                 realizadas: visitasRealizadas,

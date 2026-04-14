@@ -866,7 +866,7 @@ export default function MaterialesPage() {
                                 onClick={() => importRef.current?.click()}
                                 sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 800, textTransform: 'none', borderColor: CCO.azul, color: CCO.azul, '&:hover': { bgcolor: alpha(CCO.azul, 0.05) } }}
                             >
-                                {importing ? 'Importando...' : '📥 Importar'}
+                                {importing ? 'Importando...' : ' Importar'}
                             </Button>
                             
                             <Button variant="outlined"
@@ -879,7 +879,7 @@ export default function MaterialesPage() {
                                     '&:hover': { bgcolor: alpha('#2e7d32', 0.05), borderColor: '#1b5e20' } 
                                 }}
                             >
-                                {exportando ? 'Exportando...' : '📄 Exportar Excel'}
+                                {exportando ? 'Exportando...' : ' Exportar Excel'}
                             </Button>
                             <input type="file" ref={importRef} accept=".xlsx, .xls" hidden onChange={handleFileSelect} />
 

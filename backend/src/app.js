@@ -8,6 +8,7 @@ import multipart from '@fastify/multipart'
 import fastifyStatic from '@fastify/static'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import helmet from '@fastify/helmet'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -37,6 +38,10 @@ export async function buildApp() {
 
     // ── Plugins globales ────────────────────────────────────
     await app.register(corsPlugin)
+    await app.register(helmet, {
+        contentSecurityPolicy: false, // Deshabilitar si causa problemas con Swagger, ajustar luego
+        crossOriginEmbedderPolicy: false
+    })
     await app.register(rateLimitPlugin)
     await app.register(prismaPlugin)
     await app.register(authPlugin)
@@ -46,7 +51,29 @@ export async function buildApp() {
         }
     })
 
-    // ── Servir archivos estáticos (uploads) ─────────────────
+    // ── Servir archivos estáticos (uploads) — PROTEGIDO ────────
+    // Solo permitir acceso a fotos si el usuario está autenticado.
+    // Soporta tanto cabecera Authorization como parámetro ?token=.
+    app.addHook('onRequest', async (request, reply) => {
+        if (request.url.startsWith('/uploads/')) {
+            try {
+                // Intentar extraer token de query si no está en headers
+                const authHeader = request.headers.authorization;
+                const queryToken = request.query.token;
+
+                if (!authHeader && queryToken) {
+                    // Manual verification if only query token is present
+                    await app.jwt.verify(queryToken);
+                } else {
+                    // Standard header verification
+                    await request.jwtVerify();
+                }
+            } catch (err) {
+                return reply.status(401).send({ error: 'Debe iniciar sesión para ver este archivo' })
+            }
+        }
+    })
+
     await app.register(fastifyStatic, {
         root: path.join(process.cwd(), 'uploads'),
         prefix: '/uploads/',

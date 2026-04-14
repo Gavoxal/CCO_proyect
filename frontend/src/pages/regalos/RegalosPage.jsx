@@ -38,9 +38,8 @@ const CCO = {
 
 // ─── Componentes ──────────────────────────────────────────────
 
-function DetalleModal({ open, item, tipoLabel, onClose }) {
+function DetalleModal({ open, item, tipoLabel, getImageUrl, onClose }) {
     if (!item) return null;
-    const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace('/api/v1', '');
 
     const entregadoPorNombre = item.entregadoPor?.persona 
         ? `${item.entregadoPor.persona.nombres} ${item.entregadoPor.persona.apellidos}`
@@ -57,7 +56,7 @@ function DetalleModal({ open, item, tipoLabel, onClose }) {
                 <Box>
                     <Box sx={{ p: 3, display: 'flex', gap: 3, alignItems: 'center', bgcolor: alpha(CCO.azul, 0.03) }}>
                         <Avatar
-                            src={item.infante?.fotografia ? `${baseURL}${item.infante.fotografia}` : ''}
+                            src={item.infante?.fotografia ? getImageUrl(item.infante.fotografia) : ''}
                             sx={{ width: 90, height: 90, borderRadius: 3, border: `3px solid ${CCO.azul}`, boxShadow: '0 8px 16px rgba(0,0,0,0.1)', fontSize: 36 }}
                         >
                             {item.infante?.persona?.nombres?.charAt(0)}
@@ -121,7 +120,7 @@ function DetalleModal({ open, item, tipoLabel, onClose }) {
                                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>Evidencia Fotográfica</Typography>
                                         <Box 
                                             component="img"
-                                            src={`${baseURL}${item.foto}`}
+                                            src={getImageUrl(item.foto)}
                                             sx={{ width: '100%', borderRadius: 3, boxShadow: '0 8px 16px rgba(0,0,0,0.1)', border: '1px solid', borderColor: 'divider' }}
                                         />
                                     </Box>
@@ -152,10 +151,9 @@ function DetalleModal({ open, item, tipoLabel, onClose }) {
 export default function RegalosPage() {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    const { user } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const fileInputRef = useRef(null);
-    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
     const [anio, setAnio] = useState(new Date().getFullYear());
     const [tipo, setTipo] = useState('regalo_navidad');
@@ -170,7 +168,8 @@ export default function RegalosPage() {
     // Modales
     const [detalleItem, setDetalleItem] = useState(null);
     
-    const canWrite = !user?.rol || ['admin', 'director', 'secretaria'].includes(user?.rol);
+    const isAuthenticated = !!user;
+    const canManageSeason = ['admin', 'director', 'secretaria'].includes(user?.rol);
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -277,7 +276,7 @@ export default function RegalosPage() {
             renderCell: r => (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <Avatar
-                        src={r.infante?.fotografia ? `${baseURL}${r.infante.fotografia}` : ''}
+                        src={r.infante?.fotografia ? getImageUrl(r.infante.fotografia) : ''}
                         sx={{
                             width: 38, height: 38, borderRadius: '10px',
                             bgcolor: alpha(CCO.azul, 0.15), color: CCO.azul,
@@ -304,7 +303,7 @@ export default function RegalosPage() {
                 r.foto ? (
                     <Box 
                         component="img"
-                        src={`${baseURL}${r.foto}`}
+                        src={getImageUrl(r.foto)}
                         sx={{ width: 44, height: 34, borderRadius: 1.5, objectFit: 'cover', cursor: 'pointer', border: '1px solid', borderColor: 'divider' }}
                         onClick={() => setDetalleItem(r)}
                     />
@@ -351,7 +350,7 @@ export default function RegalosPage() {
                         </IconButton>
                     </Tooltip>
 
-                    {canWrite && r.estado !== 'entregado' && (
+                    {isAuthenticated && r.estado !== 'entregado' && (
                         <>
                             <Tooltip title="Confirmar con Foto (Fácil)" arrow>
                                 <IconButton
@@ -420,7 +419,7 @@ export default function RegalosPage() {
                     </Box>
 
                     <Stack direction="row" spacing={1.5} flexWrap="wrap">
-                        {canWrite && (
+                        {canManageSeason && (
                             <Button
                                 variant="outlined"
                                 startIcon={generating ? <CircularProgress size={16} /> : <StarIcon />}
@@ -436,7 +435,7 @@ export default function RegalosPage() {
                             </Button>
                         )}
 
-                        {canWrite && (
+                        {canManageSeason && (
                             <Button
                                 variant="contained"
                                 startIcon={<DownloadIcon />}
@@ -576,6 +575,7 @@ export default function RegalosPage() {
                     open={Boolean(detalleItem)}
                     item={detalleItem}
                     tipoLabel={tipoLabel}
+                    getImageUrl={getImageUrl}
                     anio={anio}
                     onClose={() => setDetalleItem(null)}
                 />

@@ -286,7 +286,7 @@ export default function IncidentesPage() {
             };
             const res = await incidentesService.listar(params);
             setReportes(res.data);
-            setTotal(res.total);
+            setTotal(res.meta?.total ?? res.total ?? 0);
         } catch (err) {
             enqueueSnackbar('Error al cargar reportes', { variant: 'error' });
         } finally {

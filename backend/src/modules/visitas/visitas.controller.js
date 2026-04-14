@@ -8,12 +8,20 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
 
 export async function listar(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { infanteId, anio, fechaInicio, fechaFin, tutorId } = request.query
+    const { infanteId, anio, fechaInicio, fechaFin, tutorId, search, mes, anioLectivo } = request.query
     const db = request.server.db
 
     const where = {}
     if (infanteId) where.infanteId = parseInt(infanteId)
     if (tutorId) where.tutorId = parseInt(tutorId)
+    if (search) {
+        const s = String(search).trim()
+        where.OR = [
+            { infante: { persona: { nombres: { contains: s, mode: 'insensitive' } } } },
+            { infante: { persona: { apellidos: { contains: s, mode: 'insensitive' } } } },
+            { infante: { codigo: { contains: s, mode: 'insensitive' } } }
+        ]
+    }
 
     if (fechaInicio || fechaFin) {
         where.fecha = {}
@@ -24,12 +32,21 @@ export async function listar(request, reply) {
         where.fecha = { gte: new Date(`${yr}-01-01`), lte: new Date(`${yr}-12-31`) }
     }
 
+    if (mes !== undefined && mes !== 'all' && anioLectivo) {
+        const mesNum = parseInt(mes)
+        const inicioLectivo = parseInt(anioLectivo)
+        const anioMes = mesNum >= 6 ? inicioLectivo : inicioLectivo + 1
+        const start = new Date(anioMes, mesNum, 1)
+        const end = new Date(anioMes, mesNum + 1, 0, 23, 59, 59)
+        where.fecha = { gte: start, lte: end }
+    }
+
     const [total, visitas] = await Promise.all([
         db.visita.count({ where }),
         db.visita.findMany({
             where, skip, take: limit,
             include: {
-                infante: { include: { persona: true } },
+                infante: { include: { persona: true, tutor: { include: { persona: true } } } },
                 tutor: { include: { persona: true } }
             },
             orderBy: { fecha: 'desc' }
@@ -39,6 +56,10 @@ export async function listar(request, reply) {
     // Mapear para el frontend
     const mappedVisitas = visitas.map(v => ({
         ...v,
+        tutor: v.tutor ? { 
+            ...v.tutor, 
+            nombre: `${v.tutor.persona.nombres} ${v.tutor.persona.apellidos}` 
+        } : null,
         visitaExitosa: v.estado === 'Realizada' ? 'SI' : 'NO',
         razon: v.razonVisita === 'OtraCausa' ? 'Otra Causa' : v.razonVisita,
         situacion: v.decision === 'ContinuaMinisterio' ? 'Continuación en el Ministerio' : 
@@ -53,7 +74,7 @@ export async function obtener(request, reply) {
     const visita = await db.visita.findUnique({
         where: { id: parseInt(request.params.id) },
         include: {
-            infante: { include: { persona: true } },
+            infante: { include: { persona: true, tutor: { include: { persona: true } } } },
             tutor: { include: { persona: true } }
         }
     })
@@ -113,7 +134,10 @@ export async function crear(request, reply) {
                 infanteId: parseInt(body.infanteId),
                 tutorId: body.tutorId ? parseInt(body.tutorId) : null
             },
-            include: { infante: { include: { persona: true } } }
+            include: { 
+                infante: { include: { persona: true, tutor: { include: { persona: true } } } },
+                tutor: { include: { persona: true } }
+            }
         })
         return created(reply, visita)
     } catch (error) {
@@ -180,7 +204,10 @@ export async function actualizar(request, reply) {
         const visitaActualizada = await db.visita.update({
             where: { id },
             data: dataToUpdate,
-            include: { infante: { include: { persona: true } }, tutor: { include: { persona: true } } }
+            include: { 
+                infante: { include: { persona: true, tutor: { include: { persona: true } } } }, 
+                tutor: { include: { persona: true } } 
+            }
         })
         return ok(reply, visitaActualizada)
     } catch (error) {
@@ -244,7 +271,10 @@ export async function listarPendientes(request, reply) {
         db.infante.count({ where }),
         db.infante.findMany({
             where, skip, take: limit,
-            include: { persona: true },
+            include: { 
+                persona: true,
+                tutor: { include: { persona: true } }
+            },
             orderBy: { persona: { apellidos: 'asc' } }
         })
     ])

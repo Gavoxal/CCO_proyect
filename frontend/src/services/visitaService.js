@@ -29,6 +29,14 @@ const visitaService = {
         });
         return data;
     },
+
+    actualizar: async (id, payload) => {
+        const isFormData = payload instanceof FormData;
+        const { data } = await api.put(`/visitas/${id}`, payload, {
+            headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
+        });
+        return data;
+    },
     
     eliminar: async (id) => {
         await api.delete(`/visitas/${id}`);

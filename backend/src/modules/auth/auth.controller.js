@@ -65,8 +65,13 @@ export async function recuperarPassword(request, reply) {
     const db = request.server.db
 
     const usuario = await db.usuario.findUnique({ where: { email } })
+    
+    const SUCCESS_MSG = 'Si el correo electrónico está registrado, recibirás una contraseña temporal en breve.'
+
     if (!usuario) {
-        return reply.status(404).send({ error: 'El correo electrónico no está registrado en el sistema.' })
+        // Log interno para monitoreo, pero respuesta genérica para seguridad
+        request.server.log.info(`Intento de recuperación de contraseña para correo no registrado: ${email}`)
+        return ok(reply, { message: SUCCESS_MSG })
     }
 
     // Generar contraseña temporal robusta

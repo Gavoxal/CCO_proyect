@@ -235,17 +235,22 @@ export async function alertas(request, reply) {
     const fechaLimite = new Date()
     fechaLimite.setDate(fechaLimite.getDate() - diasUmbral)
 
-    const [todos, desactualizados] = await Promise.all([
-        db.inventarioMaterial.findMany(),
-        db.inventarioMaterial.findMany({
-            where: { fechaUltimaActualizacion: { lt: fechaLimite } }
-        })
-    ])
+    // Usar count para stock bajo (más eficiente)
+    const countStockBajo = await db.inventarioMaterial.count({
+        where: {
+            cantidadDisponible: { lt: db.inventarioMaterial.fields.stockMinimo }
+        }
+    })
 
-    const stockBajo = todos.filter(i => i.cantidadDisponible < i.stockMinimo)
+    // Para desactualizados, solo traemos los necesarios (ej. top 50) y solo campos mínimos
+    const desactualizados = await db.inventarioMaterial.findMany({
+        where: { fechaUltimaActualizacion: { lt: fechaLimite } },
+        take: 50,
+        select: { id: true, nombreMaterial: true, codigo: true, fechaUltimaActualizacion: true }
+    })
 
     return ok(reply, {
-        stockBajo: stockBajo.map(i => ({ ...i, razon: 'Stock bajo' })),
+        stockBajoCount: countStockBajo,
         desactualizados: desactualizados.map(i => ({ ...i, razon: `Sin actualizar hace +${diasUmbral} días` }))
     })
 }

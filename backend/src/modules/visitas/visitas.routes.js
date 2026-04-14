@@ -3,7 +3,7 @@ import { listar, obtener, crear, actualizar, eliminar, listarPendientes } from '
 
 export default async function visitasRoutes(fastify) {
     const todos = { preHandler: [requireRoles(...ROLES.TODOS)] }
-    const superAdmins = { preHandler: [requireRoles(...ROLES.SUPER_ADMINS)] }
+    const eliminarVisita = { preHandler: [requireRoles('admin', 'director', 'secretaria', 'proteccion')] }
 
     fastify.get('/', todos, listar)
     fastify.get('/pendientes', todos, listarPendientes)
@@ -11,6 +11,6 @@ export default async function visitasRoutes(fastify) {
     // Tutores y tutores especiales pueden registrar visitas
     fastify.post('/', todos, crear)
     fastify.put('/:id', todos, actualizar)
-    fastify.delete('/:id', todos, eliminar)
+    fastify.delete('/:id', eliminarVisita, eliminar)
 }
 

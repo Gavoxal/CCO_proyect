@@ -37,7 +37,7 @@ const ROLES = {
 
 export default function ProfilePage() {
     const theme = useTheme();
-    const { user, updateUser } = useAuth();
+    const { user, updateUser, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
 
     const [loading, setLoading] = useState(true);
@@ -69,7 +69,7 @@ export default function ProfilePage() {
                 profesion: data.persona?.tutor?.profesion || '',
                 password: '', confirmarPassword: '',
                 foto: null,
-                previewUrl: data.persona?.tutor?.fotografia ? getImageUrl(data.persona.tutor.fotografia) : null
+                previewUrl: data.persona?.tutor?.fotografia || null
             });
         } catch (error) {
             enqueueSnackbar('Error al cargar perfil', { variant: 'error' });

@@ -74,8 +74,8 @@ const InfanteDetailPage = () => {
     const fileRef = useRef(null);
 
     // Permisos
-    const canWrite = ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
-    const isTutor = user?.rol === 'tutor' || user?.rol === 'tutor_especial';
+    const canWrite = ['admin', 'director', 'secretaria'].includes(user?.rol);
+    const canOnlyEditGps = ['tutor', 'tutor_especial', 'proteccion'].includes(user?.rol);
 
     useEffect(() => {
         const cargar = async () => {
@@ -150,7 +150,7 @@ const InfanteDetailPage = () => {
                     <Button startIcon={<BackIcon />} onClick={() => navigate('/infantes')} variant="outlined" size="small" sx={{ borderRadius: 2 }}>
                         Volver
                     </Button>
-                    {(canWrite || isTutor) && (
+                    {(canWrite || canOnlyEditGps) && (
                         <Stack direction="row" spacing={1}>
                             <Button
                                 startIcon={<VisitaIcon />}

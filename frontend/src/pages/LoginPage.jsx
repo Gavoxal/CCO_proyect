@@ -31,19 +31,19 @@ const SLIDES = [
     {
         src: '/login1.jpg',
         titulo: 'Transformando vidas',
-        desc: 'Ministerio Vías en Acción — Acompañando a niños, familias y comunidades hacia un futuro mejor.',
+        desc: 'Ministerio Vídas en Acción — Acompañando a niños, familias y comunidades hacia un futuro mejor.',
         color: CCO.naranja,
     },
     {
-        src: '/login2.jpg',
+        src: '/login4.jpg',
         titulo: 'Formando el futuro',
         desc: 'Cada niño importa — educamos con amor, fe y propósito para construir communidades más fuertes.',
         color: CCO.violeta,
     },
     {
-        src: '/login3.jpeg',
+        src: '/imagen2.jpg',
         titulo: 'Sirviendo con amor',
-        desc: 'Kits escolares, regalos de navidad y mucho más — porque cada sonrisa vale el esfuerzo.',
+        desc: 'Todo lo hacemos con amor para que nuestros niños y familias se sientan cuidados y amados.',
         color: CCO.azul,
     },
 ];
@@ -172,7 +172,7 @@ const LoginPage = () => {
                             <Typography variant="h5" fontWeight={800} color="text.primary">Obrapía</Typography>
                         </Box>
                         <Typography variant="body2" color="text.secondary">
-                            Sistema KidScam · Ministerio Vías en Acción
+                            Sistema KidScam · Ministerio Vídas en Acción
                         </Typography>
                     </Box>
 

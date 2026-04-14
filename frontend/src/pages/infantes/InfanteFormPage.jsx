@@ -90,7 +90,8 @@ const InfanteFormPage = () => {
     const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
     const isEditing = !!id;
-    const isTutor = user?.rol === 'tutor';
+    const canOnlyEditGps = ['tutor', 'tutor_especial', 'proteccion'].includes(user?.rol);
+    const isRestrictedEditing = isEditing && canOnlyEditGps;
 
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
@@ -190,6 +191,10 @@ const InfanteFormPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!isEditing && canOnlyEditGps) {
+            enqueueSnackbar('Tu rol no tiene permisos para crear infantes', { variant: 'error' });
+            return;
+        }
         setSaving(true);
         try {
             const payload = {
@@ -215,7 +220,7 @@ const InfanteFormPage = () => {
             };
             let responseId = id;
             if (isEditing) {
-                if (isTutor) {
+                if (canOnlyEditGps) {
                     await infantesService.actualizarUbicacion(id, form.persona.ubicacionGps);
                 } else {
                     await infantesService.actualizar(id, payload);
@@ -291,7 +296,7 @@ const InfanteFormPage = () => {
                                 <TextField fullWidth label="Código del Infante" value={form.codigo}
                                     onChange={e => set('codigo', e.target.value)}
                                     size="small"
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     helperText="Formato: EC0802XXXXX"
                                     sx={{ '& input': { fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 } }}
                                 />
@@ -300,7 +305,7 @@ const InfanteFormPage = () => {
                             {/* Tipo Programa */}
                             <Grid item xs={12} sm={6} md={3}>
                                 <TextField fullWidth select label="Tipo de Programa" value={form.tipoPrograma || 'Ministerio'}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => set('tipoPrograma', e.target.value)} size="small"
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value="Ministerio">Ministerio</MenuItem>
@@ -317,11 +322,11 @@ const InfanteFormPage = () => {
                                     borderRadius: 2.5, px: 2, py: 1,
                                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                     bgcolor: form.esPatrocinado ? alpha('#4caf50', 0.06) : 'transparent',
-                                    transition: 'all .2s ease', cursor: (isTutor && isEditing) ? 'default' : 'pointer',
+                                    transition: 'all .2s ease', cursor: isRestrictedEditing ? 'default' : 'pointer',
                                     height: '100%', minHeight: 48,
-                                    opacity: (isTutor && isEditing) ? 0.8 : 1
+                                    opacity: isRestrictedEditing ? 0.8 : 1
                                 }} onClick={() => {
-                                    if (isTutor && isEditing) return;
+                                    if (isRestrictedEditing) return;
                                     const next = !form.esPatrocinado;
                                     setForm(f => ({
                                         ...f,
@@ -339,13 +344,13 @@ const InfanteFormPage = () => {
                                                 {form.esPatrocinado ? 'Patrocinado' : 'No Patrocinado'}
                                             </Typography>
                                             <Typography variant="caption" color="text.disabled">
-                                                {(isTutor && isEditing) ? 'Lectura' : 'Toca para cambiar'}
+                                                {isRestrictedEditing ? 'Lectura' : 'Toca para cambiar'}
                                             </Typography>
                                         </Box>
                                     </Box>
                                     <Switch
                                         checked={form.esPatrocinado}
-                                        disabled={isTutor && isEditing}
+                                        disabled={isRestrictedEditing}
                                         onChange={e => {
                                             e.stopPropagation();
                                             const val = e.target.checked;
@@ -363,7 +368,7 @@ const InfanteFormPage = () => {
                             {/* Fuente Patrocinio */}
                             <Grid item xs={12} sm={6} md={3}>
                                 <TextField fullWidth select label="Fuente de Patrocinio" value={form.esPatrocinado ? (form.fuentePatrocinio || 'Compassion') : 'Ninguno'}
-                                    disabled={!form.esPatrocinado || (isTutor && isEditing)}
+                                    disabled={!form.esPatrocinado || isRestrictedEditing}
                                     onChange={e => set('fuentePatrocinio', e.target.value)} size="small"
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value="Ninguno" disabled><em>Ninguno</em></MenuItem>
@@ -389,13 +394,13 @@ const InfanteFormPage = () => {
                                         <input ref={fotoRef} type="file" accept="image/*" onChange={handleFoto} style={{ display: 'none' }} />
                                         <Button variant="outlined" startIcon={<CameraIcon />}
                                             onClick={() => fotoRef.current?.click()}
-                                            disabled={isTutor && isEditing}
+                                            disabled={isRestrictedEditing}
                                             size="small" sx={{ borderRadius: 2, fontWeight: 700 }}>
                                             {form.foto ? 'Cambiar foto' : 'Subir foto'}
                                         </Button>
                                         {form.foto && (
                                             <Button variant="text" color="error" startIcon={<DeleteIcon />}
-                                                disabled={isTutor && isEditing}
+                                                disabled={isRestrictedEditing}
                                                 onClick={() => set('foto', '')} size="small"
                                                 sx={{ borderRadius: 2, fontWeight: 700 }}>
                                                 Quitar foto
@@ -411,13 +416,13 @@ const InfanteFormPage = () => {
                             {/* Enfermedades y alergias */}
                              <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Enfermedades" value={form.enfermedades}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => set('enfermedades', e.target.value)} size="small" multiline rows={2}
                                     placeholder="Ninguna conocida..." />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Alergias" value={form.alergias}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => set('alergias', e.target.value)} size="small" multiline rows={2}
                                     placeholder="Ninguna conocida..." />
                             </Grid>
@@ -427,7 +432,7 @@ const InfanteFormPage = () => {
                                 <TextField fullWidth label="Tarifa Diaria Comedor ($)" value={form.tarifaDiaria}
                                     type="number"
                                     inputProps={{ step: 0.25 }}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => set('tarifaDiaria', e.target.value)} size="small"
                                     helperText="Valor que paga el niño por cada día de asistencia (Ej: 0.50 o 1.00)" />
                             </Grid>
@@ -453,28 +458,28 @@ const InfanteFormPage = () => {
                         <Grid container spacing={2.5}>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Nombres *" value={form.persona.nombres}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('nombres', e.target.value)} required size="small" />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Apellidos *" value={form.persona.apellidos}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('apellidos', e.target.value)} required size="small" />
                             </Grid>
                              <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label="Fecha de Nacimiento" type="date" value={form.persona.fechaNacimiento}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('fechaNacimiento', e.target.value)} size="small"
                                     slotProps={{ inputLabel: { shrink: true } }} />
                             </Grid>
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label="Cédula" value={form.persona.cedula}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('cedula', e.target.value)} size="small" placeholder="0900000000" />
                             </Grid>
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth select label="Tutor" value={form.tutorId || ''}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => set('tutorId', e.target.value ? Number(e.target.value) : '')} size="small"
                                     SelectProps={{ displayEmpty: true }}>
                                     <MenuItem value=""><em>Sin tutor asignado</em></MenuItem>
@@ -498,29 +503,29 @@ const InfanteFormPage = () => {
                         <Grid container spacing={2.5}>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Cuidador / Representante" value={form.persona.cuidador}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('cuidador', e.target.value)} size="small"
                                     placeholder="Nombre completo del cuidador" />
                             </Grid>
                             <Grid item xs={12} sm={3}>
                                 <TextField fullWidth label="Teléfono *" value={form.persona.telefono}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('telefono', e.target.value)} required size="small"
                                     placeholder="098 563 3054" />
                             </Grid>
                             <Grid item xs={12} sm={3}>
                                 <TextField fullWidth label="Teléfono 2" value={form.persona.telefono2}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('telefono2', e.target.value)} size="small" />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Email" value={form.persona.email}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('email', e.target.value)} type="email" size="small" />
                             </Grid>
                             <Grid item xs={12} sm={6}>
                                 <TextField fullWidth label="Dirección" value={form.persona.direccion}
-                                    disabled={isTutor && isEditing}
+                                    disabled={isRestrictedEditing}
                                     onChange={e => setP('direccion', e.target.value)} size="small"
                                     placeholder="Sector, calle, referencia..." />
                             </Grid>
