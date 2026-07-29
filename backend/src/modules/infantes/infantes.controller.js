@@ -29,13 +29,18 @@ export async function listar(request, reply) {
     if (tutorId) where.tutorId = parseInt(tutorId)
     if (buscar) {
         const hash = encryptionService.generateBlindIndex(buscar);
-        where.persona = {
-            OR: [
-                { nombres: { contains: buscar } },
-                { apellidos: { contains: buscar } },
-                { cedulaHash: hash }
-            ]
-        }
+        where.OR = [
+            { codigo: { contains: buscar } },
+            {
+                persona: {
+                    OR: [
+                        { nombres: { contains: buscar } },
+                        { apellidos: { contains: buscar } },
+                        { cedulaHash: hash }
+                    ]
+                }
+            }
+        ]
     }
 
     try {
