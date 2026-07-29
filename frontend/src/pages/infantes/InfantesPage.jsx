@@ -175,11 +175,16 @@ const InfantesPage = () => {
         let res = infantes;
         if (search) {
             const s = search.toLowerCase();
-            res = res.filter(i =>
-                `${i.persona.nombres} ${i.persona.apellidos}`.toLowerCase().includes(s) ||
-                i.codigo.toLowerCase().includes(s) ||
-                i.persona.cedula?.includes(s)
-            );
+            
+            if (/^\d{1,4}$/.test(s)) {
+                res = res.filter(i => (i.codigo || '').toLowerCase().includes(s) || (i.codigo || '').toLowerCase().endsWith(s));
+            } else {
+                res = res.filter(i =>
+                    `${i.persona?.nombres || ''} ${i.persona?.apellidos || ''}`.toLowerCase().includes(s) ||
+                    (i.codigo || '').toLowerCase().includes(s) ||
+                    (i.persona?.cedula || '').includes(s)
+                );
+            }
         }
         if (filtroPat === 'true') res = res.filter(i => i.esPatrocinado);
         if (filtroPat === 'false') res = res.filter(i => !i.esPatrocinado);

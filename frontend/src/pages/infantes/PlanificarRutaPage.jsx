@@ -209,10 +209,18 @@ const PlanificarRutaPage = () => {
             }
             if (searchTerm) {
                 const term = searchTerm.toLowerCase();
-                const nombreCompleto = `${infante.persona?.nombres || ''} ${infante.persona?.apellidos || ''}`.toLowerCase();
-                const codigo = (infante.codigo || '').toLowerCase();
-                if (!nombreCompleto.includes(term) && !codigo.includes(term)) {
-                    return false;
+                
+                if (/^\d{1,4}$/.test(term)) {
+                    if (!(infante.codigo || '').toLowerCase().includes(term)) {
+                        return false;
+                    }
+                } else {
+                    const nombreCompleto = `${infante.persona?.nombres || ''} ${infante.persona?.apellidos || ''}`.toLowerCase();
+                    const codigo = (infante.codigo || '').toLowerCase();
+                    const cedula = (infante.persona?.cedula || '').toLowerCase();
+                    if (!nombreCompleto.includes(term) && !codigo.includes(term) && !cedula.includes(term)) {
+                        return false;
+                    }
                 }
             }
             return true;
