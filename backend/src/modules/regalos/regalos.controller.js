@@ -64,16 +64,44 @@ export async function crear(request, reply) {
 
 export async function actualizar(request, reply) {
     const db = request.server.db
+    const id = parseInt(request.params.id)
+    const { estado, fechaEntrega, observaciones, foto } = request.body
+
     try {
+        const data = {
+            estado,
+            observaciones,
+            foto
+        }
+
+        if (fechaEntrega !== undefined) {
+            data.fechaEntrega = fechaEntrega ? new Date(fechaEntrega) : null
+        }
+
+        if (estado === 'entregado') {
+            // Si pasa a entregado, asegurar que tenga fecha y responsable
+            if (!data.fechaEntrega) data.fechaEntrega = new Date()
+            data.entregadoPorId = request.user.id
+        } else if (estado === 'pendiente') {
+            // Si regresa a pendiente, limpiar datos de entrega
+            data.fechaEntrega = null
+            data.entregadoPorId = null
+            data.foto = null
+        }
+
         const regalo = await db.regalo.update({
-            where: { id: parseInt(request.params.id) },
-            data: {
-                ...request.body,
-                entregadoPorId: request.body.estado === 'entregado' ? request.user.id : undefined
+            where: { id },
+            data,
+            include: { 
+                infante: { include: { persona: true } },
+                entregadoPor: { include: { persona: true } }
             }
         })
         return ok(reply, regalo)
-    } catch { return notFound(reply) }
+    } catch (error) {
+        request.server.log.error(error)
+        return notFound(reply)
+    }
 }
 
 export async function eliminar(request, reply) {

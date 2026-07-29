@@ -15,28 +15,48 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const savedUser = localStorage.getItem('user');
-        const savedToken = localStorage.getItem('token');
-        if (savedUser && savedToken) {
-            try { 
-                setUser(JSON.parse(savedUser)); 
-                setToken(savedToken);
-            } catch { 
-                localStorage.clear(); 
+        const initAuth = async () => {
+            const savedUser = localStorage.getItem('user');
+            const savedToken = localStorage.getItem('token');
+            if (savedUser && savedToken) {
+                try { 
+                    // Establecer estado inicial rápido para que no haya parpadeo
+                    setUser(JSON.parse(savedUser)); 
+                    setToken(savedToken);
+                    
+                    // Obtener perfil completo en segundo plano
+                    const fullUser = await authService.me();
+                    setUser(fullUser);
+                    localStorage.setItem('user', JSON.stringify(fullUser));
+                } catch { 
+                    localStorage.clear(); 
+                    setUser(null);
+                    setToken(null);
+                }
             }
-        }
-        setLoading(false);
+            setLoading(false);
+        };
+        initAuth();
     }, []);
 
     const login = async (username, password) => {
         const result = await authService.login(username, password);
         if (result.success) {
-            const u = result.data.usuario;
             const t = result.data.token;
-            setUser(u);
             setToken(t);
-            localStorage.setItem('user', JSON.stringify(u));
             localStorage.setItem('token', t);
+            
+            // Obtener perfil completo inmediatamente
+            try {
+                const fullUser = await authService.me();
+                setUser(fullUser);
+                localStorage.setItem('user', JSON.stringify(fullUser));
+            } catch (e) {
+                // Fallback al payload del login si falla
+                const u = result.data.usuario;
+                setUser(u);
+                localStorage.setItem('user', JSON.stringify(u));
+            }
         }
         return result;
     };

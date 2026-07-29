@@ -9,8 +9,9 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
 
 const ALLOWED_FIELDS = [
     'codigo', 'nombreMaterial', 'cantidadDisponible', 'stockMinimo',
-    'categoria', 'area', 'tipo', 'marca', 'numeroSerie', 'fotografia',
-    'pertenece', 'fungible'
+    'categoria', 'area', 'tipo', 'marca', 'numeroSerie', 'descripcion',
+    'donacion', 'fechaIngreso', 'ubicacion', 'condicion', 'responsable',
+    'observaciones', 'fotografia', 'pertenece', 'fungible', 'costoUnidad'
 ];
 
 function filterData(body) {
@@ -23,19 +24,45 @@ function filterData(body) {
     // Parse integer fields
     if (data.cantidadDisponible !== undefined) data.cantidadDisponible = parseInt(data.cantidadDisponible) || 0;
     if (data.stockMinimo !== undefined) data.stockMinimo = parseInt(data.stockMinimo) || 0;
+    if (data.costoUnidad !== undefined) data.costoUnidad = parseFloat(data.costoUnidad) || 0;
+    if (data.donacion !== undefined) {
+        const value = data.donacion;
+        data.donacion = value === true || value === 'true' || value === '1' || value === 1 || value === 'on' || value === 'yes';
+    }
+    if (body.fechaIngreso !== undefined) {
+        const fecha = body.fechaIngreso;
+        if (fecha) {
+            data.fechaIngreso = new Date(fecha);
+        } else {
+            delete data.fechaIngreso;
+        }
+    }
     return data;
 }
 
 // GET /inventario/materiales
 export async function listar(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { buscar, stockBajo, pertenece, fungible } = request.query
+    const { buscar, stockBajo, pertenece, fungible, ubicacion } = request.query
     const db = request.server.db
 
     const where = {}
-    if (buscar) where.nombreMaterial = { contains: buscar }
+    if (buscar) {
+        where.OR = [
+            { nombreMaterial: { contains: buscar } },
+            { codigo: { contains: buscar } },
+            { categoria: { contains: buscar } },
+            { area: { contains: buscar } },
+            { ubicacion: { contains: buscar } },
+            { descripcion: { contains: buscar } },
+            { marca: { contains: buscar } },
+            { numeroSerie: { contains: buscar } },
+            { responsable: { contains: buscar } }
+        ]
+    }
     if (pertenece) where.pertenece = pertenece
     if (fungible) where.fungible = fungible
+    if (ubicacion) where.ubicacion = ubicacion
     if (stockBajo === 'true') {
         where.cantidadDisponible = { lte: db.inventarioMaterial.fields.stockMinimo }
     }
@@ -156,14 +183,21 @@ export async function importarExcel(request, reply) {
             const materialData = {
                 codigo: codigo.toString().substring(0, 50),
                 nombreMaterial: nombre.toString().substring(0, 255),
+                descripcion: (row['Descripción'] || row['Descripcion'] || '').toString().substring(0, 1000) || null,
                 categoria: (row['Categoria'] || '').toString().substring(0, 100) || null,
-                area: (row['Area'] || row['Ubicacion'] || '').toString().substring(0, 100) || null,
+                area: (row['Area'] || '').toString().substring(0, 100) || null,
+                ubicacion: (row['Ubicacion'] || '').toString().substring(0, 255) || null,
+                condicion: (row['Condicion'] || row['Condición'] || '').toString().substring(0, 100) || null,
+                responsable: (row['Responsable'] || '').toString().substring(0, 255) || null,
+                observaciones: (row['Observaciones'] || '').toString().substring(0, 1000) || null,
+                donacion: ['si', 'true', '1', 'yes'].includes(String(row['Donación'] || row['Donacion'] || '').trim().toLowerCase()),
                 tipo: (row['Descripcion'] || '').toString().substring(0, 50) || null,
                 marca: (row['Marca / Modelo'] || '').toString().substring(0, 100) || null,
-                cantidadDisponible: 1, // Assumption: each row models a unique physical item
+                cantidadDisponible: 1,
                 stockMinimo: 1,
                 pertenece: 'Iglesia',
                 fungible: 'Fungible',
+                fechaIngreso: row['Fecha de ingreso'] ? new Date(row['Fecha de ingreso']) : new Date(),
                 fechaUltimaActualizacion: new Date()
             };
 
@@ -253,6 +287,58 @@ export async function alertas(request, reply) {
         stockBajoCount: countStockBajo,
         desactualizados: desactualizados.map(i => ({ ...i, razon: `Sin actualizar hace +${diasUmbral} días` }))
     })
+}
+
+// GET /materiales/maestros — returns unique categories and areas
+export async function maestros(request, reply) {
+    const db = request.server.db
+    const items = await db.inventarioMaterial.findMany({
+        select: { categoria: true, area: true, ubicacion: true },
+    })
+    const categorias = [...new Set(items.map(i => i.categoria).filter(Boolean))].sort()
+    const areas = [...new Set(items.map(i => i.area).filter(Boolean))].sort()
+    const ubicaciones = [...new Set(items.map(i => i.ubicacion).filter(Boolean))].sort()
+    return ok(reply, { categorias, areas, ubicaciones })
+}
+
+// Helper: generate abbreviation from a string (first 3 uppercase letters)
+function generarAbreviatura(texto) {
+    if (!texto) return 'GEN'
+    // Remove accents
+    const limpio = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    // Take first 3 consonant/vowel letters
+    const letras = limpio.replace(/[^A-Z]/g, '')
+    return (letras.substring(0, 3) || 'GEN').padEnd(3, 'X')
+}
+
+// GET /materiales/next-code?area=Alabanza&categoria=Instrumentos musicales
+export async function nextCode(request, reply) {
+    const db = request.server.db
+    const { area, categoria } = request.query
+    const abrevArea = generarAbreviatura(area)
+    const abrevCat = generarAbreviatura(categoria)
+    const prefix = `${abrevArea}-${abrevCat}-`
+
+    // Find all codes that start with this prefix
+    const existing = await db.inventarioMaterial.findMany({
+        where: { codigo: { startsWith: prefix } },
+        select: { codigo: true },
+        orderBy: { codigo: 'desc' },
+    })
+
+    let nextNum = 1
+    if (existing.length > 0) {
+        // Extract the numeric suffix from each matching code and find the max
+        const nums = existing.map(e => {
+            const parts = e.codigo.split('-')
+            const last = parts[parts.length - 1]
+            return parseInt(last) || 0
+        })
+        nextNum = Math.max(...nums) + 1
+    }
+
+    const codigo = `${prefix}${String(nextNum).padStart(3, '0')}`
+    return ok(reply, { codigo, prefix, abrevArea, abrevCat })
 }
 
 export async function eliminar(request, reply) {

@@ -7,7 +7,7 @@ import {
     Tab, Tabs, Table, TableBody, TableCell, TableHead, TableRow,
     TablePagination, LinearProgress, Divider, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    MenuItem,
+    MenuItem, Popover, TableContainer,
 } from '@mui/material';
 import {
     Save as SaveIcon, ChecklistRtl as AsistenciaIcon,
@@ -17,7 +17,9 @@ import {
     Group as GroupIcon, CheckCircle as CheckIcon,
     Cancel as CancelIcon, WatchLater as PendingIcon,
     Payment as PaymentIcon, Edit as EditIcon,
+    DeleteForever as DeleteFechaIcon,
 } from '@mui/icons-material';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import * as XLSX from 'xlsx';
 import MainLayout from '../../components/layout/MainLayout';
 import { useSnackbar } from 'notistack';
@@ -93,8 +95,10 @@ const AsistenciaPage = () => {
     const navigate = useNavigate();
     const { enqueueSnackbar } = useSnackbar();
     const theme = useTheme();
-    const { getImageUrl } = useAuth();
+    const { user, getImageUrl } = useAuth();
     const isDark = theme.palette.mode === 'dark';
+    // Roles que pueden editar/eliminar registros en el historial
+    const canGestionar = ['admin', 'director', 'tutor_especial'].includes(user?.rol);
 
     const hoy = new Date().toISOString().split('T')[0];
 
@@ -116,6 +120,18 @@ const AsistenciaPage = () => {
     const [exportFechaInicio, setExportFechaInicio] = useState(getMonthRange().start);
     const [exportFechaFin, setExportFechaFin] = useState(hoy);
 
+    // Edición inline en pivot
+    const [editPopover, setEditPopover] = useState({ open: false, anchorEl: null, infanteId: null, fecha: null, estadoActual: null });
+    const [savingCell, setSavingCell] = useState(false);
+
+    // Eliminar fecha completa
+    const [confirmFecha, setConfirmFecha] = useState({ open: false, fecha: null, count: 0 });
+    
+    // Pago de deuda state
+    const [pagoInfante, setPagoInfante] = useState(null);
+    const [openPagoDialog, setOpenPagoDialog] = useState(false);
+    const [procesandoPago, setProcesandoPago] = useState(false);
+
     // Historial - Filtros de rango
     const [histFechaInicio, setHistFechaInicio] = useState(getMonthRange().start);
     const [histFechaFin, setHistFechaFin] = useState(hoy);
@@ -124,8 +140,6 @@ const AsistenciaPage = () => {
 
     // Historial state
     const [histFiltroEstado, setHistFiltroEstado] = useState('');
-    const [histPage, setHistPage] = useState(0);
-    const [histRowsPerPage, setHistRowsPerPage] = useState(15);
 
     // Toma de asistencia pagination
     const [tomaPage, setTomaPage] = useState(0);
@@ -135,7 +149,7 @@ const AsistenciaPage = () => {
     const cargarDatosInfantes = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await infanteService.listar({ limit: 1000, referencia: fecha });
+            const res = await infanteService.listar({ limit: 1000, referencia: fecha, tipoPrograma: 'Comedor' });
             setInfantes(res.data || []);
         } catch (error) {
             enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
@@ -175,13 +189,12 @@ const AsistenciaPage = () => {
     const cargarHistorial = useCallback(async () => {
         try {
             const res = await asistenciaService.listar({
-                page: histPage + 1,
-                limit: histRowsPerPage,
+                limit: 5000,
                 estado: histFiltroEstado || undefined,
                 esPatrocinado: histFiltroPatrocinio !== 'all' ? histFiltroPatrocinio : undefined,
                 fechaInicio: histFechaInicio || undefined,
                 fechaFin: histFechaFin || undefined,
-                search: searchHist || undefined
+                tipoPrograma: 'Comedor',
             });
             setHistorial(res.data || []);
             setTotalHist(res.meta?.total || 0);
@@ -189,7 +202,7 @@ const AsistenciaPage = () => {
         } catch (error) {
             console.error('Error cargando historial:', error);
         }
-    }, [histPage, histRowsPerPage, histFiltroEstado, histFiltroPatrocinio, histFechaInicio, histFechaFin, searchHist]);
+    }, [histFiltroEstado, histFiltroPatrocinio, histFechaInicio, histFechaFin]);
 
     useEffect(() => {
         if (tabIndex === 1) cargarHistorial();
@@ -247,6 +260,59 @@ const AsistenciaPage = () => {
             enqueueSnackbar('Error al guardar asistencia', { variant: 'error' });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleConfirmarPago = async () => {
+        if (!pagoInfante) return;
+        setProcesandoPago(true);
+        try {
+            await asistenciaService.pagarDeuda(pagoInfante.id);
+            enqueueSnackbar(`Pago de deuda de ${pagoInfante.persona?.nombres} realizado con éxito`, { variant: 'success' });
+            cargarDatosInfantes(); // Recargar para ver deuda en $0
+            if (tabIndex === 1) cargarHistorial();
+        } catch (error) {
+            enqueueSnackbar('Error al procesar el pago', { variant: 'error' });
+        } finally {
+            setProcesandoPago(false);
+            setOpenPagoDialog(false);
+            setPagoInfante(null);
+        }
+    };
+
+    // ── Eliminar fecha completa ────────────────────────────────────────────────
+    const handleEliminarFecha = async () => {
+        const fecha = confirmFecha.fecha;
+        setConfirmFecha({ open: false, fecha: null, count: 0 });
+        try {
+            const res = await asistenciaService.eliminarFecha(fecha);
+            enqueueSnackbar(res.data?.mensaje || `Registros del ${fecha} eliminados`, { variant: 'success' });
+            cargarHistorial();
+        } catch {
+            enqueueSnackbar('Error al eliminar los registros de esa fecha', { variant: 'error' });
+        }
+    };
+
+    // ── Edición inline de celda pivot ─────────────────────────────────────────
+    const handleEditCell = async (nuevoEstado) => {
+        const { infanteId, fecha, estadoActual } = editPopover;
+        if (nuevoEstado === estadoActual) { setEditPopover(p => ({ ...p, open: false })); return; }
+        setEditPopover(p => ({ ...p, open: false }));
+        setSavingCell(true);
+        // Actualización optimista
+        setHistorial(prev => prev.map(r =>
+            r.infanteId === infanteId && r.fecha.split('T')[0] === fecha
+                ? { ...r, estado: nuevoEstado }
+                : r
+        ));
+        try {
+            await asistenciaService.actualizarRegistro(infanteId, fecha, nuevoEstado);
+            enqueueSnackbar('Registro actualizado', { variant: 'success', autoHideDuration: 1500 });
+        } catch {
+            enqueueSnackbar('Error al actualizar el registro', { variant: 'error' });
+            cargarHistorial(); // Revertir
+        } finally {
+            setSavingCell(false);
         }
     };
 
@@ -402,10 +468,17 @@ const AsistenciaPage = () => {
             <Box sx={{ p: { xs: 1.5, md: 0 } }}>
 
                 {/* ── Header ──────────────────────────────────────── */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0, flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', md: 'row' },
+                    justifyContent: 'space-between', 
+                    alignItems: { xs: 'stretch', md: 'flex-start' }, 
+                    mb: 4, 
+                    gap: 2 
+                }}>
                     <Box>
-                        <Typography variant="h4" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <AsistenciaIcon sx={{ fontSize: 32, color: isDark ? CCO.naranja : CCO.violeta }} />
+                        <Typography variant="h4" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1.75rem', md: '2.125rem' } }}>
+                            <AsistenciaIcon sx={{ fontSize: { xs: 28, md: 32 }, color: isDark ? CCO.naranja : CCO.violeta }} />
                             Asistencia
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
@@ -418,7 +491,7 @@ const AsistenciaPage = () => {
                         startIcon={<ExportIcon />}
                         onClick={() => setExportModal(true)}
                         sx={{
-                            borderRadius: 3, px: 2.5, py: 1.1, fontWeight: 700,
+                            borderRadius: 3, px: 2.5, py: 1.2, fontWeight: 700,
                             textTransform: 'none', borderColor: '#2e7d32', color: '#2e7d32',
                             '&:hover': { bgcolor: alpha('#2e7d32', 0.06), borderColor: '#1b5e20' }
                         }}
@@ -430,7 +503,7 @@ const AsistenciaPage = () => {
                 {/* ── Tabs ─────────────────────────────────────────── */}
                 <Paper elevation={0} sx={{
                     border: `1px solid ${theme.palette.divider}`, borderRadius: 3, overflow: 'hidden',
-                    mt: 2.5, mb: 3, bgcolor: isDark ? alpha('#fff', 0.02) : alpha('#000', 0.01),
+                    mt: { xs: 1, md: 2.5 }, mb: 3, bgcolor: isDark ? alpha('#fff', 0.02) : alpha('#000', 0.01),
                 }}>
                     <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} variant="fullWidth"
                         sx={{
@@ -438,9 +511,15 @@ const AsistenciaPage = () => {
                                 height: 3, borderRadius: '3px 3px 0 0',
                                 background: `linear-gradient(90deg, ${CCO.naranja}, ${CCO.violeta})`,
                             },
-                            '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', py: 1.8 },
+                            '& .MuiTab-root': { 
+                                fontWeight: 700, 
+                                textTransform: 'none', 
+                                py: 1.8,
+                                fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                                minWidth: { xs: 80, sm: 160 }
+                            },
                         }}>
-                        <Tab icon={<TodayIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Toma de Asistencia" />
+                        <Tab icon={<TodayIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Toma" />
                         <Tab icon={<HistoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Historial (${totalHist})`} />
                     </Tabs>
                 </Paper>
@@ -504,8 +583,9 @@ const AsistenciaPage = () => {
 
                         {/* Tabla de asistencia */}
                         <Paper elevation={0} sx={{ borderRadius: 3, overflow: 'hidden', border: `1px solid ${theme.palette.divider}` }}>
-                            <Table size="small">
-                                <TableHead>
+                            <TableContainer sx={{ maxHeight: 600 }}>
+                            <Table size="small" stickyHeader>
+                                <TableHead sx={{ display: { xs: 'none', md: 'table-header-group' } }}>
                                     <TableRow>
                                         <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 40 }}>#</TableCell>
                                         <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Infante</TableCell>
@@ -573,9 +653,23 @@ const AsistenciaPage = () => {
                                                     </Stack>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Typography variant="body2" fontWeight={800} color={inf.deudaTotal > 0 ? 'error.main' : 'success.main'}>
-                                                        ${inf.deudaTotal?.toFixed(2) || '0.00'}
-                                                    </Typography>
+                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                        <Typography variant="body2" fontWeight={800} color={inf.deudaTotal > 0 ? 'error.main' : 'success.main'}>
+                                                            ${inf.deudaTotal?.toFixed(2) || '0.00'}
+                                                        </Typography>
+                                                        {inf.deudaTotal > 0 && (
+                                                            <Tooltip title="Pagar deuda total">
+                                                                <IconButton 
+                                                                    size="small" 
+                                                                    color="primary" 
+                                                                    onClick={() => { setPagoInfante(inf); setOpenPagoDialog(true); }}
+                                                                    sx={{ p: 0.5, bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}
+                                                                >
+                                                                    <PaymentIcon sx={{ fontSize: 16 }} />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )}
+                                                    </Stack>
                                                 </TableCell>
                                                 <TableCell align="center">
                                                     <ToggleButtonGroup
@@ -596,6 +690,7 @@ const AsistenciaPage = () => {
                                     })}
                                 </TableBody>
                             </Table>
+                            </TableContainer>
                             <TablePagination
                                 component="div" count={filteredInfantes.length}
                                 page={tomaPage} onPageChange={(_, p) => setTomaPage(p)}
@@ -613,160 +708,325 @@ const AsistenciaPage = () => {
                 {/* ═══════════════════════════════════════════════════════════════
                     TAB 1: HISTORIAL DE ASISTENCIA
                     ═══════════════════════════════════════════════════════════════ */}
-                {tabIndex === 1 && (
-                    <Box>
-                        {/* Stats cards */}
-                        <Grid container spacing={2} sx={{ mb: 3 }}>
-                            {[
-                                { label: 'Total Registros', value: histStats.total, icon: <ChartIcon />, color: CCO.azul },
-                                { label: 'Infantes Atendidos', value: histStats.atendidos, icon: <span>🧒</span>, color: CCO.naranja },
-                                { label: 'Presentes (Total)', value: histStats.p, icon: <span>🥗</span>, color: '#4caf50' },
-                                { label: 'Ausentes (Total)', value: histStats.a, icon: <span>❌</span>, color: '#ef5350' },
-                            ].map(stat => (
-                                <Grid item xs={6} md={3} key={stat.label}>
-                                    <Card elevation={0} sx={{
-                                        border: `1px solid ${theme.palette.divider}`, borderRadius: 3,
-                                        bgcolor: alpha(stat.color, 0.04),
-                                    }}>
-                                        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, textAlign: 'center' }}>
-                                            <Typography variant="h4" fontWeight={800} sx={{ color: stat.color }}>{stat.value}</Typography>
-                                            <Typography variant="caption" color="text.secondary" fontWeight={600}>{stat.label}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))}
-                        </Grid>
+                {tabIndex === 1 && (() => {
+                    // ── Construir pivot en frontend ──────────────────────────────
+                    // 1. Fechas únicas ordenadas (columnas)
+                    const fechasUnicas = [...new Set(historial.map(r => r.fecha.split('T')[0]))].sort();
 
-                        {/* Barra de asistencia general */}
-                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3 }}>
-                            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                    <Typography variant="subtitle2" fontWeight={700}>Cobertura de Atención (Infantes Atendidos / Total Población)</Typography>
-                                    <Chip label={`${histStats.pctCobertura}%`} size="small"
-                                        color={histStats.pctCobertura >= 80 ? 'success' : histStats.pctCobertura >= 40 ? 'warning' : 'info'}
-                                        sx={{ fontWeight: 700 }} />
+                    // 2. Mapa: infanteId → { info, map: { fecha→estado } }
+                    const infanteMap = {};
+                    historial.forEach(r => {
+                        const id = r.infanteId;
+                        if (!infanteMap[id]) {
+                            infanteMap[id] = { id, info: r.infante, registros: {} };
+                        }
+                        infanteMap[id].registros[r.fecha.split('T')[0]] = r.estado;
+                    });
+
+                    // 3. Lista de infantes filtrada por búsqueda
+                    const PRESENCIAS = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
+                    const busqLow = searchHist.toLowerCase();
+                    let filas = Object.values(infanteMap);
+                    if (busqLow) {
+                        filas = filas.filter(f => {
+                            const nombre = `${f.info?.persona?.nombres || ''} ${f.info?.persona?.apellidos || ''}`.toLowerCase();
+                            const codigo = (f.info?.codigo || '').toLowerCase();
+                            return nombre.includes(busqLow) || codigo.includes(busqLow);
+                        });
+                    }
+                    if (histFiltroEstado) {
+                        filas = filas.filter(f => Object.values(f.registros).includes(histFiltroEstado));
+                    }
+                    filas.sort((a, b) => {
+                        const na = `${a.info?.persona?.apellidos || ''} ${a.info?.persona?.nombres || ''}`;
+                        const nb = `${b.info?.persona?.apellidos || ''} ${b.info?.persona?.nombres || ''}`;
+                        return na.localeCompare(nb);
+                    });
+
+                    // Colores de celda por estado
+                    const CELL_COLORS = {
+                        Mes:      { bg: '#e8f5e9', color: '#2e7d32', label: 'MES' },
+                        Semana:   { bg: '#e3f2fd', color: '#1565c0', label: 'SEM' },
+                        PagoDia:  { bg: '#e1f5fe', color: '#0277bd', label: '$' },
+                        Pendiente:{ bg: '#fce4ec', color: '#c62828', label: 'P' },
+                        Punto:    { bg: '#f3e5f5', color: '#6a1b9a', label: 'S' },
+                        Ausente:  { bg: '#f5f5f5', color: '#9e9e9e', label: 'F' },
+                    };
+
+                    const fmtCol = (dateStr) => {
+                        const d = new Date(dateStr + 'T12:00:00');
+                        return {
+                            dia: d.toLocaleDateString('es-EC', { day: '2-digit' }),
+                            mes: d.toLocaleDateString('es-EC', { month: 'short' }),
+                            dow: d.toLocaleDateString('es-EC', { weekday: 'short' }),
+                        };
+                    };
+
+                    return (
+                        <Box>
+                            {/* Stats cards */}
+                            <Grid container spacing={2} sx={{ mb: 3 }}>
+                                {[
+                                    { label: 'Días con registro', value: fechasUnicas.length, color: CCO.azul },
+                                    { label: 'Infantes atendidos', value: filas.length, color: CCO.naranja },
+                                    { label: 'Presentes (total)', value: histStats.p, color: '#4caf50' },
+                                    { label: 'Ausentes (total)', value: histStats.a, color: '#ef5350' },
+                                ].map(stat => (
+                                    <Grid item xs={6} md={3} key={stat.label}>
+                                        <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, bgcolor: alpha(stat.color, 0.04) }}>
+                                            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, textAlign: 'center' }}>
+                                                <Typography variant="h4" fontWeight={800} sx={{ color: stat.color }}>{stat.value}</Typography>
+                                                <Typography variant="caption" color="text.secondary" fontWeight={600}>{stat.label}</Typography>
+                                            </CardContent>
+                                        </Card>
+                                    </Grid>
+                                ))}
+                            </Grid>
+
+                            {/* Barra de cobertura */}
+                            <Card elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3, mb: 3 }}>
+                                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                        <Typography variant="subtitle2" fontWeight={700}>Cobertura de Atención</Typography>
+                                        <Chip label={`${histStats.pctCobertura}%`} size="small"
+                                            color={histStats.pctCobertura >= 80 ? 'success' : histStats.pctCobertura >= 40 ? 'warning' : 'info'}
+                                            sx={{ fontWeight: 700 }} />
+                                    </Box>
+                                    <LinearProgress variant="determinate" value={histStats.pctCobertura}
+                                        sx={{ height: 10, borderRadius: 5, bgcolor: alpha('#000', 0.08),
+                                            '& .MuiLinearProgress-bar': { borderRadius: 5,
+                                                bgcolor: histStats.pctCobertura >= 80 ? '#4caf50' : histStats.pctCobertura >= 40 ? '#ff9800' : '#4169E1' } }} />
+                                </CardContent>
+                            </Card>
+
+                            {/* Leyenda */}
+                            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+                                {Object.entries(CELL_COLORS).map(([k, v]) => (
+                                    <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <Box sx={{ width: 18, height: 18, borderRadius: 1, bgcolor: v.bg, border: `1px solid ${v.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Typography sx={{ fontSize: '0.6rem', fontWeight: 900, color: v.color }}>{v.label}</Typography>
+                                        </Box>
+                                        <Typography variant="caption" color="text.secondary">{ESTADO_DISPLAY[k]}</Typography>
+                                    </Box>
+                                ))}
+                            </Stack>
+
+                            {/* Filtros */}
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+                                <TextField
+                                    size="small" placeholder="Buscar infante por nombre o código..."
+                                    value={searchHist} onChange={e => setSearchHist(e.target.value)}
+                                    sx={{ flex: 1, minWidth: 200 }}
+                                    InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+                                />
+                                <TextField type="date" size="small" label="Desde" value={histFechaInicio}
+                                    onChange={e => setHistFechaInicio(e.target.value)}
+                                    slotProps={{ inputLabel: { shrink: true } }} />
+                                <TextField type="date" size="small" label="Hasta" value={histFechaFin}
+                                    onChange={e => setHistFechaFin(e.target.value)}
+                                    slotProps={{ inputLabel: { shrink: true } }} />
+                                <TextField select size="small" label="Población" value={histFiltroPatrocinio}
+                                    onChange={e => setHistFiltroPatrocinio(e.target.value)} sx={{ minWidth: 160 }}>
+                                    <MenuItem value="all">Todos los Niños</MenuItem>
+                                    <MenuItem value="true">Solo Patrocinados</MenuItem>
+                                    <MenuItem value="false">No Patrocinados</MenuItem>
+                                </TextField>
+                                <TextField select size="small" label="Estado" value={histFiltroEstado}
+                                    onChange={e => setHistFiltroEstado(e.target.value)} sx={{ minWidth: 145 }}>
+                                    <MenuItem value="">Todos</MenuItem>
+                                    <MenuItem value="Mes">Mes</MenuItem>
+                                    <MenuItem value="Semana">Semana</MenuItem>
+                                    <MenuItem value="PagoDia">Pago Diario</MenuItem>
+                                    <MenuItem value="Pendiente">Deuda (P)</MenuItem>
+                                    <MenuItem value="Punto">Seguimiento (S)</MenuItem>
+                                    <MenuItem value="Ausente">Falta (F)</MenuItem>
+                                </TextField>
+                            </Stack>
+
+                            {/* ── TABLA PIVOT ─────────────────────────────── */}
+                            <Paper elevation={0} sx={{ borderRadius: 3, border: `1px solid ${theme.palette.divider}`, overflow: 'hidden' }}>
+                                {fechasUnicas.length === 0 ? (
+                                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                                        <Typography color="text.secondary">No hay registros en el rango seleccionado</Typography>
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ overflowX: 'auto' }}>
+                                        <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 300 + fechasUnicas.length * 56 }}>
+                                            <TableHead>
+                                                <TableRow sx={{ bgcolor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.03) }}>
+                                                    {/* Columna fija: infante */}
+                                                    <TableCell sx={{
+                                                        fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase',
+                                                        width: 200, minWidth: 200, position: 'sticky', left: 0, zIndex: 3,
+                                                        bgcolor: isDark ? '#1a1f36' : '#fafafa',
+                                                        borderRight: `2px solid ${theme.palette.divider}`,
+                                                    }}>Infante</TableCell>
+                                                    <TableCell sx={{
+                                                        fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase',
+                                                        width: 80, minWidth: 80, position: 'sticky', left: 200, zIndex: 3,
+                                                        bgcolor: isDark ? '#1a1f36' : '#fafafa',
+                                                        borderRight: `2px solid ${theme.palette.divider}`,
+                                                    }}>Código</TableCell>
+                                                    {/* Columnas de fechas */}
+                                                    {fechasUnicas.map(f => {
+                                                        const { dia, mes, dow } = fmtCol(f);
+                                                        // Contar registros de esa fecha para el confirm
+                                                        const cntFecha = historial.filter(r => r.fecha.split('T')[0] === f).length;
+                                                        return (
+                                                            <TableCell key={f} align="center" sx={{
+                                                                width: 56, minWidth: 56, p: '4px 2px',
+                                                                fontWeight: 700, fontSize: '0.65rem',
+                                                                borderRight: `1px solid ${theme.palette.divider}`,
+                                                                '&:hover .del-btn': canGestionar ? { opacity: 1 } : {},
+                                                            }}>
+                                                                <Box sx={{ textTransform: 'capitalize', color: 'text.secondary', lineHeight: 1.2 }}>
+                                                                    <span style={{ display: 'block', fontSize: '0.6rem' }}>{dow}</span>
+                                                                    <span style={{ display: 'block', fontWeight: 900, fontSize: '0.85rem', color: theme.palette.text.primary }}>{dia}</span>
+                                                                    <span style={{ display: 'block', fontSize: '0.6rem' }}>{mes}</span>
+                                                                </Box>
+                                                                {canGestionar && (
+                                                                    <Tooltip title={`Eliminar todos los registros del ${dia}/${mes}`} arrow>
+                                                                        <IconButton
+                                                                            className="del-btn"
+                                                                            size="small"
+                                                                            onClick={e => { e.stopPropagation(); setConfirmFecha({ open: true, fecha: f, count: cntFecha }); }}
+                                                                            sx={{ p: 0.2, opacity: 0, transition: 'opacity 0.2s', color: 'error.main', '&:hover': { bgcolor: alpha('#ef5350', 0.1) } }}
+                                                                        >
+                                                                            <DeleteFechaIcon sx={{ fontSize: 13 }} />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                )}
+                                                            </TableCell>
+                                                        );
+                                                    })}
+                                                    {/* Totales */}
+                                                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 60, minWidth: 60, borderLeft: `2px solid ${theme.palette.divider}` }}>Pres.</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 55, minWidth: 55 }}>%</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {filas.length === 0 ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={fechasUnicas.length + 4} align="center" sx={{ py: 4 }}>
+                                                            <Typography color="text.secondary">No se encontraron infantes</Typography>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ) : filas.map((fila, rowIdx) => {
+                                                    const nombre = `${fila.info?.persona?.nombres || ''} ${fila.info?.persona?.apellidos || ''}`;
+                                                    let presencias = 0;
+                                                    let totalDias = fechasUnicas.length;
+                                                    fechasUnicas.forEach(f => {
+                                                        const est = fila.registros[f];
+                                                        if (PRESENCIAS.includes(est)) presencias++;
+                                                    });
+                                                    const pct = totalDias > 0 ? Math.round((presencias / totalDias) * 100) : 0;
+                                                    const rowBg = rowIdx % 2 === 0
+                                                        ? 'transparent'
+                                                        : isDark ? alpha('#fff', 0.02) : alpha('#000', 0.015);
+                                                    return (
+                                                        <TableRow key={fila.id} hover
+                                                            onClick={() => !canGestionar && navigate(`/infantes/${fila.id}`)}
+                                                            sx={{ cursor: canGestionar ? 'default' : 'pointer', bgcolor: rowBg, '&:hover': { bgcolor: alpha(CCO.azul, 0.04) } }}>
+                                                            {/* Nombre - sticky (siempre navega al perfil) */}
+                                                            <TableCell
+                                                                onClick={() => navigate(`/infantes/${fila.id}`)}
+                                                                sx={{
+                                                                    position: 'sticky', left: 0, zIndex: 2,
+                                                                    bgcolor: isDark ? '#12172a' : '#fff',
+                                                                    borderRight: `2px solid ${theme.palette.divider}`,
+                                                                    py: 0.8, cursor: 'pointer',
+                                                                }}>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                    <Avatar
+                                                                        src={fila.info?.fotografia ? getImageUrl(fila.info.fotografia) : undefined}
+                                                                        sx={{ width: 28, height: 28, fontSize: '0.65rem', fontWeight: 700, bgcolor: AVATAR_COLORS[fila.id % AVATAR_COLORS.length] }}
+                                                                    >
+                                                                        {`${fila.info?.persona?.nombres?.charAt(0) || ''}${fila.info?.persona?.apellidos?.charAt(0) || ''}`}
+                                                                    </Avatar>
+                                                                    <Typography variant="body2" fontWeight={600} noWrap sx={{ fontSize: '0.8rem', maxWidth: 155 }}>
+                                                                        {nombre}
+                                                                    </Typography>
+                                                                </Box>
+                                                            </TableCell>
+                                                            {/* Código - sticky */}
+                                                            <TableCell sx={{
+                                                                position: 'sticky', left: 200, zIndex: 2,
+                                                                bgcolor: isDark ? '#12172a' : '#fff',
+                                                                borderRight: `2px solid ${theme.palette.divider}`,
+                                                                py: 0.8,
+                                                            }}>
+                                                                <Chip label={fila.info?.codigo || '—'} size="small"
+                                                                    variant="outlined" sx={{ fontWeight: 600, fontSize: '0.68rem', height: 20 }} />
+                                                            </TableCell>
+                                                            {/* Celdas de estado por fecha — clickeables si canGestionar */}
+                                                            {fechasUnicas.map(f => {
+                                                                const est = fila.registros[f];
+                                                                const cfg = est ? CELL_COLORS[est] : null;
+                                                                return (
+                                                                    <TableCell key={f} align="center"
+                                                                        onClick={canGestionar ? (e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditPopover({ open: true, anchorEl: e.currentTarget, infanteId: fila.id, fecha: f, estadoActual: est || null });
+                                                                        } : undefined}
+                                                                        sx={{
+                                                                            p: '3px 2px',
+                                                                            borderRight: `1px solid ${theme.palette.divider}`,
+                                                                            bgcolor: cfg ? alpha(cfg.bg, 0.9) : 'transparent',
+                                                                            cursor: canGestionar ? 'pointer' : 'default',
+                                                                            '&:hover': canGestionar ? { filter: 'brightness(0.9)', outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: '-2px' } : {},
+                                                                        }}>
+                                                                        {cfg ? (
+                                                                            <Tooltip title={canGestionar ? `Editar: ${ESTADO_DISPLAY[est]}` : (ESTADO_DISPLAY[est] || est)} arrow>
+                                                                                <Typography sx={{ fontSize: '0.68rem', fontWeight: 900, color: cfg.color, lineHeight: 1 }}>
+                                                                                    {cfg.label === '$' ? `$${fila.info?.tarifaDiaria || ''}` : cfg.label}
+                                                                                </Typography>
+                                                                            </Tooltip>
+                                                                        ) : (
+                                                                            <Typography sx={{ fontSize: '0.65rem', color: canGestionar ? alpha(theme.palette.primary.main, 0.5) : 'text.disabled' }}>
+                                                                                {canGestionar ? '+' : '—'}
+                                                                            </Typography>
+                                                                        )}
+                                                                    </TableCell>
+                                                                );
+                                                            })}
+                                                            {/* Total presencias */}
+                                                            <TableCell align="center" sx={{ borderLeft: `2px solid ${theme.palette.divider}`, py: 0.8 }}>
+                                                                <Typography variant="body2" fontWeight={800} sx={{ color: presencias > 0 ? '#2e7d32' : 'text.disabled' }}>
+                                                                    {presencias}
+                                                                </Typography>
+                                                            </TableCell>
+                                                            {/* % asistencia */}
+                                                            <TableCell align="center" sx={{ py: 0.8 }}>
+                                                                <Chip
+                                                                    label={`${pct}%`}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        height: 20, fontSize: '0.65rem', fontWeight: 800,
+                                                                        bgcolor: alpha(pct >= 70 ? '#4caf50' : pct >= 40 ? '#ff9800' : '#ef5350', 0.12),
+                                                                        color: pct >= 70 ? '#2e7d32' : pct >= 40 ? '#e65100' : '#c62828',
+                                                                    }}
+                                                                />
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </Box>
+                                )}
+                                {/* Footer con total de infantes */}
+                                <Box sx={{ px: 2, py: 1, borderTop: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {filas.length} infante{filas.length !== 1 ? 's' : ''} · {fechasUnicas.length} día{fechasUnicas.length !== 1 ? 's' : ''} con registro
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {canGestionar ? 'Clic en celda para editar · hover en fecha para eliminar' : 'Clic en nombre para ver perfil'}
+                                    </Typography>
                                 </Box>
-                                <LinearProgress variant="determinate" value={histStats.pctCobertura}
-                                    sx={{
-                                        height: 10, borderRadius: 5,
-                                        bgcolor: alpha('#000', 0.08),
-                                        '& .MuiLinearProgress-bar': {
-                                            borderRadius: 5,
-                                            bgcolor: histStats.pctCobertura >= 80 ? '#4caf50' : histStats.pctCobertura >= 40 ? '#ff9800' : '#4169E1',
-                                        },
-                                    }} />
-                            </CardContent>
-                        </Card>
-
-                        {/* Filtros */}
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-                            <TextField
-                                size="small" placeholder="Buscar infante..."
-                                value={searchHist} onChange={e => { setSearchHist(e.target.value); setHistPage(0); }}
-                                sx={{ flex: 1, minWidth: 200 }}
-                                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                            />
-                            <TextField
-                                type="date" size="small" label="Desde" value={histFechaInicio}
-                                onChange={e => { setHistFechaInicio(e.target.value); setHistPage(0); }}
-                                slotProps={{ inputLabel: { shrink: true } }}
-                            />
-                            <TextField
-                                type="date" size="small" label="Hasta" value={histFechaFin}
-                                onChange={e => { setHistFechaFin(e.target.value); setHistPage(0); }}
-                                slotProps={{ inputLabel: { shrink: true } }}
-                            />
-                            <TextField select size="small" label="Población" value={histFiltroPatrocinio}
-                                onChange={e => { setHistFiltroPatrocinio(e.target.value); setHistPage(0); }}
-                                sx={{ minWidth: 160 }}>
-                                <MenuItem value="all">Todos los Niños</MenuItem>
-                                <MenuItem value="true">Solo Patrocinados</MenuItem>
-                                <MenuItem value="false">No Patrocinados</MenuItem>
-                            </TextField>
-                            <TextField select size="small" label="Estado" value={histFiltroEstado}
-                                onChange={e => { setHistFiltroEstado(e.target.value); setHistPage(0); }}
-                                sx={{ minWidth: 160 }}>
-                                <MenuItem value="Mes">Mes (Pago completo)</MenuItem>
-                                <MenuItem value="Semana">Semana</MenuItem>
-                                <MenuItem value="PagoDia">Pago Diario</MenuItem>
-                                <MenuItem value="Pendiente">Deuda (P)</MenuItem>
-                                <MenuItem value="Punto">Seguimiento (S)</MenuItem>
-                                <MenuItem value="Ausente">Falta (F)</MenuItem>
-                            </TextField>
-                        </Stack>
-
-                        {/* Tabla historial */}
-                        <Paper elevation={0} sx={{ borderRadius: 3, overflow: 'hidden', border: `1px solid ${theme.palette.divider}` }}>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Fecha</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Foto</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Infante</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Código</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {historial.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                                                <Typography color="text.secondary">No se encontraron registros</Typography>
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : historial.map(r => (
-                                        <TableRow key={r.id} hover sx={{ cursor: 'pointer' }}
-                                            onClick={() => navigate(`/infantes/${r.infanteId}`)}>
-                                            <TableCell>
-                                                <Typography variant="body2" fontWeight={500} sx={{ textTransform: 'capitalize' }}>
-                                                    {new Date(r.fecha.split('T')[0] + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' })}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Avatar
-                                                    src={r.infante?.fotografia ? `http://localhost:3000${r.infante.fotografia}` : undefined}
-                                                    sx={{
-                                                        width: 32, height: 32, fontSize: '0.72rem', fontWeight: 700,
-                                                        bgcolor: AVATAR_COLORS[r.infanteId % AVATAR_COLORS.length],
-                                                    }}
-                                                >
-                                                    {getInitials(r.infante)}
-                                                </Avatar>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2" fontWeight={600}>
-                                                    {r.infante?.persona?.nombres} {r.infante?.persona?.apellidos}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip label={r.infante?.codigo} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={ESTADO_DISPLAY[r.estado] || r.estado}
-                                                    size="small"
-                                                    color={ESTADO_COLORS[r.estado]}
-                                                    variant="outlined"
-                                                    sx={{ fontWeight: 600 }}
-                                                />
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                            <TablePagination
-                                component="div" count={totalHist}
-                                page={histPage} onPageChange={(_, p) => setHistPage(p)}
-                                rowsPerPage={histRowsPerPage}
-                                onRowsPerPageChange={e => { setHistRowsPerPage(parseInt(e.target.value, 10)); setHistPage(0); }}
-                                rowsPerPageOptions={[10, 15, 25, 50]}
-                                labelRowsPerPage="Filas por página:"
-                                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-                                sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
-                            />
-                        </Paper>
-                    </Box>
-                )}
+                            </Paper>
+                        </Box>
+                    );
+                })()}
             </Box>
 
             {/* ── Modal de Exportación Excel ── */}
@@ -869,6 +1129,91 @@ const AsistenciaPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* ── Modal de Confirmación de Pago ── */}
+            <Dialog open={openPagoDialog} onClose={() => !procesandoPago && setOpenPagoDialog(false)} PaperProps={{ sx: { borderRadius: 4, maxWidth: 400 } }}>
+                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Confirmar Pago de Deuda</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        ¿Confirmas que el infante <strong>{pagoInfante?.persona?.nombres} {pagoInfante?.persona?.apellidos}</strong> ha cancelado el total de su deuda pendiente?
+                    </Typography>
+                    <Box sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 3, border: `1px dashed ${theme.palette.error.main}`, textAlign: 'center' }}>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>MONTO TOTAL A CANCELAR</Typography>
+                        <Typography variant="h4" fontWeight={900} color="error.main">
+                            ${pagoInfante?.deudaTotal?.toFixed(2)}
+                        </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, fontStyle: 'italic' }}>
+                        Esta acción marcará todas sus asistencias pendientes como "Pagado".
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 2.5, pt: 0 }}>
+                    <Button onClick={() => setOpenPagoDialog(false)} disabled={procesandoPago} sx={{ fontWeight: 700, textTransform: 'none' }}>Cancelar</Button>
+                    <Button 
+                        variant="contained" 
+                        onClick={handleConfirmarPago} 
+                        disabled={procesandoPago}
+                        startIcon={procesandoPago ? <CircularProgress size={18} color="inherit" /> : <CheckIcon />}
+                        sx={{ borderRadius: 3, fontWeight: 700, textTransform: 'none', px: 3 }}
+                    >
+                        Confirmar Pago
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ── Popover de edición inline ──────────────────────────── */}
+            <Popover
+                open={editPopover.open}
+                anchorEl={editPopover.anchorEl}
+                onClose={() => setEditPopover(p => ({ ...p, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+                PaperProps={{ sx: { borderRadius: 3, p: 1.5, boxShadow: 6, minWidth: 220 } }}
+            >
+                <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1, px: 0.5 }}>
+                    Cambiar estado
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" spacing={0.8} sx={{ maxWidth: 230 }}>
+                    {[
+                        { key: 'Mes', label: 'MES', color: '#2e7d32', bg: '#e8f5e9' },
+                        { key: 'Semana', label: 'SEM', color: '#1565c0', bg: '#e3f2fd' },
+                        { key: 'PagoDia', label: 'PAGO', color: '#0277bd', bg: '#e1f5fe' },
+                        { key: 'Pendiente', label: 'DEUDA', color: '#c62828', bg: '#fce4ec' },
+                        { key: 'Punto', label: 'SEGUIM.', color: '#6a1b9a', bg: '#f3e5f5' },
+                        { key: 'Ausente', label: 'FALTA', color: '#616161', bg: '#f5f5f5' },
+                    ].map(opt => (
+                        <Button
+                            key={opt.key}
+                            size="small"
+                            disabled={savingCell}
+                            onClick={() => handleEditCell(opt.key)}
+                            sx={{
+                                minWidth: 0, px: 1.2, py: 0.5, fontSize: '0.72rem', fontWeight: 900,
+                                bgcolor: editPopover.estadoActual === opt.key ? opt.bg : 'transparent',
+                                color: opt.color,
+                                border: `2px solid ${editPopover.estadoActual === opt.key ? opt.color : 'transparent'}`,
+                                borderRadius: 2,
+                                '&:hover': { bgcolor: opt.bg, border: `2px solid ${opt.color}` },
+                                mb: 0.5,
+                            }}
+                        >
+                            {opt.label}
+                        </Button>
+                    ))}
+                </Stack>
+                {savingCell && <LinearProgress sx={{ mt: 1, borderRadius: 2 }} />}
+            </Popover>
+
+            {/* ── ConfirmDialog eliminar fecha ───────────────────────── */}
+            <ConfirmDialog
+                open={confirmFecha.open}
+                onClose={() => setConfirmFecha({ open: false, fecha: null, count: 0 })}
+                onConfirm={handleEliminarFecha}
+                title="Eliminar registros de fecha"
+                message={`¿Estás seguro de que deseas eliminar todos los registros del ${confirmFecha.fecha ? new Date(confirmFecha.fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' }) : ''}? Se eliminarán ${confirmFecha.count} registro(s). Esta acción no se puede deshacer.`}
+                confirmLabel="Sí, eliminar todo"
+                severity="error"
+            />
         </MainLayout>
     );
 };

@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import { buildApp } from './app.js'
 import { startEventRemindersCron } from './cron/eventReminders.js';
+import { startBackupCron } from './cron/backups.js';
+
 
 const PORT = parseInt(process.env.PORT || '3000')
 const HOST = process.env.HOST || '0.0.0.0'
@@ -13,6 +15,8 @@ try {
 
     // Iniciar tareas programadas (cron)
     startEventRemindersCron();
+    startBackupCron();
+
 
 } catch (err) {
     app.log.error(err)

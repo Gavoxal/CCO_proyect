@@ -78,6 +78,11 @@ export async function crear(request, reply) {
         where: { OR: [{ username }, { email }] }
     })
     if (existente) {
+        if (!existente.activo) {
+            return reply.status(409).send({
+                error: 'Ya existe un usuario inactivo con este email o nombre de usuario. Reacítivalo o use otro email.'
+            })
+        }
         return reply.status(409).send({ error: 'Usuario o email ya existe' })
     }
 
@@ -175,11 +180,19 @@ export async function actualizar(request, reply) {
 // DELETE /usuarios/:id (solo admin)
 export async function eliminar(request, reply) {
     const db = request.server.db
+    const id = parseInt(request.params.id)
     try {
-        await db.usuario.delete({ where: { id: parseInt(request.params.id) } })
+        await db.usuario.delete({ where: { id } })
         return noContent(reply)
-    } catch {
-        return notFound(reply)
+    } catch (error) {
+        if (error?.code === 'P2025') {
+            return notFound(reply)
+        }
+        if (error?.code === 'P2003') {
+            await db.usuario.update({ where: { id }, data: { activo: false } })
+            return noContent(reply)
+        }
+        return reply.status(500).send({ error: 'Error eliminando usuario' })
     }
 }
 

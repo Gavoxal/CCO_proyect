@@ -14,8 +14,10 @@ import {
     PeopleAlt as PeopleIcon, FileUpload as ImportIcon,
     PhotoCamera as PhotoIcon, Close as CloseIcon,
     CheckCircle as SuccessIcon, Download as DownloadIcon,
+    Map as MapIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { infantesService, usuariosService } from '../../services/appServices';
@@ -106,6 +108,7 @@ const InfantesPage = () => {
     const [tutores, setTutores] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null, nombre: '' });
 
     const cargarInfantes = useCallback(async () => {
         setLoading(true);
@@ -137,6 +140,7 @@ const InfantesPage = () => {
     const [filtroPat, setFiltroPat] = useState('');
     const [filtroTutor, setFiltroTutor] = useState('');
     const [filtroVisita, setFiltroVisita] = useState('');
+    const [misInfantes, setMisInfantes] = useState(false);
     const [page, setPage] = useState(0);
 
     const getTutorName = (row) => {
@@ -180,6 +184,7 @@ const InfantesPage = () => {
         if (filtroPat === 'true') res = res.filter(i => i.esPatrocinado);
         if (filtroPat === 'false') res = res.filter(i => !i.esPatrocinado);
         if (filtroTutor) res = res.filter(i => getTutorName(i) === filtroTutor);
+        if (misInfantes && user?.nombre) res = res.filter(i => getTutorName(i) === user.nombre);
         if (filtroVisita !== '') {
             const currYear = new Date().getFullYear();
             res = res.filter(i => {
@@ -188,7 +193,7 @@ const InfantesPage = () => {
             });
         }
         return res;
-    }, [infantes, search, filtroPat, filtroTutor, filtroVisita]);
+    }, [infantes, search, filtroPat, filtroTutor, filtroVisita, misInfantes, user]);
 
     // Ordenamiento
     const sorted = useMemo(() => {
@@ -212,8 +217,9 @@ const InfantesPage = () => {
         setOrderBy(field);
     };
 
-    const handleEliminar = async (id) => {
-        if (!window.confirm('¿Eliminar este infante? Esta acción no se puede deshacer.')) return;
+    const handleEliminar = async () => {
+        const id = confirmDelete.id;
+        setConfirmDelete({ open: false, id: null, nombre: '' });
         try {
             await infantesService.eliminar(id);
             setInfantes(prev => prev.filter(i => i.id !== id));
@@ -319,8 +325,8 @@ const InfantesPage = () => {
 
                 {/* ── Header ──────────────────────────────────────── */}
                 <Box sx={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                    mb: 3, flexWrap: 'wrap', gap: 2,
+                    display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'flex-start' },
+                    mb: 3, flexDirection: { xs: 'column', md: 'row' }, gap: 2,
                 }}>
                     <Box>
                         <Typography variant="h4" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -331,18 +337,19 @@ const InfantesPage = () => {
                             {infantes.length} registrados · {patrocinados} patrocinados · {conFoto} con foto
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1.5}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                         {canWrite && (
                             <>
                                 <Button variant="outlined" startIcon={<ImportIcon />}
                                     onClick={() => fileInputRef.current?.click()}
-                                    sx={{ borderRadius: 3, px: 2.5, fontWeight: 600, fontSize: '0.82rem' }}>
+                                    sx={{ borderRadius: 3, px: 2.5, fontWeight: 600, fontSize: '0.82rem', py: { xs: 1, md: 1.2 } }}>
                                     Importar Excel
                                 </Button>
-                                <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/infantes/nuevo')}
-                                    sx={{ borderRadius: 3, px: 3, py: 1.2, fontWeight: 700 }}>
-                                    Nuevo Infante
-                                </Button>
+                                {(canWrite || isTutorEspecial) && (
+                                    <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => navigate('/infantes/nuevo')}>
+                                        Nuevo Infante
+                                    </Button>
+                                )}
                             </>
                         )}
                     </Stack>
@@ -350,6 +357,16 @@ const InfantesPage = () => {
 
                 {/* ── Filtros ─────────────────────────────────────── */}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+                    {['tutor', 'tutor_especial'].includes(user?.rol) && (
+                        <Button
+                            variant={misInfantes ? "contained" : "outlined"}
+                            color={misInfantes ? "primary" : "inherit"}
+                            onClick={() => setMisInfantes(!misInfantes)}
+                            sx={{ minWidth: 140, borderRadius: 2 }}
+                        >
+                            Mis Infantes
+                        </Button>
+                    )}
                     <TextField
                         size="small" placeholder="Buscar por nombre, apellido o código..."
                         value={search}
@@ -403,6 +420,7 @@ const InfantesPage = () => {
                                         <TableCell key={col.id} sx={{
                                             fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase',
                                             letterSpacing: '0.05em', py: 1.5, minWidth: col.w,
+                                            display: col.id === 'fotoEstado' ? { xs: 'none', md: 'table-cell' } : 'table-cell',
                                         }}>
                                             {col.sort ? (
                                                 <TableSortLabel active={orderBy === col.id} direction={orderBy === col.id ? order : 'asc'} onClick={() => handleSort(col.id)}>
@@ -481,7 +499,7 @@ const InfantesPage = () => {
                                                     color={row.esPatrocinado ? 'success' : 'default'} variant="outlined" sx={{ fontWeight: 600 }} />
                                             </TableCell>
                                             {/* Foto Estado */}
-                                            <TableCell>
+                                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                                                 {row.fotografia ? (
                                                     <Tooltip title={`Actualizada: ${fb.text}`}>
                                                         <Chip icon={<PhotoIcon sx={{ fontSize: 14 }} />}
@@ -511,7 +529,7 @@ const InfantesPage = () => {
                                                     )}
                                                     {canDelete && (
                                                         <Tooltip title="Eliminar">
-                                                            <IconButton size="small" color="error" onClick={() => handleEliminar(row.id)}>
+                                                            <IconButton size="small" color="error" onClick={() => setConfirmDelete({ open: true, id: row.id, nombre: `${row.persona.nombres} ${row.persona.apellidos}` })}>
                                                                 <DeleteIcon fontSize="small" />
                                                             </IconButton>
                                                         </Tooltip>
@@ -620,6 +638,16 @@ const InfantesPage = () => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+
+                <ConfirmDialog
+                    open={confirmDelete.open}
+                    onClose={() => setConfirmDelete({ open: false, id: null, nombre: '' })}
+                    onConfirm={handleEliminar}
+                    title="Eliminar infante"
+                    message={`¿Estás seguro de que deseas eliminar a "${confirmDelete.nombre}"? Esta acción no se puede deshacer.`}
+                    confirmLabel="Sí, eliminar"
+                    severity="error"
+                />
             </Box>
         </MainLayout>
     );

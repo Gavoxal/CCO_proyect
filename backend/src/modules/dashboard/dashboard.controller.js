@@ -28,6 +28,12 @@ export async function getStats(request, reply) {
         const startOfMonth = new Date(currentYear, currentMonth, 1);
         const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
         const asistenciaValidaEstados = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
+        
+        // Obtenemos solo los infantes que pertenecen al comedor para la base del porcentaje
+        const totalInfantesComedor = await db.infante.count({
+            where: { tipoPrograma: { in: ['Comedor', 'Ambos'] } }
+        });
+
         const infantesAsistieronMes = await db.asistencia.groupBy({
             by: ['infanteId'],
             where: {
@@ -36,7 +42,7 @@ export async function getStats(request, reply) {
             }
         });
         const asistentesUnicosMes = infantesAsistieronMes.length;
-        const pctAsistencia = totalInfantes > 0 ? Math.round((asistentesUnicosMes / totalInfantes) * 100) : 0;
+        const pctAsistencia = totalInfantesComedor > 0 ? Math.round((asistentesUnicosMes / totalInfantesComedor) * 100) : 0;
 
         // 4. Regalos y Kits (este año)
         const regalosRaw = await db.regalo.groupBy({
@@ -68,15 +74,19 @@ export async function getStats(request, reply) {
         });
 
         const cumplesMes = infantesConCumple
-            .filter(i => new Date(i.persona.fechaNacimiento).getMonth() === currentMonth)
-            .map(i => ({
-                id: i.id,
-                nombre: `${i.persona.nombres} ${i.persona.apellidos}`,
-                fecha: new Date(i.persona.fechaNacimiento).toLocaleDateString('es-EC', { day: 'numeric', month: 'short' }),
-                edad: currentYear - new Date(i.persona.fechaNacimiento).getFullYear()
-            }))
-            .sort((a,b) => new Date(a.fecha).getDate() - new Date(b.fecha).getDate())
-            .slice(0, 5);
+            .filter(i => new Date(i.persona.fechaNacimiento).getUTCMonth() === currentMonth)
+            .map(i => {
+                const date = new Date(i.persona.fechaNacimiento);
+                return {
+                    id: i.id,
+                    nombre: `${i.persona.nombres} ${i.persona.apellidos}`,
+                    fecha: date.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+                    edad: currentYear - date.getUTCFullYear(),
+                    dia: date.getUTCDate()
+                };
+            })
+            .sort((a,b) => a.dia - b.dia)
+            .map(({ dia, ...rest }) => rest);
 
         // 6. Inventario (Materiales con stock bajo)
         const materiales = await db.inventarioMaterial.findMany();

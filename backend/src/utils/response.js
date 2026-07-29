@@ -5,23 +5,28 @@
 export const ok = (reply, data, meta = null) => {
     const response = { success: true, data }
     if (meta) response.meta = meta
-    return reply.status(200).send(response)
+    reply.status(200).send(response)
 }
 
-export const created = (reply, data) =>
+export const created = (reply, data) => {
     reply.status(201).send({ success: true, data })
+}
 
-export const noContent = (reply) =>
+export const noContent = (reply) => {
     reply.status(204).send()
+}
 
-export const notFound = (reply, message = 'Recurso no encontrado') =>
+export const notFound = (reply, message = 'Recurso no encontrado') => {
     reply.status(404).send({ success: false, error: message })
+}
 
-export const badRequest = (reply, message) =>
+export const badRequest = (reply, message) => {
     reply.status(400).send({ success: false, error: message })
+}
 
-export const forbidden = (reply, message = 'Acceso denegado') =>
+export const forbidden = (reply, message = 'Acceso denegado') => {
     reply.status(403).send({ success: false, error: message })
+}
 
 export const paginated = (reply, data, total, page, limit, summary = null) => {
     const meta = {
@@ -32,7 +37,7 @@ export const paginated = (reply, data, total, page, limit, summary = null) => {
     }
     if (summary) meta.summary = summary
     
-    return reply.status(200).send({
+    reply.status(200).send({
         success: true,
         data,
         meta

@@ -4,7 +4,7 @@ import {
     TextField, MenuItem, Stack, IconButton, Tooltip, Avatar, Grid, Card, CardContent,
     CardActions, LinearProgress, Badge, InputAdornment, ToggleButtonGroup,
     ToggleButton, Divider, Skeleton, Alert, Paper, TableContainer, TablePagination,
-    CircularProgress
+    CircularProgress, Autocomplete
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -39,6 +39,7 @@ import {
     Sync as FungibleIcon,
     Lock as NonFungibleIcon,
 } from '@mui/icons-material';
+import { compressImage } from '../../utils/imageUtils';
 import MainLayout from '../../components/layout/MainLayout';
 import DataTable from '../../components/common/DataTable';
 import { materialesService } from '../../services/appServices';
@@ -186,16 +187,58 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
                                     }}
                                 />
                             )}
+                            {item.ubicacion && (
+                                <Chip
+                                    label={item.ubicacion}
+                                    size="small"
+                                    sx={{
+                                        fontSize: 9, fontWeight: 700,
+                                        bgcolor: alpha(CCO.celeste, 0.1),
+                                        color: CCO.azul,
+                                        border: `1px solid ${alpha(CCO.celeste, 0.35)}`
+                                    }}
+                                />
+                            )}
+                            {item.donacion && (
+                                <Chip
+                                    label="Donación"
+                                    size="small"
+                                    sx={{
+                                        fontSize: 9, fontWeight: 700,
+                                        bgcolor: alpha('#4caf50', 0.12),
+                                        color: '#2e7d32',
+                                        border: `1px solid ${alpha('#4caf50', 0.3)}`
+                                    }}
+                                />
+                            )}
                         </Box>
+                        {(item.responsable || item.condicion || item.fechaIngreso) && (
+                            <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                {item.condicion && <Typography variant="caption" color="text.secondary">Condición: {item.condicion}</Typography>}
+                                {item.responsable && <Typography variant="caption" color="text.secondary">Responsable: {item.responsable}</Typography>}
+                                {item.fechaIngreso && <Typography variant="caption" color="text.secondary">Ingreso: {new Date(item.fechaIngreso).toLocaleDateString('es-EC')}</Typography>}
+                            </Box>
+                        )}
+                        {item.descripcion && (
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                {item.descripcion.length > 110 ? `${item.descripcion.slice(0, 110)}...` : item.descripcion}
+                            </Typography>
+                        )}
                     </Box>
                 </Box>
 
                 {/* Stock meter — siempre al fondo del contenido */}
                 <Box sx={{ mt: 1.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
                         <Typography variant="caption" color="text.secondary">Stock disponible</Typography>
                         <Typography variant="caption" fontWeight={800} color={item.stockBajo ? 'error.main' : 'success.main'}>
                             {item.cantidadDisponible} / mín {item.stockMinimo}
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">Costo: <strong>${item.costoUnidad || 0}</strong></Typography>
+                        <Typography variant="caption" fontWeight={800} color={CCO.azul}>
+                            Valuación: ${(item.cantidadDisponible * (item.costoUnidad || 0)).toFixed(2)}
                         </Typography>
                     </Box>
                     <LinearProgress
@@ -248,16 +291,65 @@ function MaterialCard({ item, canWrite, canDelete, onIngresar, onDespachar, onEd
 }
 
 // ─── MODAL: FORMULARIO MATERIAL ───────────────────────────────
-function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
-    const EMPTY = { codigo: '', nombreMaterial: '', categoria: '', area: '', marca: '', numeroSerie: '', stockMinimo: 5, fungible: 'Fungible', pertenece: 'Iglesia' };
+function MaterialFormModal({ open, tipo, item, onClose, onConfirm, categoriasOptions, areasOptions, ubicacionesOptions }) {
+    const EMPTY = {
+        codigo: '', nombreMaterial: '', categoria: '', area: '', ubicacion: '', marca: '', numeroSerie: '',
+        descripcion: '', donacion: false, fechaIngreso: new Date().toISOString().slice(0, 10),
+        condicion: '', responsable: '', observaciones: '', stockMinimo: 5, fungible: 'Fungible', pertenece: 'Iglesia', costoUnidad: 0
+    };
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
+    const [loadingCode, setLoadingCode] = useState(false);
+    const codeTimerRef = useRef(null);
 
     useEffect(() => {
-        if (open) setForm(item ? { ...item } : EMPTY);
-    }, [open]); // eslint-disable-line
+        if (!open) return;
+        if (item) {
+            setForm({
+                ...EMPTY,
+                ...item,
+                fechaIngreso: item.fechaIngreso ? String(item.fechaIngreso).split('T')[0] : new Date().toISOString().slice(0, 10),
+                donacion: item.donacion ?? false,
+                descripcion: item.descripcion || '',
+                condicion: item.condicion || '',
+                responsable: item.responsable || '',
+                observaciones: item.observaciones || '',
+                ubicacion: item.ubicacion || ''
+            });
+        } else {
+            setForm(EMPTY);
+        }
+    }, [open, item]); // eslint-disable-line
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    // Auto-generate code when area or categoria changes (only for new items)
+    const fetchNextCode = useCallback(async (area, categoria) => {
+        if (tipo !== 'crear') return;
+        if (!area && !categoria) {
+            set('codigo', '');
+            return;
+        }
+        setLoadingCode(true);
+        try {
+            const res = await materialesService.nextCode(area || '', categoria || '');
+            setForm(f => ({ ...f, codigo: res.data?.codigo || res.codigo || '' }));
+        } catch (err) {
+            console.error('Error generating code:', err);
+        } finally {
+            setLoadingCode(false);
+        }
+    }, [tipo]);
+
+    // Debounced code generation when area/categoria changes
+    useEffect(() => {
+        if (!open || tipo !== 'crear') return;
+        if (codeTimerRef.current) clearTimeout(codeTimerRef.current);
+        codeTimerRef.current = setTimeout(() => {
+            fetchNextCode(form.area, form.categoria);
+        }, 500);
+        return () => clearTimeout(codeTimerRef.current);
+    }, [form.area, form.categoria, open, tipo, fetchNextCode]);
 
     const handleSubmit = async () => {
         setSaving(true);
@@ -274,15 +366,57 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
             <Divider />
             <DialogContent>
                 <Stack spacing={2} sx={{ pt: 1 }}>
+                    {/* ── Área y Categoría (Autocomplete) ── */}
                     <Box sx={{ display: 'flex', gap: 2 }}>
-                        <TextField label="Código / SKU *" value={form.codigo} onChange={e => set('codigo', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <Autocomplete
+                            freeSolo
+                            options={areasOptions || []}
+                            value={form.area || ''}
+                            onInputChange={(_, v) => set('area', v)}
+                            onChange={(_, v) => set('area', v || '')}
+                            renderInput={(params) => (
+                                <TextField {...params} label="Área *" size="small"
+                                    placeholder="Seleccionar o escribir..."
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                            )}
+                            sx={{ flex: 1 }}
+                        />
+                        <Autocomplete
+                            freeSolo
+                            options={categoriasOptions || []}
+                            value={form.categoria || ''}
+                            onInputChange={(_, v) => set('categoria', v)}
+                            onChange={(_, v) => set('categoria', v || '')}
+                            renderInput={(params) => (
+                                <TextField {...params} label="Categoría *" size="small"
+                                    placeholder="Seleccionar o escribir..."
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                            )}
+                            sx={{ flex: 1 }}
+                        />
+                    </Box>
+
+                    {/* ── Código auto-generado + Stock mínimo ── */}
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField
+                            label="Código / SKU"
+                            value={form.codigo}
+                            onChange={e => tipo === 'editar' && set('codigo', e.target.value)}
+                            size="small"
+                            sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                            InputProps={{
+                                readOnly: tipo === 'crear',
+                                endAdornment: loadingCode ? (
+                                    <InputAdornment position="end">
+                                        <CircularProgress size={16} />
+                                    </InputAdornment>
+                                ) : null,
+                            }}
+                            helperText={tipo === 'crear' ? 'Generado automáticamente desde Área + Categoría' : ''}
+                        />
                         <TextField label="Stock mínimo" type="number" value={form.stockMinimo} onChange={e => set('stockMinimo', parseInt(e.target.value) || 0)} size="small" sx={{ width: 130, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                     </Box>
                     <TextField label="Nombre del material *" value={form.nombreMaterial} onChange={e => set('nombreMaterial', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        <TextField label="Categoría" value={form.categoria} onChange={e => set('categoria', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                        <TextField label="Área" value={form.area || ''} onChange={e => set('area', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                    </Box>
 
                     {/* ── Tipo: Fungible / No Fungible ── */}
                     <Box>
@@ -313,8 +447,64 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
 
                     <Box sx={{ display: 'flex', gap: 2 }}>
                         <TextField label="Marca" value={form.marca || ''} onChange={e => set('marca', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                        <TextField label="N° Serie / Código de Barras" value={form.numeroSerie || ''} onChange={e => set('numeroSerie', e.target.value)} size="small" sx={{ flex: 1.5, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <TextField 
+                            label="Costo Unidad ($)" 
+                            type="number" 
+                            step="0.01"
+                            value={form.costoUnidad || 0} 
+                            onChange={e => set('costoUnidad', parseFloat(e.target.value) || 0)} 
+                            size="small" 
+                            sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} 
+                        />
                     </Box>
+                    <TextField label="N° Serie / Código de Barras" value={form.numeroSerie || ''} onChange={e => set('numeroSerie', e.target.value)} size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+
+                    <TextField
+                        label="Descripción" value={form.descripcion}
+                        onChange={e => set('descripcion', e.target.value)}
+                        size="small" fullWidth multiline rows={3}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                    />
+
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                        <TextField select label="Donación" value={form.donacion ? 'si' : 'no'} onChange={e => set('donacion', e.target.value === 'si')} size="small" sx={{ width: 160, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
+                            <MenuItem value="si">Sí</MenuItem>
+                            <MenuItem value="no">No</MenuItem>
+                        </TextField>
+                        <TextField
+                            label="Fecha de ingreso" type="date"
+                            value={form.fechaIngreso || ''}
+                            onChange={e => set('fechaIngreso', e.target.value)}
+                            size="small" fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                        />
+                    </Box>
+
+                    <Autocomplete
+                        freeSolo
+                        options={ubicacionesOptions || []}
+                        value={form.ubicacion || ''}
+                        onInputChange={(_, v) => set('ubicacion', v)}
+                        onChange={(_, v) => set('ubicacion', v || '')}
+                        renderInput={(params) => (
+                            <TextField {...params} label="Ubicación" size="small"
+                                placeholder="Seleccionar o escribir..."
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        )}
+                    />
+
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField label="Condición" value={form.condicion || ''} onChange={e => set('condicion', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                        <TextField label="Responsable" value={form.responsable || ''} onChange={e => set('responsable', e.target.value)} size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+                    </Box>
+                    <TextField
+                        label="Observaciones" value={form.observaciones || ''}
+                        onChange={e => set('observaciones', e.target.value)}
+                        size="small" fullWidth multiline rows={3}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                    />
+
                     <Alert severity="info" sx={{ borderRadius: 2, fontSize: 12 }}>
                         La foto del material se puede subir desde la vista de tarjetas después de crear el item.
                     </Alert>
@@ -323,7 +513,7 @@ function MaterialFormModal({ open, tipo, item, onClose, onConfirm }) {
             <Divider />
             <DialogActions sx={{ p: 2, gap: 1 }}>
                 <Button onClick={onClose} color="inherit" sx={{ borderRadius: 2, fontWeight: 700 }}>Cancelar</Button>
-                <Button variant="contained" onClick={handleSubmit} disabled={saving || !form.codigo || !form.nombreMaterial}
+                <Button variant="contained" onClick={handleSubmit} disabled={saving || loadingCode || !form.codigo || !form.nombreMaterial}
                     sx={{ borderRadius: 3, px: 3, fontWeight: 800, textTransform: 'none', bgcolor: CCO.azul }}>
                     {saving ? 'Guardando...' : tipo === 'crear' ? 'Crear Material' : 'Guardar Cambios'}
                 </Button>
@@ -403,24 +593,38 @@ function StockModal({ open, tipo, item, onClose, onConfirm }) {
 // ─── MODAL: FOTO ──────────────────────────────────────────────
 function FotoModal({ open, item, onClose, onSubirFoto }) {
     const { getImageUrl } = useAuth();
+    const { enqueueSnackbar } = useSnackbar();
     const fileRef = useRef();
     const [preview, setPreview] = useState(null);
+    const [compressedFile, setCompressedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
 
-    useEffect(() => { if (open) setPreview(item?.fotografia || null); }, [open, item]);
+    useEffect(() => { if (open) { setPreview(item?.fotografia || null); setCompressedFile(null); } }, [open, item]);
 
-    const handleFile = (e) => {
+    const handleFile = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const url = URL.createObjectURL(file);
-        setPreview(url);
+        if (file.size > 30 * 1024 * 1024) {
+            enqueueSnackbar('La imagen es demasiado grande (máx. 30 MB)', { variant: 'error' });
+            e.target.value = '';
+            return;
+        }
+        try {
+            enqueueSnackbar('Procesando imagen...', { variant: 'info', autoHideDuration: 2000 });
+            const compressed = await compressImage(file);
+            setCompressedFile(compressed);
+            setPreview(URL.createObjectURL(compressed));
+        } catch (err) {
+            console.error('Error procesando imagen:', err);
+            enqueueSnackbar('Error al procesar la imagen. Intenta con otra foto.', { variant: 'error' });
+            e.target.value = '';
+        }
     };
 
     const handleUpload = async () => {
-        const file = fileRef.current?.files[0];
-        if (!file) return;
+        if (!compressedFile) return;
         setUploading(true);
-        await onSubirFoto(item.id, file);
+        await onSubirFoto(item.id, compressedFile);
         setUploading(false);
         onClose();
     };
@@ -455,9 +659,9 @@ function FotoModal({ open, item, onClose, onSubirFoto }) {
                         </Stack>
                     )}
                 </Box>
-                <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
+                <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile} />
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
-                    Máximo 5MB · Formatos: JPG, PNG, WebP
+                    Optimización automática · Formatos: JPG, PNG, WebP
                 </Typography>
             </DialogContent>
             <Divider />
@@ -481,7 +685,7 @@ export default function MaterialesPage() {
     const isDark = theme.palette.mode === 'dark';
     const { user, getImageUrl } = useAuth();
     const { enqueueSnackbar } = useSnackbar();
-    const canWrite = !user?.rol || ['admin', 'director', 'secretaria', 'tutor_especial'].includes(user?.rol);
+    const canWrite = !user?.rol || ['admin', 'director', 'secretaria', 'tutor_especial', 'tutor'].includes(user?.rol);
     const canDelete = !user?.rol || ['admin', 'director'].includes(user?.rol);
 
     // ── Estado ────────────────────────────────────────────────
@@ -526,6 +730,10 @@ export default function MaterialesPage() {
     const [lastSelectedFile, setLastSelectedFile] = useState(null);
     const [exportando, setExportando] = useState(false);
 
+    // ── Datos maestros (categorías, áreas y ubicaciones existentes) ─────────
+    const [maestros, setMaestros] = useState({ categorias: [], areas: [], ubicaciones: [] });
+    const [filtroUbicacion, setFiltroUbicacion] = useState('');
+
     // ── Carga ─────────────────────────────────────────────────
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -537,17 +745,20 @@ export default function MaterialesPage() {
                 categoria: filtroCategoria,
                 stockBajo: filtroStock === 'bajo' ? 'true' : undefined,
                 fungible: filtroFungible,
-                pertenece: filtroPertenece
+                pertenece: filtroPertenece,
+                ubicacion: filtroUbicacion || undefined
             };
 
-            const [res, alertRes] = await Promise.all([
+            const [res, alertRes, maestrosRes] = await Promise.all([
                 materialesService.listar(params),
                 materialesService.alertas(),
+                materialesService.maestros(),
             ]);
             
             setRows(res.data || []);
             setTotal(res.meta?.total || 0);
             setAlertas(alertRes.data || { stockBajoCount: 0, desactualizados: [] });
+            setMaestros(maestrosRes.data || { categorias: [], areas: [], ubicaciones: [] });
         } catch (err) {
             enqueueSnackbar('Error al cargar datos del inventario', { variant: 'error' });
             setRows([]);
@@ -563,11 +774,10 @@ export default function MaterialesPage() {
     useEffect(() => {
         // Reset page on filter change
         setPage(0);
-    }, [debouncedBuscar, filtroCategoria, filtroStock, filtroFungible, filtroPertenece]);
+    }, [debouncedBuscar, filtroCategoria, filtroStock, filtroFungible, filtroPertenece, filtroUbicacion]);
 
-    // Categorías únicas (En un sistema con paginación, idealmente esto vendría de un endpoint de maestros, 
-    // pero por ahora lo sacamos de los rows actuales o una lista estática si es necesario)
-    const categorias = useMemo(() => [...new Set(rows.map(r => r.categoria).filter(Boolean))].sort(), [rows]);
+    // Categorías únicas desde datos maestros (incluye TODAS, no solo las de la página actual)
+    const categorias = useMemo(() => maestros.categorias || [], [maestros.categorias]);
 
     const hayFiltros = buscar || filtroCategoria || filtroStock || filtroFungible || filtroPertenece;
 
@@ -621,7 +831,16 @@ export default function MaterialesPage() {
             const excelData = data.map(item => ({
                 'Código': item.codigo,
                 'Nombre del Material': item.nombreMaterial,
+                'Descripción': item.descripcion || '',
                 'Categoría': item.categoria,
+                'Área': item.area || '',
+                'Ubicación': item.ubicacion || '',
+                'Donación': item.donacion ? 'Sí' : 'No',
+                'Marca': item.marca || '',
+                'N° Serie': item.numeroSerie || '',
+                'Condición': item.condicion || '',
+                'Responsable': item.responsable || '',
+                'Observaciones': item.observaciones || '',
                 'Stock Actual': item.cantidadDisponible,
                 'Stock Mínimo': item.stockMinimo,
                 'Estado Stock': item.stockBajo ? 'BAJO' : 'OK',
@@ -629,7 +848,7 @@ export default function MaterialesPage() {
                 'Pertenece a': item.pertenece || 'N/A',
                 'Costo Unidad ($)': item.costoUnidad || 0,
                 'Valor Inventario ($)': (item.cantidadDisponible * (item.costoUnidad || 0)).toFixed(2),
-                'Descripción': item.descripcion || '',
+                'Fecha de ingreso': item.fechaIngreso ? new Date(item.fechaIngreso).toLocaleDateString('es-EC') : '',
                 'Última Actualización': item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('es-EC') : 'N/A'
             }));
 
@@ -655,14 +874,10 @@ export default function MaterialesPage() {
     };
 
     const handleSubirFoto = async (id, file) => {
-        // Validación de tamaño: 5MB
-        if (file.size > 5 * 1024 * 1024) {
-            enqueueSnackbar('La imagen es demasiado grande. El límite es 5MB.', { variant: 'warning' });
-            return;
-        }
-
         try {
-            await materialesService.subirFoto(id, file);
+            // Comprimir antes de enviar al servidor
+            const compressed = await compressImage(file);
+            await materialesService.subirFoto(id, compressed);
             enqueueSnackbar('Foto actualizada correctamente', { variant: 'success' });
             cargar();
         } catch (err) {
@@ -757,6 +972,29 @@ export default function MaterialesPage() {
             )
         },
         { field: 'area', headerName: 'Área', renderCell: r => <Typography variant="caption">{r.area || '—'}</Typography> },
+        { field: 'ubicacion', headerName: 'Ubicación', renderCell: r => <Typography variant="caption">{r.ubicacion || '—'}</Typography> },
+        {
+            field: 'donacion', headerName: 'Donación',
+            renderCell: r => (
+                <Chip
+                    label={r.donacion ? 'Sí' : 'No'}
+                    size="small"
+                    color={r.donacion ? 'success' : 'default'}
+                    sx={{ fontWeight: 700, bgcolor: r.donacion ? alpha('#4caf50', 0.12) : 'background.paper' }}
+                />
+            )
+        },
+        {
+            field: 'fechaIngreso', headerName: 'Fecha ingreso',
+            renderCell: r => (
+                <Typography variant="caption" color="text.secondary">
+                    {r.fechaIngreso ? new Date(r.fechaIngreso).toLocaleDateString() : '—'}
+                </Typography>
+            )
+        },
+        {
+            field: 'responsable', headerName: 'Responsable', renderCell: r => <Typography variant="caption">{r.responsable || '—'}</Typography>
+        },
         {
             field: 'fungible', headerName: 'Tipo',
             renderCell: r => r.fungible ? (
@@ -788,6 +1026,18 @@ export default function MaterialesPage() {
                     }}
                 />
             ) : <Typography variant="caption" color="text.secondary">—</Typography>
+        },
+        {
+            field: 'costoUnidad', headerName: 'Costo ($)',
+            renderCell: r => <Typography variant="caption" fontWeight={700}>${r.costoUnidad || 0}</Typography>
+        },
+        {
+            field: 'valorTotal', headerName: 'V. Inventario',
+            renderCell: r => (
+                <Typography variant="caption" fontWeight={900} color={CCO.azul}>
+                    ${(r.cantidadDisponible * (r.costoUnidad || 0)).toFixed(2)}
+                </Typography>
+            )
         },
         {
             field: 'fechaUltimaActualizacion', headerName: 'Actualizado',
@@ -978,16 +1228,12 @@ export default function MaterialesPage() {
                             <MenuItem value="Iglesia">Iglesia</MenuItem>
                             <MenuItem value="Ministerio">Ministerio</MenuItem>
                         </TextField>
-
-                        {/* Limpiar filtros */}
-                        {hayFiltros && (
-                            <Tooltip title="Limpiar filtros" arrow>
-                                <IconButton onClick={() => { setBuscar(''); setFiltroCategoria(''); setFiltroStock(''); setFiltroFungible(''); setFiltroPertenece(''); }}
-                                    sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
-                                    <ClearIcon />
-                                </IconButton>
-                            </Tooltip>
-                        )}
+                        <TextField select size="small" label="Ubicación" value={filtroUbicacion}
+                            onChange={e => setFiltroUbicacion(e.target.value)}
+                            sx={{ minWidth: 160, '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}>
+                            <MenuItem value="">Todas</MenuItem>
+                            {maestros.ubicaciones.map(u => <MenuItem key={u} value={u}>{u}</MenuItem>)}
+                        </TextField>
 
                         <Box sx={{ ml: 'auto' }}>
                             <ToggleButtonGroup value={vistaMode} exclusive onChange={(_, v) => v && setVistaMode(v)} size="small">
@@ -1086,6 +1332,9 @@ export default function MaterialesPage() {
                 open={formModal.open} tipo={formModal.tipo} item={formModal.item}
                 onClose={() => setFormModal(m => ({ ...m, open: false }))}
                 onConfirm={handleAccionForm}
+                categoriasOptions={maestros.categorias || []}
+                areasOptions={maestros.areas || []}
+                ubicacionesOptions={maestros.ubicaciones || []}
             />
             <StockModal
                 open={stockModal.open} tipo={stockModal.tipo} item={stockModal.item}

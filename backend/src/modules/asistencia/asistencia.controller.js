@@ -5,7 +5,7 @@ import { getSchoolYearRange } from '../../utils/date.js'
 // GET /asistencia?infanteId=1&fecha=2026-03-01&tutorId=2
 export async function listar(request, reply) {
     const { page, limit, skip } = getPagination(request.query)
-    const { infanteId, fecha, fechaInicio, fechaFin, estado, tutorId, esPatrocinado } = request.query
+    const { infanteId, fecha, fechaInicio, fechaFin, estado, tutorId, esPatrocinado, tipoPrograma } = request.query
     const db = request.server.db
 
     const where = {}
@@ -15,6 +15,14 @@ export async function listar(request, reply) {
     // Filtro por patrocinio
     if (esPatrocinado !== undefined && esPatrocinado !== 'all') {
         where.infante = { ...where.infante, esPatrocinado: esPatrocinado === 'true' }
+    }
+
+    // Filtro por tipo de programa del infante
+    if (tipoPrograma) {
+        const tpFilter = tipoPrograma === 'Comedor'
+            ? { in: ['Comedor', 'Ambos'] }
+            : tipoPrograma;
+        where.infante = { ...where.infante, tipoPrograma: tpFilter }
     }
     
     if (fecha) {
@@ -135,6 +143,84 @@ export async function resumen(request, reply) {
     ])
 
     return ok(reply, { label: `${start.getFullYear()}-${end.getFullYear()}`, total, presentes: presentesC, ausentes, justificados: 0 })
-
-    return ok(reply, { label: `${start.getFullYear()}-${end.getFullYear()}`, total, presentes, ausentes, justificados })
 }
+
+// PATCH /asistencia/pagar-deuda/:infanteId
+export async function pagarDeuda(request, reply) {
+    const db = request.server.db
+    const infanteId = parseInt(request.params.infanteId)
+
+    if (isNaN(infanteId)) {
+        return badRequest(reply, 'ID de infante inválido')
+    }
+
+    try {
+        // Actualizar todos los registros 'Pendiente' a 'PagoDia'
+        const resultado = await db.asistencia.updateMany({
+            where: {
+                infanteId,
+                estado: 'Pendiente'
+            },
+            data: {
+                estado: 'PagoDia'
+            }
+        })
+
+        return ok(reply, {
+            mensaje: `Se han pagado ${resultado.count} registros de asistencia`,
+            actualizados: resultado.count
+        })
+    } catch (error) {
+        request.server.log.error('Error al pagar deuda de asistencia:', error)
+        return reply.status(500).send({
+            success: false,
+            error: 'Error interno al procesar el pago'
+        })
+    }
+}
+
+// DELETE /asistencia/fecha/:fecha — elimina TODOS los registros de una fecha
+export async function eliminarFecha(request, reply) {
+    const { fecha } = request.params
+    const db = request.server.db
+
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return badRequest(reply, 'Fecha inválida. Formato esperado: YYYY-MM-DD')
+    }
+
+    const fechaDate = new Date(fecha + 'T00:00:00.000Z')
+
+    const resultado = await db.asistencia.deleteMany({
+        where: { fecha: fechaDate }
+    })
+
+    return ok(reply, {
+        mensaje: `Se eliminaron ${resultado.count} registros del ${fecha}`,
+        eliminados: resultado.count,
+        fecha
+    })
+}
+
+// PATCH /asistencia/:infanteId/:fecha — actualiza o crea un registro individual
+export async function actualizarRegistro(request, reply) {
+    const { infanteId, fecha } = request.params
+    const { estado } = request.body
+    const db = request.server.db
+
+    const id = parseInt(infanteId)
+    if (isNaN(id)) return badRequest(reply, 'infanteId inválido')
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return badRequest(reply, 'Fecha inválida')
+    const estadosValidos = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto', 'Ausente']
+    if (!estadosValidos.includes(estado)) return badRequest(reply, 'Estado inválido')
+
+    const fechaDate = new Date(fecha + 'T00:00:00.000Z')
+
+    const registro = await db.asistencia.upsert({
+        where: { infanteId_fecha: { infanteId: id, fecha: fechaDate } },
+        update: { estado },
+        create: { infanteId: id, fecha: fechaDate, estado }
+    })
+
+    return ok(reply, registro)
+}
+

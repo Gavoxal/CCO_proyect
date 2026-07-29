@@ -19,6 +19,7 @@ import {
     ChevronRight as ChevronRightIcon,
     Logout as LogoutIcon,
     ReportProblem as IncidentesIcon,
+    Map as MapIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,6 +39,7 @@ const menuGroups = [
         label: 'Ministerio',
         items: [
             { text: 'Infantes', icon: <InfantesIcon />, path: '/infantes' },
+            { text: 'Planificar Ruta', icon: <MapIcon />, path: '/planificar-ruta' },
             { text: 'Asistencia', icon: <AsistenciaIcon />, path: '/asistencia', roles: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial'] },
             { text: 'Visitas', icon: <VisitasIcon />, path: '/visitas' },
             { text: 'Regalos y Kits', icon: <RegalosIcon />, path: '/regalos' },
@@ -77,7 +79,7 @@ const ROL_LABELS = {
     tutor: { label: 'Tutor', color: '#9e9e9e' },
 };
 
-const Sidebar = () => {
+const Sidebar = ({ mobileOpen, onClose, isMobile }) => {
     const [collapsed, setCollapsed] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
@@ -98,13 +100,16 @@ const Sidebar = () => {
 
     return (
         <Drawer
-            variant="permanent"
+            variant={isMobile ? 'temporary' : 'permanent'}
+            open={isMobile ? mobileOpen : true}
+            onClose={onClose}
+            ModalProps={{ keepMounted: true }}
             sx={{
-                width: drawerWidth,
+                width: isMobile ? DRAWER_WIDTH : drawerWidth,
                 flexShrink: 0,
                 transition: 'width 0.3s ease',
                 '& .MuiDrawer-paper': {
-                    width: drawerWidth,
+                    width: isMobile ? DRAWER_WIDTH : drawerWidth,
                     boxSizing: 'border-box',
                     background: theme.palette.mode === 'dark'
                         ? `linear-gradient(180deg, ${alpha('#0d2137', 0.97)} 0%, ${alpha('#0a1929', 0.99)} 100%)`
@@ -123,12 +128,16 @@ const Sidebar = () => {
             <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', minHeight: 64 }}>
                 {!collapsed && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{
-                            width: 38, height: 38, borderRadius: '12px',
-                            background: 'linear-gradient(135deg, #7c4dff 0%, #00bcd4 100%)',
+                        <Box sx={{ 
+                            width: 38, height: 38, 
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            overflow: 'hidden'
                         }}>
-                            <InfantesIcon sx={{ color: '#fff', fontSize: 22 }} />
+                            <img 
+                                src="/fondo blanco trasparente vidas en accion.png" 
+                                alt="Logo" 
+                                style={{ width: '100%', height: 'auto', objectFit: 'contain' }} 
+                            />
                         </Box>
                         <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.3px' }}>
@@ -140,13 +149,32 @@ const Sidebar = () => {
                         </Box>
                     </Box>
                 )}
-                <IconButton
-                    onClick={() => setCollapsed(!collapsed)}
-                    size="small"
-                    sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}
-                >
-                    {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
-                </IconButton>
+                {collapsed && (
+                    <Box sx={{ 
+                        width: 38, height: 38, 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <img 
+                            src="/fondo blanco trasparente vidas en accion.png" 
+                            alt="Logo" 
+                            style={{ width: '100%', height: 'auto', objectFit: 'contain' }} 
+                        />
+                    </Box>
+                )}
+                {!isMobile && (
+                    <IconButton
+                        onClick={() => setCollapsed(!collapsed)}
+                        size="small"
+                        sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}
+                    >
+                        {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+                    </IconButton>
+                )}
+                {isMobile && (
+                    <IconButton onClick={onClose} size="small">
+                        <ChevronLeftIcon />
+                    </IconButton>
+                )}
             </Box>
 
             <Divider sx={{ mx: 1, opacity: 0.4 }} />
@@ -172,7 +200,10 @@ const Sidebar = () => {
                                     <ListItem key={item.text} disablePadding sx={{ mb: 0.25 }}>
                                         <Tooltip title={collapsed ? item.text : ''} placement="right" arrow>
                                             <ListItemButton
-                                                onClick={() => navigate(item.path)}
+                                                onClick={() => {
+                                                    navigate(item.path);
+                                                    if (isMobile) onClose();
+                                                }}
                                                 sx={{
                                                     borderRadius: '10px', minHeight: 44,
                                                     justifyContent: collapsed ? 'center' : 'flex-start',
@@ -224,7 +255,10 @@ const Sidebar = () => {
                     }}
                 >
                     <Box 
-                        onClick={() => navigate('/perfil')}
+                        onClick={() => {
+                            navigate('/perfil');
+                            if (isMobile) onClose();
+                        }}
                         sx={{ 
                             display: 'flex', alignItems: 'center', gap: 1.5, 
                             flex: 1, minWidth: 0, cursor: 'pointer',

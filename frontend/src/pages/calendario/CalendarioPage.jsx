@@ -26,6 +26,7 @@ import {
     Edit as EditIcon,
 } from '@mui/icons-material';
 import MainLayout from '../../components/layout/MainLayout';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { eventosService } from '../../services/appServices';
 import { useSnackbar } from 'notistack';
 
@@ -129,6 +130,7 @@ export default function CalendarioPage() {
     const [form, setForm] = useState(emptyForm);
     const [isEditing, setIsEditing] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null, titulo: '' });
 
     // ── Cargar eventos del backend ────────────────────────────────────────────
     const cargar = useCallback(async () => {
@@ -253,8 +255,9 @@ export default function CalendarioPage() {
         }
     };
 
-    const handleDeleteEvent = async (id) => {
-        if (!window.confirm('¿Eliminar este evento permanentemente?')) return;
+    const handleDeleteEvent = async () => {
+        const id = confirmDelete.id;
+        setConfirmDelete({ open: false, id: null, titulo: '' });
         try {
             await eventosService.eliminar(id);
             enqueueSnackbar('Evento eliminado', { variant: 'success' });
@@ -493,7 +496,7 @@ export default function CalendarioPage() {
                                         <Button
                                             startIcon={<DeleteIcon />}
                                             color="error"
-                                            onClick={() => handleDeleteEvent(selectedEvent.id)}
+                                            onClick={() => setConfirmDelete({ open: true, id: selectedEvent.id, titulo: selectedEvent.title || selectedEvent.titulo })}
                                         >
                                             Eliminar
                                         </Button>
@@ -605,6 +608,16 @@ export default function CalendarioPage() {
                         </Button>
                     </DialogActions>
                 </Dialog>
+
+                <ConfirmDialog
+                    open={confirmDelete.open}
+                    onClose={() => setConfirmDelete({ open: false, id: null, titulo: '' })}
+                    onConfirm={handleDeleteEvent}
+                    title="Eliminar evento"
+                    message={`¿Estás seguro de que deseas eliminar el evento "${confirmDelete.titulo}"? Esta acción no se puede deshacer.`}
+                    confirmLabel="Sí, eliminar"
+                    severity="error"
+                />
 
             </Box>
         </MainLayout>

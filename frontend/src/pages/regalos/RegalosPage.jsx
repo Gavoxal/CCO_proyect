@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import MainLayout from '../../components/layout/MainLayout';
 import DataTable from '../../components/common/DataTable';
-import { regalosService } from '../../services/appServices';
+import { regalosService, importService } from '../../services/appServices';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -27,6 +27,9 @@ import CalendarIcon from '@mui/icons-material/CalendarToday';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import StarIcon from '@mui/icons-material/Star';
+import EditIcon from '@mui/icons-material/Edit';
+import { compressImage } from '../../utils/imageUtils';
+import EditRegaloModal from './EditRegaloModal';
 
 const CCO = {
     naranja: '#FF6B35',
@@ -167,6 +170,7 @@ export default function RegalosPage() {
 
     // Modales
     const [detalleItem, setDetalleItem] = useState(null);
+    const [editItem, setEditItem] = useState(null);
     
     const isAuthenticated = !!user;
     const canManageSeason = ['admin', 'director', 'secretaria'].includes(user?.rol);
@@ -228,7 +232,9 @@ export default function RegalosPage() {
 
         setUploading(true);
         try {
-            await regalosService.subirFoto(activeRegaloId, file);
+            // Comprimir antes de enviar
+            const compressed = await compressImage(file);
+            await regalosService.subirFoto(activeRegaloId, compressed);
             enqueueSnackbar('Entrega confirmada con foto exitosamente', { variant: 'success' });
             cargar();
         } catch (error) {
@@ -254,6 +260,22 @@ export default function RegalosPage() {
         } finally {
             setUploading(false);
             event.target.value = null;
+        }
+    };
+
+    const handleSaveEdit = async (id, data, newFile) => {
+        try {
+            if (newFile) {
+                const compressed = await compressImage(newFile);
+                await regalosService.subirFoto(id, compressed);
+            }
+            await regalosService.actualizar(id, data);
+            enqueueSnackbar('Registro actualizado correctamente', { variant: 'success' });
+            setEditItem(null);
+            cargar();
+        } catch (error) {
+            console.error(error);
+            enqueueSnackbar('Error al actualizar registro', { variant: 'error' });
         }
     };
 
@@ -350,6 +372,21 @@ export default function RegalosPage() {
                         </IconButton>
                     </Tooltip>
 
+                    <Tooltip title="Editar registro" arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => setEditItem(r)}
+                            sx={{
+                                color: theme.palette.warning.main,
+                                bgcolor: alpha(theme.palette.warning.main, 0.08),
+                                borderRadius: 2,
+                                '&:hover': { bgcolor: alpha(theme.palette.warning.main, 0.18) }
+                            }}
+                        >
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+
                     {isAuthenticated && r.estado !== 'entregado' && (
                         <>
                             <Tooltip title="Confirmar con Foto (Fácil)" arrow>
@@ -403,17 +440,25 @@ export default function RegalosPage() {
                 />
 
                 {/* ── Header ── */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', md: 'row' },
+                    justifyContent: 'space-between', 
+                    alignItems: { xs: 'stretch', md: 'flex-start' }, 
+                    mb: 4, 
+                    gap: 2 
+                }}>
                     <Box>
                         <Typography variant="h4" fontWeight={900} sx={{
                             background: `linear-gradient(45deg, ${CCO.azul}, ${CCO.naranja})`,
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent',
-                            mb: 0.5
+                            mb: 0.5,
+                            fontSize: { xs: '1.75rem', md: '2.125rem' }
                         }}>
                             Gestión de Entregas
                         </Typography>
-                        <Typography variant="body1" color="text.secondary" fontWeight={500}>
+                        <Typography variant="body1" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
                             Control ágil de suministros y regalos anuales
                         </Typography>
                     </Box>
@@ -505,9 +550,9 @@ export default function RegalosPage() {
                                 </Grid>
 
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mb: 2 }}>
-                                    <Typography variant="h3" fontWeight={900} color="primary" sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                                    <Typography variant="h3" fontWeight={900} color="primary" sx={{ display: 'flex', alignItems: 'baseline', gap: 1, fontSize: { xs: '2.5rem', md: '3rem' } }}>
                                         {stats.entregados}
-                                        <Typography variant="h6" component="span" color="text.secondary" fontWeight={500}>
+                                        <Typography variant="h6" component="span" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
                                             / {stats.total} completados
                                         </Typography>
                                     </Typography>
@@ -578,6 +623,14 @@ export default function RegalosPage() {
                     getImageUrl={getImageUrl}
                     anio={anio}
                     onClose={() => setDetalleItem(null)}
+                />
+
+                <EditRegaloModal
+                    open={Boolean(editItem)}
+                    item={editItem}
+                    getImageUrl={getImageUrl}
+                    onSave={handleSaveEdit}
+                    onClose={() => setEditItem(null)}
                 />
             </Box>
         </MainLayout>

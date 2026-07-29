@@ -51,13 +51,24 @@ export async function me(request, reply) {
             id: true, username: true, email: true, rol: true,
             ultimoAcceso: true, activo: true,
             persona: {
-                select: { nombres: true, apellidos: true, telefono1: true }
+                select: { 
+                    nombres: true, 
+                    apellidos: true, 
+                    telefono1: true,
+                    tutor: { select: { id: true } }
+                }
             }
         }
     })
 
     if (!usuario) return reply.status(404).send({ error: 'Usuario no encontrado' })
-    return ok(reply, usuario)
+    const responseData = {
+        ...usuario,
+        nombre: usuario.persona
+            ? `${usuario.persona.nombres} ${usuario.persona.apellidos}`
+            : usuario.username
+    };
+    return ok(reply, responseData)
 }
 
 export async function recuperarPassword(request, reply) {

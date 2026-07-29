@@ -184,7 +184,7 @@ const TabMinisterio = ({ d }) => {
                                     No hay cumpleaños registrados este mes
                                 </Alert>
                             ) : (
-                                <List disablePadding>
+                                <List disablePadding sx={{ maxHeight: 320, overflow: 'auto', pr: 1 }}>
                                     {d.cumplesMes.map((c, i) => (
                                         <Box key={i}>
                                             <ListItem disableGutters sx={{ py: 1 }}>

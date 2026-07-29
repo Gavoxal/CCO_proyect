@@ -39,6 +39,7 @@ const ROLES = {
     secretaria: { label: 'Secretaría', color: '#4caf50' },
     tutor_especial: { label: 'Tutor Especial', color: '#ff9800' },
     tutor: { label: 'Tutor', color: '#9e9e9e' },
+    proteccion: { label: 'Protección', color: '#e91e63' },
 };
 
 // ─── Backend Integrado API ────────────────────────────────────────────────
@@ -427,7 +428,7 @@ function UsuarioDetailModal({ open, item, onClose }) {
 }
 
 // ─── CARD DE USUARIO ─────────────────────────────────────────
-function UsuarioCard({ item, canEdit, onEditar, onEliminar, onToggleActivo, onVerDetalle }) {
+function UsuarioCard({ item, canEdit, onEditar, onToggleActivo, onVerDetalle }) {
     const theme = useTheme();
     const cfg = ROLES[item.rol] || { label: item.rol, color: '#777' };
     return (
@@ -488,12 +489,6 @@ function UsuarioCard({ item, canEdit, onEditar, onEliminar, onToggleActivo, onVe
                         <IconButton size="small" onClick={() => onEditar(item)}
                             sx={{ bgcolor: alpha(CCO.azul, 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha(CCO.azul, 0.18) } }}>
                             <EditIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Eliminar usuario" arrow>
-                        <IconButton size="small" color="error" onClick={() => onEliminar(item.id)}
-                            sx={{ bgcolor: alpha('#f44336', 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha('#f44336', 0.18) }, ml: 'auto' }}>
-                            <DeleteIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
                 </CardActions>
@@ -597,17 +592,6 @@ export default function UsuariosPage() {
         }
     };
 
-    const handleEliminar = async (id) => {
-        if (!window.confirm('¿Eliminar este usuario permanentemente?')) return;
-        try {
-            await usuariosService.eliminar(id);
-            enqueueSnackbar('Usuario eliminado', { variant: 'success' });
-            cargar();
-        } catch (error) {
-            enqueueSnackbar('Error al eliminar', { variant: 'error' });
-        }
-    };
-
     const handleToggleActivo = async (item) => {
         try {
             await usuariosService.actualizar(item.id, { activo: !item.activo });
@@ -688,12 +672,7 @@ export default function UsuariosPage() {
                             <EditIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
-                    <Tooltip title="Eliminar" arrow>
-                        <IconButton size="small" color="error" onClick={() => handleEliminar(r.id)}
-                            sx={{ bgcolor: alpha('#f44336', 0.08), borderRadius: 1.5 }}>
-                            <DeleteIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+
                 </Stack>
             )
         },
@@ -814,7 +793,7 @@ export default function UsuariosPage() {
 
                 {!canEdit && (
                     <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
-                        Solo los administradores pueden crear, editar o eliminar usuarios.
+                        Solo los administradores pueden crear, editar o desactivar usuarios.
                     </Alert>
                 )}
 
@@ -833,7 +812,6 @@ export default function UsuariosPage() {
                                     <UsuarioCard
                                         item={item} canEdit={canEdit}
                                         onEditar={(r) => setFormModal({ open: true, tipo: 'editar', item: r })}
-                                        onEliminar={handleEliminar}
                                         onToggleActivo={handleToggleActivo}
                                         onVerDetalle={(r) => setDetailModal({ open: true, item: r })}
                                     />

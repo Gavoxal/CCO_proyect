@@ -31,7 +31,7 @@ export const ROLES = {
     TODOS: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial', 'tutor'],
 
     // Gestión de inventario de materiales
-    INVENTARIO: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial'],
+    INVENTARIO: ['admin', 'director', 'proteccion', 'secretaria', 'tutor_especial', 'tutor'],
 
     // Pueden VER los reportes de incidentes
     INCIDENTES_VER: ['admin', 'director', 'proteccion', 'secretaria'],

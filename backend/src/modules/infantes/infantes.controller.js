@@ -3,6 +3,8 @@ import { getPagination } from '../../utils/pagination.js'
 import path from 'path'
 import fs from 'fs/promises'
 import { getMonthRange, getWeekRange } from '../../utils/date.js'
+import { encryptionService } from '../../services/encryption.service.js'
+
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
 
@@ -16,14 +18,22 @@ export async function listar(request, reply) {
 
     const where = {}
     if (esPatrocinado !== undefined) where.esPatrocinado = esPatrocinado === 'true'
-    if (tipoPrograma) where.tipoPrograma = tipoPrograma
+    if (tipoPrograma) {
+        if (tipoPrograma === 'Comedor') {
+            // Incluir tanto 'Comedor' como 'Ambos' (participan del comedor)
+            where.tipoPrograma = { in: ['Comedor', 'Ambos'] }
+        } else {
+            where.tipoPrograma = tipoPrograma
+        }
+    }
     if (tutorId) where.tutorId = parseInt(tutorId)
     if (buscar) {
+        const hash = encryptionService.generateBlindIndex(buscar);
         where.persona = {
             OR: [
                 { nombres: { contains: buscar } },
                 { apellidos: { contains: buscar } },
-                { cedula: { contains: buscar } }
+                { cedulaHash: hash }
             ]
         }
     }

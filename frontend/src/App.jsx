@@ -10,6 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 
 // Páginas nuevas
 import InfantesPage from './pages/infantes/InfantesPage';
+import PlanificarRutaPage from './pages/infantes/PlanificarRutaPage';
 import InfanteDetailPage from './pages/infantes/InfanteDetailPage';
 import InfanteFormPage from './pages/infantes/InfanteFormPage';
 import AsistenciaPage from './pages/asistencia/AsistenciaPage';
@@ -67,6 +68,7 @@ function App() {
               <Route path="/calendario" element={<ProtectedRoute><CalendarioPage /></ProtectedRoute>} />
               <Route path="/asistencia/historial" element={<ProtectedRoute><AsistenciaHistorialPage /></ProtectedRoute>} />
               <Route path="/infantes" element={<ProtectedRoute><InfantesPage /></ProtectedRoute>} />
+              <Route path="/planificar-ruta" element={<ProtectedRoute><PlanificarRutaPage /></ProtectedRoute>} />
               <Route path="/infantes/:id" element={<ProtectedRoute><InfanteDetailPage /></ProtectedRoute>} />
               <Route path="/visitas" element={<ProtectedRoute><VisitasPage /></ProtectedRoute>} />
               <Route path="/inventario/materiales" element={<ProtectedRoute><MaterialesPage /></ProtectedRoute>} />

@@ -13,6 +13,7 @@ import {
     Warning as WarningIcon,
     DoneAll as DoneAllIcon,
     Circle as CircleIcon,
+    Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -24,7 +25,7 @@ const TIPO_ICON = {
     ALERTA: <WarningIcon fontSize="small" sx={{ color: '#ff9800' }} />,
 };
 
-const Topbar = ({ title }) => {
+const Topbar = ({ title, onMenuClick, isMobile }) => {
     const theme = useTheme();
     const { mode, toggleTheme } = useThemeMode();
     const { isAuthenticated } = useAuth();
@@ -101,8 +102,13 @@ const Topbar = ({ title }) => {
             }}
         >
             <Toolbar sx={{ justifyContent: 'space-between', minHeight: '64px !important' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+                    {isMobile && (
+                        <IconButton onClick={onMenuClick} edge="start" sx={{ mr: 1, color: 'text.secondary' }}>
+                            <MenuIcon />
+                        </IconButton>
+                    )}
+                    <Typography variant={isMobile ? 'subtitle1' : 'h5'} sx={{ fontWeight: 700 }} noWrap>
                         {title}
                     </Typography>
                 </Box>

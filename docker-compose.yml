@@ -1,0 +1,50 @@
+services:
+  # Base de Datos (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: cco-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: cco_kidscam
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # Eliminamos 'ports' para que la BD solo sea accesible internamente por el backend
+
+  # Backend (API Node.js)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cco-backend
+    restart: always
+    env_file:
+      - ./backend/.env # Aquí vivirán tus variables JWT_SECRET, ENCRYPTION_KEY, etc.
+    environment:
+      # Sobrescribimos solo la conexión a BD usando variables del entorno
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@db:3306/cco_kidscam
+    depends_on:
+      - db
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/backups:/app/backups
+    # Eliminamos 'ports' (3000) ya que Nginx (frontend) actuará como proxy seguro
+
+  # Frontend (Vite + Nginx Proxy)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api/v1
+    container_name: cco-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  mysql_data:

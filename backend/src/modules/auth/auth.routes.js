@@ -3,6 +3,12 @@ import { login, me, recuperarPassword } from './auth.controller.js'
 export default async function authRoutes(fastify) {
     // POST /api/v1/auth/login
     fastify.post('/login', {
+        config: {
+            rateLimit: {
+                max: 5,
+                timeWindow: '5 minutes'
+            }
+        },
         schema: {
             body: {
                 type: 'object',

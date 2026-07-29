@@ -208,11 +208,11 @@ const LoginPage = () => {
                             placeholder="••••••••" autoComplete="current-password" />
 
                         <Box sx={{ mt: -2, mb: 3, textAlign: 'right' }}>
-                            <Button 
-                                variant="text" size="medium" 
+                            <Button
+                                variant="text" size="medium"
                                 onClick={() => setOpenRecovery(true)}
-                                sx={{ 
-                                    textTransform: 'none', color: isDark ? alpha('#fff', 0.6) : alpha('#000', 0.5), 
+                                sx={{
+                                    textTransform: 'none', color: isDark ? alpha('#fff', 0.6) : alpha('#000', 0.5),
                                     fontWeight: 600, fontSize: '0.875rem',
                                     '&:hover': { color: CCO.violeta, background: 'transparent' }
                                 }}
@@ -269,7 +269,7 @@ const LoginPage = () => {
                     border: `1px solid ${alpha('#fff', 0.2)}`,
                 }}>
                     <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700, letterSpacing: 0.5 }}>
-                        Sistema KidScam v1.0
+                        Sistema KidScam v1.5
                     </Typography>
                 </Box>
 
@@ -334,8 +334,8 @@ const LoginPage = () => {
             </Box>
 
             {/* ── DIALOG RECUPERACIÓN ──────────────────────────────────────── */}
-            <Dialog 
-                open={openRecovery} 
+            <Dialog
+                open={openRecovery}
                 onClose={() => !recoveryLoading && setOpenRecovery(false)}
                 PaperProps={{ sx: { borderRadius: '20px', p: 1, width: '100%', maxWidth: 400 } }}
             >
@@ -358,18 +358,18 @@ const LoginPage = () => {
                     />
                 </DialogContent>
                 <DialogActions sx={{ p: 3, pt: 0 }}>
-                    <Button 
-                        onClick={() => setOpenRecovery(false)} 
+                    <Button
+                        onClick={() => setOpenRecovery(false)}
                         disabled={recoveryLoading}
                         sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}
                     >
                         Cancelar
                     </Button>
-                    <Button 
+                    <Button
                         onClick={handleRecovery}
                         variant="contained"
                         disabled={recoveryLoading}
-                        sx={{ 
+                        sx={{
                             borderRadius: '12px', fontWeight: 800, px: 3, textTransform: 'none',
                             background: `linear-gradient(135deg, ${CCO.naranja} 0%, ${CCO.violeta} 100%)`,
                             '&:hover': { opacity: 0.9 }

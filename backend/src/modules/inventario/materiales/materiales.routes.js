@@ -1,7 +1,8 @@
 import { requireRoles, ROLES } from '../../../middleware/roles.js'
 import {
     listar, obtener, crear, actualizar, eliminar,
-    despachar, ingresar, alertas, importarExcel, subirFoto
+    despachar, ingresar, alertas, importarExcel, subirFoto,
+    maestros, nextCode
 } from './materiales.controller.js'
 
 export default async function materialesRoutes(fastify) {
@@ -11,6 +12,8 @@ export default async function materialesRoutes(fastify) {
 
     fastify.get('/', todos, listar)
     fastify.get('/alertas', todos, alertas)
+    fastify.get('/maestros', todos, maestros)
+    fastify.get('/next-code', todos, nextCode)
     fastify.get('/:id', todos, obtener)
     fastify.post('/importar', superAdmins, importarExcel)
     fastify.post('/', inventario, crear)

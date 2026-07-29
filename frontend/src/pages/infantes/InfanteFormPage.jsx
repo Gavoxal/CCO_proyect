@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { compressImage } from '../../utils/imageUtils';
 
 // Fix leaflet icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -118,13 +119,37 @@ const InfanteFormPage = () => {
         fetchTutores();
     }, []);
 
-    const handleFoto = (e) => {
+    const handleFoto = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setArchivoFoto(file);
-        const reader = new FileReader();
-        reader.onload = (ev) => set('foto', ev.target.result);
-        reader.readAsDataURL(file);
+
+        // Validar tamaño original antes de comprimir (30 MB máx)
+        if (file.size > 30 * 1024 * 1024) {
+            enqueueSnackbar('La imagen es demasiado grande (máx. 30 MB). Elige otra foto.', { variant: 'error' });
+            e.target.value = '';
+            return;
+        }
+        
+        try {
+            enqueueSnackbar('Procesando imagen...', { variant: 'info', autoHideDuration: 2000 });
+            // Comprimir antes de guardar y previsualizar
+            const compressed = await compressImage(file);
+
+            // Validar tamaño después de comprimir (5 MB máx al backend)
+            if (compressed.size > 5 * 1024 * 1024) {
+                enqueueSnackbar('La imagen comprimida sigue siendo muy grande. Intenta con una foto de menor resolución.', { variant: 'warning' });
+            }
+
+            setArchivoFoto(compressed);
+            
+            const reader = new FileReader();
+            reader.onload = (ev) => set('foto', ev.target.result);
+            reader.readAsDataURL(compressed);
+        } catch (err) {
+            console.error('Error procesando imagen:', err);
+            enqueueSnackbar('Error al procesar la imagen. Intenta con otra foto.', { variant: 'error' });
+            e.target.value = '';
+        }
     };
 
     const obtenerUbicacion = () => {
@@ -391,7 +416,7 @@ const InfanteFormPage = () => {
                                         {!form.foto && <ChildIcon sx={{ fontSize: 44, color: alpha(CCO.azul, 0.4) }} />}
                                     </Avatar>
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                        <input ref={fotoRef} type="file" accept="image/*" onChange={handleFoto} style={{ display: 'none' }} />
+                                        <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{ display: 'none' }} />
                                         <Button variant="outlined" startIcon={<CameraIcon />}
                                             onClick={() => fotoRef.current?.click()}
                                             disabled={isRestrictedEditing}

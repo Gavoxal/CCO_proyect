@@ -11,13 +11,14 @@ model Persona {
   id              Int       @id @default(autoincrement())
   nombres         String    @db.VarChar(255)
   apellidos       String    @db.VarChar(255)
-  cedula          String?   @unique @db.VarChar(20)
-  telefono1       String?   @db.VarChar(20)
-  telefono2       String?   @db.VarChar(20)
+  cedula          String?   @unique @db.VarChar(512)
+  cedulaHash      String?   @unique @db.VarChar(64)
+  telefono1       String?   @db.VarChar(512)
+  telefono2       String?   @db.VarChar(512)
   email           String?   @db.VarChar(255)
-  direccion       String?   @db.VarChar(500)
+  direccion       String?   @db.Text
   fechaNacimiento DateTime? @db.Date
-  ubicacionGps    String?   @db.VarChar(255)
+  ubicacionGps    String?   @db.VarChar(512)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   infante         Infante?
@@ -186,11 +187,19 @@ model InventarioMaterial {
   tipo                     String?  @db.VarChar(50)
   marca                    String?  @db.VarChar(100)
   numeroSerie              String?  @db.VarChar(100)
+  descripcion             String?  @db.Text
+  donacion                Boolean  @default(false)
+  fechaIngreso            DateTime @default(now())
+  ubicacion               String?  @db.VarChar(255)
+  condicion               String?  @db.VarChar(100)
+  responsable             String?  @db.VarChar(255)
+  observaciones           String?  @db.Text
+  fotografia               String?  @db.VarChar(500)
+  costoUnidad              Decimal? @default(0) @db.Decimal(10, 2)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
   fungible                 String?  @default("Fungible") @db.VarChar(50)
   pertenece                String?  @default("Iglesia") @db.VarChar(50)
-  fotografia               String?  @db.VarChar(500)
 
   @@map("inventario_materiales")
 }

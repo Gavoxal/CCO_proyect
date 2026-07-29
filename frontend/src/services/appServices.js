@@ -90,6 +90,8 @@ export const materialesService = {
     despachar: (id, cantidad) => api.patch(`/inventario/materiales/${id}/despachar`, { cantidad }).then(r => r.data),
     ingresar: (id, cantidad) => api.patch(`/inventario/materiales/${id}/ingresar`, { cantidad }).then(r => r.data),
     alertas: () => api.get('/inventario/materiales/alertas').then(r => r.data),
+    maestros: () => api.get('/inventario/materiales/maestros').then(r => r.data),
+    nextCode: (area, categoria) => api.get('/inventario/materiales/next-code', { params: { area, categoria } }).then(r => r.data),
     subirFoto: (id, file) => {
         const fd = new FormData();
         fd.append('file', file);

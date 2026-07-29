@@ -22,6 +22,7 @@ import {
     FileDownload as ExcelIcon, PhotoCamera as PhotoIcon,
     Print as PrintIcon, Close as CloseIcon, Delete as DeleteIcon, Edit as EditIcon,
 } from '@mui/icons-material';
+import { compressImage } from '../../utils/imageUtils';
 import MainLayout from '../../components/layout/MainLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSnackbar } from 'notistack';
@@ -1084,11 +1085,23 @@ export default function VisitasPage() {
                                                                 <>
                                                                     <IconButton color="primary" component="label" sx={{ bgcolor: alpha(CCO.naranja, 0.15), mb: 2, p: 2 }}>
                                                                         <PhotoIcon fontSize="large" sx={{ color: CCO.naranja }} />
-                                                                        <input type="file" hidden accept="image/*" onChange={(e) => {
+                                                                        <input type="file" hidden accept="image/*" capture="environment" onChange={async (e) => {
                                                                             const file = e.target.files[0];
-                                                                            if (file) {
-                                                                                setFotoVisita(file);
-                                                                                setFotoPreview(URL.createObjectURL(file));
+                                                                            if (!file) return;
+                                                                            if (file.size > 30 * 1024 * 1024) {
+                                                                                enqueueSnackbar('La imagen es demasiado grande (máx. 30 MB)', { variant: 'error' });
+                                                                                e.target.value = '';
+                                                                                return;
+                                                                            }
+                                                                            try {
+                                                                                enqueueSnackbar('Procesando imagen...', { variant: 'info', autoHideDuration: 2000 });
+                                                                                const compressed = await compressImage(file);
+                                                                                setFotoVisita(compressed);
+                                                                                setFotoPreview(URL.createObjectURL(compressed));
+                                                                            } catch (err) {
+                                                                                console.error('Error procesando imagen:', err);
+                                                                                enqueueSnackbar('Error al procesar la imagen. Intenta con otra foto.', { variant: 'error' });
+                                                                                e.target.value = '';
                                                                             }
                                                                         }} />
                                                                     </IconButton>
