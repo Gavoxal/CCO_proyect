@@ -89,22 +89,34 @@ export async function crear(request, reply) {
     const hash = await bcrypt.hash(password, 12)
     const isTutor = rol === 'tutor' || rol === 'tutor_especial' || rol === 'proteccion'
 
-    const dataObj = {
-        username, email,
-        password: hash,
-        rol: rol || 'tutor',
-        persona: persona ? {
-            create: {
-                ...persona,
-                tutor: isTutor ? {
-                    create: {
+    let personaId = null;
+    if (persona && persona.cedula) {
+        let existentePersona = await db.persona.findUnique({ where: { cedula: persona.cedula } })
+        if (!existentePersona) {
+            existentePersona = await db.persona.create({ data: persona })
+        }
+        personaId = existentePersona.id
+
+        if (isTutor) {
+            const tutorExistente = await db.tutor.findUnique({ where: { personaId } })
+            if (!tutorExistente) {
+                await db.tutor.create({
+                    data: {
+                        personaId,
                         codigo: `TUT-${Date.now().toString().slice(-6)}`,
                         profesion: profesion || null,
                         fotografia: fotografia || null
                     }
-                } : undefined
+                })
             }
-        } : undefined
+        }
+    }
+
+    const dataObj = {
+        username, email,
+        password: hash,
+        rol: rol || 'tutor',
+        personaId
     }
 
     const usuario = await db.usuario.create({
