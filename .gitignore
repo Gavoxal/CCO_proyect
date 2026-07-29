@@ -1,2 +1,12 @@
+# Archivos y documentos locales
 lista general mvidas.xlsx
+Transcripción de la Entrevista uno.txt
 Transcripción de la Entrevista Uno.txt
+task.md.resolved
+
+# Configuraciones de despliegue locales
+docker-compose.yml
+nginx.conf
+
+# Node
+package-lock.json
