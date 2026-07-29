@@ -168,3 +168,9 @@ export const importService = {
 export const dashboardService = {
     getStats: () => api.get('/dashboard/stats').then(r => r.data),
 };
+
+export const rutasService = {
+    obtenerBolsa: () => api.get('/rutas/bolsa').then(r => r.data),
+    toggleInfante: (infanteId) => api.post('/rutas/bolsa/toggle', { infanteId }).then(r => r.data),
+    completarVisitas: (infantesIds) => api.post('/rutas/bolsa/completar', { infantesIds }).then(r => r.data),
+};

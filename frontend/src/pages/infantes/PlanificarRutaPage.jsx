@@ -26,7 +26,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import MainLayout from '../../components/layout/MainLayout';
-import { infantesService } from '../../services/appServices';
+import { infantesService, rutasService } from '../../services/appServices';
+import visitaService from '../../services/visitaService';
 import { useAuth } from '../../context/AuthContext';
 
 // Fix Leaflet Default Icon issue in React
@@ -87,11 +88,13 @@ const PlanificarRutaPage = () => {
     const [selectedIds, setSelectedIds] = useState([]);
     
     // Modo Lote: Pool & Quota
-    const [poolIds, setPoolIds] = useState(() => {
-        const saved = localStorage.getItem('ruta_pool_ids');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [poolIds, setPoolIds] = useState([]);
     const [quota, setQuota] = useState(5);
+
+    // Modo Recomendación
+    const [pendientes, setPendientes] = useState([]);
+    const [loadingPendientes, setLoadingPendientes] = useState(false);
+    const [quotaPendientes, setQuotaPendientes] = useState(5);
 
     // Route calculation & tracking
     const [calculating, setCalculating] = useState(false);
@@ -106,11 +109,60 @@ const PlanificarRutaPage = () => {
 
     useEffect(() => {
         cargarInfantes();
+        cargarBolsa();
     }, []);
 
     useEffect(() => {
-        localStorage.setItem('ruta_pool_ids', JSON.stringify(poolIds));
-    }, [poolIds]);
+        if (user?.rol === 'tutor' || user?.rol === 'tutor_especial') {
+            cargarPendientes();
+        }
+    }, [user]);
+
+    const cargarPendientes = async () => {
+        try {
+            setLoadingPendientes(true);
+            const res = await visitaService.listarPendientes({ limit: 1000, tutorId: user?.persona?.tutor?.id || '' });
+            const data = res.data || [];
+            
+            const infantesConGps = data.filter(inf => {
+                const gps = inf.persona?.ubicacionGps;
+                if (!gps) return false;
+                const parts = gps.split(',');
+                if (parts.length !== 2) return false;
+                const lat = parseFloat(parts[0]);
+                const lng = parseFloat(parts[1]);
+                return !isNaN(lat) && !isNaN(lng);
+            });
+
+            const parsedInfantes = infantesConGps.map(inf => {
+                const parts = inf.persona.ubicacionGps.split(',');
+                return {
+                    ...inf,
+                    parsedGps: {
+                        lat: parseFloat(parts[0]),
+                        lng: parseFloat(parts[1])
+                    }
+                };
+            });
+
+            setPendientes(parsedInfantes);
+        } catch (error) {
+            console.error('Error al cargar pendientes:', error);
+        } finally {
+            setLoadingPendientes(false);
+        }
+    };
+
+    const cargarBolsa = async () => {
+        try {
+            const res = await rutasService.obtenerBolsa();
+            if (res.data) {
+                setPoolIds(res.data);
+            }
+        } catch (error) {
+            console.error('Error al cargar la bolsa:', error);
+        }
+    };
 
     const cargarInfantes = async () => {
         try {
@@ -187,7 +239,7 @@ const PlanificarRutaPage = () => {
     };
 
     // Handle Pool Toggles
-    const handlePoolToggle = (value) => () => {
+    const handlePoolToggle = (value) => async () => {
         const currentIndex = poolIds.indexOf(value);
         const newPool = [...poolIds];
         if (currentIndex === -1) {
@@ -197,6 +249,12 @@ const PlanificarRutaPage = () => {
         }
         setPoolIds(newPool);
         setRouteData(null);
+
+        try {
+            await rutasService.toggleInfante(value);
+        } catch (error) {
+            enqueueSnackbar('Error al actualizar la bolsa en el servidor.', { variant: 'error' });
+        }
     };
 
     const requestLocation = () => {
@@ -238,13 +296,13 @@ const PlanificarRutaPage = () => {
         return R * c;
     };
 
-    const calcularRutaGreedy = (startCoords) => {
-        const unvisited = poolIds.map(id => infantes.find(i => i.id === id)).filter(Boolean);
+    const calcularRutaGreedy = (startCoords, unvisitedList, maxStops) => {
+        let unvisited = [...unvisitedList];
         if (unvisited.length === 0) return [];
         
         let currentPos = startCoords;
         let selectedForRoute = [];
-        let limit = Math.min(quota, MAX_STOPS, unvisited.length);
+        let limit = Math.min(maxStops, MAX_STOPS, unvisited.length);
 
         while (selectedForRoute.length < limit && unvisited.length > 0) {
             let closest = null;
@@ -284,13 +342,20 @@ const PlanificarRutaPage = () => {
                 return;
             }
             selectedInfantes = infantes.filter(i => selectedIds.includes(i.id));
-        } else {
+        } else if (activeTab === 1) {
             if (poolIds.length === 0) {
                 enqueueSnackbar('Añade infantes a tu bolsa de visitas primero.', { variant: 'warning' });
                 return;
             }
-            selectedInfantes = calcularRutaGreedy(startCoords);
-            // Auto update manual selection to reflect what the algorithm picked so the UI aligns
+            const poolInfantes = poolIds.map(id => infantes.find(i => i.id === id)).filter(Boolean);
+            selectedInfantes = calcularRutaGreedy(startCoords, poolInfantes, quota);
+            setSelectedIds(selectedInfantes.map(i => i.id));
+        } else if (activeTab === 2) {
+            if (pendientes.length === 0) {
+                enqueueSnackbar('No tienes infantes pendientes de visita.', { variant: 'warning' });
+                return;
+            }
+            selectedInfantes = calcularRutaGreedy(startCoords, pendientes, quotaPendientes);
             setSelectedIds(selectedInfantes.map(i => i.id));
         }
 
@@ -381,26 +446,38 @@ const PlanificarRutaPage = () => {
     };
 
     const openFinishModal = () => {
-        // Preseleccionar todos los niños de la ruta generada
-        const routeInfanteIds = routeData.stops.filter(s => s.type === 'stop').map(s => s.infante.id);
-        setSuccessfulVisits(routeInfanteIds);
-        setFinishModalOpen(true);
+        if (activeTab === 2) {
+            // En Recomendación, el registro se hace por cada niño en su formulario
+            setRouteData(null);
+            cargarPendientes();
+            if (isNavigating) toggleNavigation();
+            enqueueSnackbar('Ruta de recomendación finalizada.', { variant: 'info' });
+        } else {
+            const routeInfanteIds = routeData.stops.filter(s => s.type === 'stop').map(s => s.infante.id);
+            setSuccessfulVisits(routeInfanteIds);
+            setFinishModalOpen(true);
+        }
     };
 
-    const confirmFinishRoute = () => {
-        // Si estamos en modo lotes, restamos de la bolsa global los visitados exitosamente
-        if (activeTab === 1) {
-            const newPool = poolIds.filter(id => !successfulVisits.includes(id));
-            setPoolIds(newPool);
+    const confirmFinishRoute = async () => {
+        try {
+            // Si estamos en modo lotes, restamos de la bolsa global los visitados exitosamente y guardamos visitas
+            if (activeTab === 1) {
+                await rutasService.completarVisitas(successfulVisits);
+                const newPool = poolIds.filter(id => !successfulVisits.includes(id));
+                setPoolIds(newPool);
+            }
+            
+            // Reset everything
+            setRouteData(null);
+            setSelectedIds([]); 
+            setFinishModalOpen(false);
+            if (isNavigating) toggleNavigation();
+            
+            enqueueSnackbar('Ruta finalizada. Registros de la bolsa actualizados.', { variant: 'success' });
+        } catch (error) {
+            enqueueSnackbar('Error al completar las visitas.', { variant: 'error' });
         }
-        
-        // Reset everything
-        setRouteData(null);
-        setSelectedIds([]); 
-        setFinishModalOpen(false);
-        if (isNavigating) toggleNavigation();
-        
-        enqueueSnackbar('Ruta finalizada. Registros de la bolsa actualizados.', { variant: 'success' });
     };
 
     const mapBounds = useMemo(() => {
@@ -455,6 +532,7 @@ const PlanificarRutaPage = () => {
                         >
                             <Tab label="Ruta Manual" />
                             <Tab label="Campaña / Lotes" />
+                            <Tab label="Recomendación" />
                         </Tabs>
 
                         <Box p={3} flexGrow={1} display="flex" flexDirection="column">
@@ -512,7 +590,7 @@ const PlanificarRutaPage = () => {
                                         ))}
                                     </List>
                                 </>
-                            ) : (
+                            ) : activeTab === 1 ? (
                                 <>
                                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                                         <Typography variant="subtitle2" color="text.secondary">
@@ -548,6 +626,51 @@ const PlanificarRutaPage = () => {
                                         ))}
                                     </List>
                                 </>
+                            ) : (
+                                <>
+                                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Infantes que aún no has visitado exitosamente.
+                                        </Typography>
+                                        <Chip label={`Pendientes: ${pendientes.length}`} color="secondary" size="small" />
+                                    </Box>
+                                    
+                                    <TextField
+                                        label="Infantes a visitar hoy (Cuota)"
+                                        type="number"
+                                        size="small"
+                                        value={quotaPendientes}
+                                        onChange={(e) => setQuotaPendientes(Math.min(MAX_STOPS, Math.max(1, parseInt(e.target.value) || 1)))}
+                                        fullWidth
+                                        sx={{ mb: 2 }}
+                                        helperText={`Máximo ${MAX_STOPS} permitidos`}
+                                    />
+
+                                    <List sx={{ width: '100%', bgcolor: 'background.paper', maxHeight: 230, overflow: 'auto', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                                        {loadingPendientes ? <CircularProgress sx={{ m: 2 }} /> : pendientes.filter(infante => {
+                                            if (searchTerm) {
+                                                const term = searchTerm.toLowerCase();
+                                                const nombreCompleto = `${infante.persona?.nombres || ''} ${infante.persona?.apellidos || ''}`.toLowerCase();
+                                                const codigo = (infante.codigo || '').toLowerCase();
+                                                return nombreCompleto.includes(term) || codigo.includes(term);
+                                            }
+                                            return true;
+                                        }).map((infante) => (
+                                            <ListItem key={infante.id} disablePadding>
+                                                <ListItemButton dense>
+                                                    <ListItemText 
+                                                        primary={`[${infante.codigo}] ${infante.persona.nombres} ${infante.persona.apellidos}`} 
+                                                    />
+                                                </ListItemButton>
+                                            </ListItem>
+                                        ))}
+                                        {pendientes.length === 0 && !loadingPendientes && (
+                                            <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
+                                                ¡Felicidades! Has visitado a todos tus infantes pendientes.
+                                            </Typography>
+                                        )}
+                                    </List>
+                                </>
                             )}
 
                             <Button 
@@ -558,9 +681,9 @@ const PlanificarRutaPage = () => {
                                 sx={{ mt: 3, borderRadius: 3, py: 1.5, fontWeight: 'bold' }}
                                 startIcon={calculating ? <CircularProgress size={20} color="inherit" /> : (activeTab === 1 ? <OptimizeIcon /> : <RouteIcon />)}
                                 onClick={generarRuta}
-                                disabled={calculating || (activeTab === 0 && selectedIds.length === 0) || (activeTab === 1 && poolIds.length === 0) || (originType === 'current' && !currentLocation)}
+                                disabled={calculating || (activeTab === 0 && selectedIds.length === 0) || (activeTab === 1 && poolIds.length === 0) || (activeTab === 2 && pendientes.length === 0) || (originType === 'current' && !currentLocation)}
                             >
-                                {calculating ? 'Optimizando...' : (activeTab === 1 ? 'Generar Ruta Automática' : 'Generar Ruta Óptima')}
+                                {calculating ? 'Optimizando...' : (activeTab === 1 ? 'Generar Ruta Automática' : (activeTab === 2 ? 'Recomendar Ruta' : 'Generar Ruta Óptima'))}
                             </Button>
                         </Box>
                     </Paper>
@@ -651,22 +774,33 @@ const PlanificarRutaPage = () => {
                                 </Box>
 
                                 <Typography variant="subtitle1" fontWeight={700} mb={1}>Orden de Visita</Typography>
-                                <List dense sx={{ display: 'flex', flexDirection: 'row', overflowX: 'auto', p: 0, gap: 1 }}>
+                                <List dense sx={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', maxHeight: 300, p: 0, gap: 1 }}>
                                     {routeData.stops.map((stop, i) => (
-                                        <Paper key={i} variant="outlined" sx={{ minWidth: 200, p: 1.5, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                            <Avatar sx={{ bgcolor: i === 0 ? 'success.main' : 'error.main', width: 32, height: 32, fontSize: '1rem' }}>
-                                                {i === 0 ? 'S' : i}
-                                            </Avatar>
-                                            <Box>
-                                                <Typography variant="body2" fontWeight="bold" noWrap sx={{ maxWidth: 140 }}>
-                                                    {i === 0 ? 'Inicio' : stop.label}
-                                                </Typography>
-                                                {i !== 0 && (
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {stop.infante?.tutor?.persona?.nombres || 'Sin tutor'}
+                                        <Paper key={i} variant="outlined" sx={{ p: 1.5, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
+                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                <Avatar sx={{ bgcolor: i === 0 ? 'success.main' : 'error.main', width: 32, height: 32, fontSize: '1rem' }}>
+                                                    {i === 0 ? 'S' : i}
+                                                </Avatar>
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight="bold">
+                                                        {i === 0 ? 'Inicio' : stop.label}
                                                     </Typography>
-                                                )}
+                                                    {i !== 0 && (
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {stop.infante?.tutor?.persona?.nombres || 'Sin tutor'}
+                                                        </Typography>
+                                                    )}
+                                                </Box>
                                             </Box>
+                                            {activeTab === 2 && i !== 0 && (
+                                                <Button 
+                                                    variant="outlined" 
+                                                    size="small" 
+                                                    onClick={() => window.open(`/visitas?registrarVisitaPara=${stop.infante.id}`, '_blank')}
+                                                >
+                                                    Llenar Formulario
+                                                </Button>
+                                            )}
                                         </Paper>
                                     ))}
                                 </List>

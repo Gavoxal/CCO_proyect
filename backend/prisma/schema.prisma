@@ -88,6 +88,7 @@ model Infante {
   tutor                  Tutor?             @relation(fields: [tutorId], references: [id])
   regalos                Regalo[]
   visitas                Visita[]
+  bolsaVisitas           BolsaVisita[]
   reportes_incidentes    ReporteIncidente[] @relation("incidenteinfantes")
 
   @@index([tutorId], map: "infantes_tutorId_fkey")
@@ -106,6 +107,7 @@ model Tutor {
   infantes               Infante[]
   persona                Persona   @relation(fields: [personaId], references: [id])
   visitasRealizadas      Visita[]
+  bolsaVisitas           BolsaVisita[]
 
   @@map("tutores")
 }
@@ -313,4 +315,17 @@ enum DecisionVisita {
   ContinuaMinisterio
   DarDeBaja
   Otra
+}
+
+model BolsaVisita {
+  id        Int      @id @default(autoincrement())
+  tutorId   Int
+  infanteId Int
+  createdAt DateTime @default(now())
+
+  tutor     Tutor    @relation(fields: [tutorId], references: [id])
+  infante   Infante  @relation(fields: [infanteId], references: [id])
+
+  @@unique([tutorId, infanteId])
+  @@map("bolsa_visitas")
 }

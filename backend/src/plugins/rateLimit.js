@@ -11,16 +11,6 @@ async function rateLimitPlugin(fastify) {
         })
     })
 
-    // Rate limit más estricto solo para el login
-    // Permite 5 intentos cada 5 minutos por IP
-    fastify.addHook('preHandler', (request, reply, done) => {
-        if (request.url === '/api/v1/auth/login' && request.method === 'POST') {
-            // fastify-rate-limit permite configurar overrides o usar la API programática
-            // Para simplicidad aquí, usaremos la configuración por ruta si es posible, 
-            // pero como este plugin es global, aplicamos una lógica simple o recomendación.
-        }
-        done()
-    })
 }
 
 export default fp(rateLimitPlugin, { name: 'rateLimit' })

@@ -28,7 +28,7 @@ const CCO = { amarillo: '#FFD700', naranja: '#FF8C00', violeta: '#6A5ACD', azul:
 
 
 // Generador simplificado
-const generarCodigo = () => `INF-${Math.floor(Date.now() / 1000)}`;
+const generarCodigo = () => `EC0802${Math.floor(10000 + Math.random() * 90000)}`;
 
 const EMPTY_FORM = {
     codigo: '',
@@ -314,154 +314,152 @@ const InfanteFormPage = () => {
                             <IdIcon sx={{ color: CCO.azul, fontSize: 20 }} />
                             <Typography variant="subtitle1" fontWeight={700}>Identificación del Infante</Typography>
                         </Box>
-                        <Grid container spacing={2.5}>
-
-                            {/* Código del infante */}
-                            <Grid item xs={12} sm={6} md={3}>
-                                <TextField fullWidth label="Código del Infante" value={form.codigo}
-                                    onChange={e => set('codigo', e.target.value)}
-                                    size="small"
-                                    disabled={isRestrictedEditing}
-                                    helperText="Formato: EC0802XXXXX"
-                                    sx={{ '& input': { fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 } }}
-                                />
-                            </Grid>
-
-                            {/* Tipo Programa */}
-                            <Grid item xs={12} sm={6} md={3}>
-                                <TextField fullWidth select label="Tipo de Programa" value={form.tipoPrograma || 'Ministerio'}
-                                    disabled={isRestrictedEditing}
-                                    onChange={e => set('tipoPrograma', e.target.value)} size="small"
-                                    SelectProps={{ displayEmpty: true }}>
-                                    <MenuItem value="Ministerio">Ministerio</MenuItem>
-                                    <MenuItem value="Comedor">Comedor</MenuItem>
-                                    <MenuItem value="Ambos">Ambos</MenuItem>
-                                </TextField>
-                            </Grid>
-
-                            {/* Patrocinio — switch simple */}
-                            <Grid item xs={12} sm={6} md={3}>
-                                <Box sx={{
-                                    border: `1.5px solid`,
-                                    borderColor: form.esPatrocinado ? alpha('#4caf50', 0.5) : theme.palette.divider,
-                                    borderRadius: 2.5, px: 2, py: 1,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    bgcolor: form.esPatrocinado ? alpha('#4caf50', 0.06) : 'transparent',
-                                    transition: 'all .2s ease', cursor: isRestrictedEditing ? 'default' : 'pointer',
-                                    height: '100%', minHeight: 48,
-                                    opacity: isRestrictedEditing ? 0.8 : 1
-                                }} onClick={() => {
-                                    if (isRestrictedEditing) return;
-                                    const next = !form.esPatrocinado;
-                                    setForm(f => ({
-                                        ...f,
-                                        esPatrocinado: next,
-                                        fuentePatrocinio: next ? 'Compassion' : 'Ninguno'
-                                    }));
-                                }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        {form.esPatrocinado
-                                            ? <CheckedIcon sx={{ color: 'success.main', fontSize: 20 }} />
-                                            : <UncheckedIcon sx={{ color: 'text.disabled', fontSize: 20 }} />}
-                                        <Box>
-                                            <Typography variant="body2" fontWeight={700}
-                                                color={form.esPatrocinado ? 'success.main' : 'text.secondary'}>
-                                                {form.esPatrocinado ? 'Patrocinado' : 'No Patrocinado'}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.disabled">
-                                                {isRestrictedEditing ? 'Lectura' : 'Toca para cambiar'}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                    <Switch
-                                        checked={form.esPatrocinado}
+                        <Grid container spacing={3.5} sx={{ mt: 1 }}>
+                            {/* Columna Izquierda: Foto del Infante */}
+                            <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <Typography variant="body2" fontWeight={700} sx={{ mb: 2, alignSelf: 'flex-start' }}>Foto del Infante</Typography>
+                                <Avatar
+                                    src={form.foto ? (form.foto.startsWith('data:') ? form.foto : getImageUrl(form.foto)) : undefined}
+                                    sx={{
+                                        width: 140, height: 140, border: `2px dashed`,
+                                        borderColor: form.foto ? alpha(CCO.violeta, 0.5) : theme.palette.divider,
+                                        bgcolor: form.foto ? 'transparent' : alpha(CCO.azul, 0.06),
+                                        mb: 2
+                                    }}
+                                >
+                                    {!form.foto && <ChildIcon sx={{ fontSize: 60, color: alpha(CCO.azul, 0.4) }} />}
+                                </Avatar>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%', maxWidth: 200 }}>
+                                    <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{ display: 'none' }} />
+                                    <Button variant="outlined" startIcon={<CameraIcon />}
+                                        onClick={() => fotoRef.current?.click()}
                                         disabled={isRestrictedEditing}
-                                        onChange={e => {
-                                            e.stopPropagation();
-                                            const val = e.target.checked;
+                                        size="small" sx={{ borderRadius: 2, fontWeight: 700 }}>
+                                        {form.foto ? 'Cambiar foto' : 'Subir foto'}
+                                    </Button>
+                                    {form.foto && (
+                                        <Button variant="text" color="error" startIcon={<DeleteIcon />}
+                                            disabled={isRestrictedEditing}
+                                            onClick={() => set('foto', '')} size="small"
+                                            sx={{ borderRadius: 2, fontWeight: 700 }}>
+                                            Quitar foto
+                                        </Button>
+                                    )}
+                                    <Typography variant="caption" color="text.disabled" textAlign="center" sx={{ mt: 1 }}>
+                                        JPG, PNG o WEBP · Máx. 5 MB
+                                    </Typography>
+                                </Box>
+                            </Grid>
+
+                            {/* Columna Derecha: Campos de Identificación */}
+                            <Grid item xs={12} md={8}>
+                                <Grid container spacing={2.5}>
+                                    {/* Fila 1: Código del infante y Tipo Programa */}
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField fullWidth label="Código del Infante" value={form.codigo}
+                                            onChange={e => set('codigo', e.target.value)}
+                                            size="small"
+                                            disabled={isRestrictedEditing}
+                                            helperText="Formato: EC0802XXXXX"
+                                            sx={{ '& input': { fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 } }}
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField fullWidth select label="Tipo de Programa" value={form.tipoPrograma || 'Ministerio'}
+                                            disabled={isRestrictedEditing}
+                                            onChange={e => set('tipoPrograma', e.target.value)} size="small"
+                                            SelectProps={{ displayEmpty: true }}>
+                                            <MenuItem value="Ministerio">Ministerio</MenuItem>
+                                            <MenuItem value="Comedor">Comedor</MenuItem>
+                                            <MenuItem value="Ambos">Ambos</MenuItem>
+                                        </TextField>
+                                    </Grid>
+
+                                    {/* Fila 2: Patrocinio y Fuente */}
+                                    <Grid item xs={12} sm={6}>
+                                        <Box sx={{
+                                            border: `1.5px solid`,
+                                            borderColor: form.esPatrocinado ? alpha('#4caf50', 0.5) : theme.palette.divider,
+                                            borderRadius: 2.5, px: 2, py: 1,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            bgcolor: form.esPatrocinado ? alpha('#4caf50', 0.06) : 'transparent',
+                                            transition: 'all .2s ease', cursor: isRestrictedEditing ? 'default' : 'pointer',
+                                            height: '100%', minHeight: 48,
+                                            opacity: isRestrictedEditing ? 0.8 : 1
+                                        }} onClick={() => {
+                                            if (isRestrictedEditing) return;
+                                            const next = !form.esPatrocinado;
                                             setForm(f => ({
                                                 ...f,
-                                                esPatrocinado: val,
-                                                fuentePatrocinio: val ? 'Compassion' : 'Ninguno'
+                                                esPatrocinado: next,
+                                                fuentePatrocinio: next ? 'Compassion' : 'Ninguno'
                                             }));
-                                        }}
-                                        color="success"
-                                    />
-                                </Box>
-                            </Grid>
-
-                            {/* Fuente Patrocinio */}
-                            <Grid item xs={12} sm={6} md={3}>
-                                <TextField fullWidth select label="Fuente de Patrocinio" value={form.esPatrocinado ? (form.fuentePatrocinio || 'Compassion') : 'Ninguno'}
-                                    disabled={!form.esPatrocinado || isRestrictedEditing}
-                                    onChange={e => set('fuentePatrocinio', e.target.value)} size="small"
-                                    SelectProps={{ displayEmpty: true }}>
-                                    <MenuItem value="Ninguno" disabled><em>Ninguno</em></MenuItem>
-                                    <MenuItem value="Compassion">Compassion</MenuItem>
-                                </TextField>
-                            </Grid>
-
-                            {/* Foto del infante */}
-                            <Grid item xs={12}>
-                                <Typography variant="body2" fontWeight={700} sx={{ mb: 1.5 }}>Foto del Infante</Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
-                                    <Avatar
-                                        src={form.foto ? (form.foto.startsWith('data:') ? form.foto : getImageUrl(form.foto)) : undefined}
-                                        sx={{
-                                            width: 100, height: 100, border: `2px dashed`,
-                                            borderColor: form.foto ? alpha(CCO.violeta, 0.5) : theme.palette.divider,
-                                            bgcolor: form.foto ? 'transparent' : alpha(CCO.azul, 0.06),
-                                        }}
-                                    >
-                                        {!form.foto && <ChildIcon sx={{ fontSize: 44, color: alpha(CCO.azul, 0.4) }} />}
-                                    </Avatar>
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                        <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{ display: 'none' }} />
-                                        <Button variant="outlined" startIcon={<CameraIcon />}
-                                            onClick={() => fotoRef.current?.click()}
-                                            disabled={isRestrictedEditing}
-                                            size="small" sx={{ borderRadius: 2, fontWeight: 700 }}>
-                                            {form.foto ? 'Cambiar foto' : 'Subir foto'}
-                                        </Button>
-                                        {form.foto && (
-                                            <Button variant="text" color="error" startIcon={<DeleteIcon />}
+                                        }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                {form.esPatrocinado
+                                                    ? <CheckedIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                                    : <UncheckedIcon sx={{ color: 'text.disabled', fontSize: 20 }} />}
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight={700}
+                                                        color={form.esPatrocinado ? 'success.main' : 'text.secondary'}>
+                                                        {form.esPatrocinado ? 'Patrocinado' : 'No Patrocinado'}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.disabled">
+                                                        {isRestrictedEditing ? 'Lectura' : 'Toca para cambiar'}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                            <Switch
+                                                checked={form.esPatrocinado}
                                                 disabled={isRestrictedEditing}
-                                                onClick={() => set('foto', '')} size="small"
-                                                sx={{ borderRadius: 2, fontWeight: 700 }}>
-                                                Quitar foto
-                                            </Button>
-                                        )}
-                                        <Typography variant="caption" color="text.disabled">
-                                            JPG, PNG o WEBP · Máx. 5 MB
-                                        </Typography>
-                                    </Box>
-                                </Box>
-                            </Grid>
+                                                onChange={e => {
+                                                    e.stopPropagation();
+                                                    const val = e.target.checked;
+                                                    setForm(f => ({
+                                                        ...f,
+                                                        esPatrocinado: val,
+                                                        fuentePatrocinio: val ? 'Compassion' : 'Ninguno'
+                                                    }));
+                                                }}
+                                                color="success"
+                                            />
+                                        </Box>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField fullWidth select label="Fuente de Patrocinio" value={form.esPatrocinado ? (form.fuentePatrocinio || 'Compassion') : 'Ninguno'}
+                                            disabled={!form.esPatrocinado || isRestrictedEditing}
+                                            onChange={e => set('fuentePatrocinio', e.target.value)} size="small"
+                                            SelectProps={{ displayEmpty: true }}>
+                                            <MenuItem value="Ninguno" disabled><em>Ninguno</em></MenuItem>
+                                            <MenuItem value="Compassion">Compassion</MenuItem>
+                                        </TextField>
+                                    </Grid>
 
-                            {/* Enfermedades y alergias */}
-                             <Grid item xs={12} sm={6}>
-                                <TextField fullWidth label="Enfermedades" value={form.enfermedades}
-                                    disabled={isRestrictedEditing}
-                                    onChange={e => set('enfermedades', e.target.value)} size="small" multiline rows={2}
-                                    placeholder="Ninguna conocida..." />
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <TextField fullWidth label="Alergias" value={form.alergias}
-                                    disabled={isRestrictedEditing}
-                                    onChange={e => set('alergias', e.target.value)} size="small" multiline rows={2}
-                                    placeholder="Ninguna conocida..." />
-                            </Grid>
+                                    {/* Fila 3: Enfermedades y Alergias */}
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField fullWidth label="Enfermedades" value={form.enfermedades}
+                                            disabled={isRestrictedEditing}
+                                            onChange={e => set('enfermedades', e.target.value)} size="small" multiline rows={2}
+                                            placeholder="Ninguna conocida..." />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField fullWidth label="Alergias" value={form.alergias}
+                                            disabled={isRestrictedEditing}
+                                            onChange={e => set('alergias', e.target.value)} size="small" multiline rows={2}
+                                            placeholder="Ninguna conocida..." />
+                                    </Grid>
 
-                            {/* Tarifa Diaria Comedor */}
-                            <Grid item xs={12} sm={6}>
-                                <TextField fullWidth label="Tarifa Diaria Comedor ($)" value={form.tarifaDiaria}
-                                    type="number"
-                                    inputProps={{ step: 0.25 }}
-                                    disabled={isRestrictedEditing}
-                                    onChange={e => set('tarifaDiaria', e.target.value)} size="small"
-                                    helperText="Valor que paga el niño por cada día de asistencia (Ej: 0.50 o 1.00)" />
+                                    {/* Fila 4: Tarifa Diaria Comedor */}
+                                    <Grid item xs={12}>
+                                        <TextField fullWidth label="Tarifa Diaria Comedor ($)" value={form.tarifaDiaria}
+                                            type="number"
+                                            inputProps={{ step: 0.25 }}
+                                            disabled={isRestrictedEditing}
+                                            onChange={e => set('tarifaDiaria', e.target.value)} size="small"
+                                            helperText="Valor que paga el niño por cada día de asistencia (Ej: 0.50 o 1.00)" />
+                                    </Grid>
+                                </Grid>
                             </Grid>
-
                         </Grid>
                     </CardContent>
                 </Card>

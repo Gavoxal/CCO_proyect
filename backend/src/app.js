@@ -28,6 +28,7 @@ import eventosRoutes from './modules/eventos/eventos.routes.js'
 import notificacionesRoutes from './modules/notificaciones/notificaciones.routes.js'
 import importRoutes from './modules/import/import.routes.js'
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
+import rutasRoutes from './modules/rutas/rutas.routes.js'
 
 export async function buildApp() {
     const app = Fastify({
@@ -130,6 +131,7 @@ export async function buildApp() {
     app.register(notificacionesRoutes, { prefix: `${API_PREFIX}/notificaciones` })
     app.register(importRoutes, { prefix: `${API_PREFIX}/import` })
     app.register(dashboardRoutes, { prefix: `${API_PREFIX}/dashboard` })
+    app.register(rutasRoutes, { prefix: `${API_PREFIX}/rutas` })
 
     // ── Manejador de errores global ─────────────────────────
     app.setErrorHandler((error, request, reply) => {

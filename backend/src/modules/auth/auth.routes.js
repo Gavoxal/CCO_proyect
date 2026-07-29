@@ -6,7 +6,7 @@ export default async function authRoutes(fastify) {
         config: {
             rateLimit: {
                 max: 5,
-                timeWindow: '5 minutes'
+                timeWindow: '10 minutes'
             }
         },
         schema: {

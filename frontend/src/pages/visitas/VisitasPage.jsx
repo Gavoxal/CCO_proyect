@@ -108,7 +108,7 @@ export default function VisitasPage() {
                 limit: histRowsPerPage
             });
             setVisitas(res.data);
-            setTotal(res.total);
+            setTotal(res.meta ? res.meta.total : res.total);
         } catch (error) {
             enqueueSnackbar('Error al cargar visitas', { variant: 'error' });
         } finally {
@@ -127,7 +127,7 @@ export default function VisitasPage() {
                 limit: pendRowsPerPage
             });
             setPendientes(res.data);
-            setTotalPendientes(res.total);
+            setTotalPendientes(res.meta ? res.meta.total : res.total);
         } catch (error) {
             enqueueSnackbar('Error al cargar pendientes', { variant: 'error' });
         } finally {
@@ -160,12 +160,16 @@ export default function VisitasPage() {
     useEffect(() => {
         cargarInfantes();
         cargarTutores();
-        // Revisar si venimos desde el detalle de un infante
-        if (location.state?.registrarVisitaPara) {
-            setForm(f => ({ ...f, infanteId: location.state.registrarVisitaPara }));
+        
+        // Revisar si venimos desde el detalle de un infante (state) o desde la recomendación de rutas (query params)
+        const queryParams = new URLSearchParams(location.search);
+        const registrarId = location.state?.registrarVisitaPara || parseInt(queryParams.get('registrarVisitaPara'));
+
+        if (registrarId) {
+            setForm(f => ({ ...f, infanteId: registrarId }));
             setTabIndex(2); // Ir a la pestaña de registro
         }
-    }, [location.state]);
+    }, [location.state, location.search]);
 
     useEffect(() => {
         if (tabIndex === 0) cargarVisitas();
@@ -193,7 +197,7 @@ export default function VisitasPage() {
 
                 const registros = res.data || [];
                 const dataToExport = registros.map(v => ({
-                Fecha: new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                Fecha: new Date(v.fecha).toLocaleDateString('es-EC', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }),
                 Código: v.infante.codigo,
                 Infante: `${v.infante.persona.nombres} ${v.infante.persona.apellidos}`,
                 Tutor: v.tutor?.nombre || (v.infante.tutor ? `${v.infante.tutor.persona.nombres} ${v.infante.tutor.persona.apellidos}` : 'N/A'),
@@ -228,7 +232,7 @@ export default function VisitasPage() {
     const [form, setForm] = useState({
         infanteId: null,
         tutorId: null,
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
         visitaExitosa: 'SI',
         razon: '',
         resultados: '',
@@ -241,7 +245,7 @@ export default function VisitasPage() {
         setForm({
             infanteId: null,
             tutorId: null,
-            fecha: new Date().toISOString().split('T')[0],
+            fecha: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
             visitaExitosa: 'SI',
             razon: '',
             resultados: '',
@@ -340,7 +344,7 @@ export default function VisitasPage() {
         doc.setFontSize(10);
         doc.text(`Nombre: ${v.infante.persona.nombres} ${v.infante.persona.apellidos}`, 20, 65);
         doc.text(`Código: ${v.infante.codigo}`, 20, 72);
-        doc.text(`Fecha de Visita: ${new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' })}`, 120, 65);
+        doc.text(`Fecha de Visita: ${new Date(v.fecha).toLocaleDateString('es-EC', { timeZone: 'UTC', day: '2-digit', month: 'long', year: 'numeric' })}`, 120, 65);
         
         const tutorNombre = v.tutor?.nombre || (v.infante.tutor ? `${v.infante.tutor.persona.nombres} ${v.infante.tutor.persona.apellidos}` : 'N/A');
         doc.text(`Tutor Responsable: ${tutorNombre}`, 120, 72);
@@ -495,25 +499,40 @@ export default function VisitasPage() {
                         {tabIndex === 0 ? (
                             /* ─── HISTORIAL ─────────────────────────────────── */
                             <Box>
-                                <Grid container spacing={2.5} sx={{ mb: 4 }} alignItems="center">
-                                    <Grid item xs={12} md={6}>
-                                        <TextField
-                                            size="small"
-                                            fullWidth
-                                            placeholder="Buscar por infante o código..."
-                                            value={searchHist}
-                                            onChange={e => setSearchHist(e.target.value)}
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <SearchIcon fontSize="small" />
-                                                    </InputAdornment>
-                                                ),
-                                                sx: { borderRadius: 2 }
-                                            }}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={6} md={3}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.5, mb: 4, alignItems: 'center' }}>
+                                    <TextField
+                                        size="small"
+                                        fullWidth
+                                        placeholder="Buscar por infante o código..."
+                                        value={searchHist}
+                                        onChange={e => setSearchHist(e.target.value)}
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    <SearchIcon fontSize="small" />
+                                                </InputAdornment>
+                                            ),
+                                            sx: { borderRadius: 2 }
+                                        }}
+                                    />
+                                    <Autocomplete
+                                        size="small"
+                                        options={tutoresLista}
+                                        getOptionLabel={(option) => `${option.persona?.nombres} ${option.persona?.apellidos}`}
+                                        value={tutoresLista.find(t => t.id === filtroTutor) || null}
+                                        onChange={(_, newValue) => { setFiltroTutor(newValue?.id || ''); setHistPage(0); }}
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                label="Filtrar por Tutor"
+                                                InputProps={{
+                                                    ...params.InputProps,
+                                                    sx: { borderRadius: 2 }
+                                                }}
+                                            />
+                                        )}
+                                    />
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2.5 }}>
                                         <TextField
                                             select
                                             fullWidth
@@ -527,13 +546,6 @@ export default function VisitasPage() {
                                                 <MenuItem key={a} value={a}>{a} - {a + 1}</MenuItem>
                                             ))}
                                         </TextField>
-                                    </Grid>
-                                    <Grid item xs={6} md={3}>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                            Rango: {formatLongDate(schoolYear.start)} - {formatLongDate(schoolYear.end)}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={12} md={4}>
                                         <TextField
                                             select
                                             fullWidth
@@ -547,27 +559,13 @@ export default function VisitasPage() {
                                                 <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
                                             ))}
                                         </TextField>
-                                    </Grid>
-                                    <Grid item xs={12} md={4}>
-                                        <Autocomplete
-                                            size="small"
-                                            options={tutoresLista}
-                                            getOptionLabel={(option) => `${option.persona?.nombres} ${option.persona?.apellidos}`}
-                                            value={tutoresLista.find(t => t.id === filtroTutor) || null}
-                                            onChange={(_, newValue) => { setFiltroTutor(newValue?.id || ''); setHistPage(0); }}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Filtrar por Tutor"
-                                                    InputProps={{
-                                                        ...params.InputProps,
-                                                        sx: { borderRadius: 2 }
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
-                                </Grid>
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                            Rango consultado: {formatLongDate(schoolYear.start)} - {formatLongDate(schoolYear.end)}
+                                        </Typography>
+                                    </Box>
+                                </Box>
 
                                 <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                                     <Chip
@@ -595,7 +593,7 @@ export default function VisitasPage() {
                                             {visitas.map((v) => (
                                                 <TableRow key={v.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                                     <TableCell sx={{ fontWeight: 500 }}>
-                                                        {new Date(v.fecha).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        {new Date(v.fecha).toLocaleDateString('es-EC', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </TableCell>
                                                     <TableCell sx={{ minWidth: 200 }}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
