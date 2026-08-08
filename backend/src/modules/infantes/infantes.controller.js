@@ -145,7 +145,8 @@ export async function crear(request, reply) {
     } catch (error) {
         // Manejar errores de unicidad (código o cédula duplicados)
         if (error.code === 'P2002') {
-            const campo = error.meta?.target?.join(', ') || 'campo único'
+            const target = error.meta?.target
+            const campo = Array.isArray(target) ? target.join(', ') : (target || 'campo único')
             return badRequest(reply, `Ya existe un registro con ese valor de ${campo}`)
         }
         request.server.log.error('Error al crear infante:', error)

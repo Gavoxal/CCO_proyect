@@ -34,6 +34,13 @@ export async function listar(request, reply) {
 export async function listarTutores(request, reply) {
     const db = request.server.db
     const tutores = await db.tutor.findMany({
+        where: {
+            persona: {
+                usuario: {
+                    activo: true
+                }
+            }
+        },
         select: {
             id: true,
             persona: { select: { nombres: true, apellidos: true } }
@@ -194,15 +201,26 @@ export async function eliminar(request, reply) {
     const db = request.server.db
     const id = parseInt(request.params.id)
     try {
+        const usuario = await db.usuario.findUnique({ where: { id } })
+        if (!usuario) return notFound(reply)
+
         await db.usuario.delete({ where: { id } })
-        return noContent(reply)
-    } catch (error) {
-        if (error?.code === 'P2025') {
-            return notFound(reply)
+
+        // Intento de borrar Tutor y Persona asociados si quedaron huérfanos
+        if (usuario.personaId) {
+            try {
+                const tutor = await db.tutor.findUnique({ where: { personaId: usuario.personaId } })
+                if (tutor) await db.tutor.delete({ where: { id: tutor.id } })
+                await db.persona.delete({ where: { id: usuario.personaId } })
+            } catch (e) {
+                // Si la persona tiene otras relaciones, se ignora
+            }
         }
+        return ok(reply, { message: 'Usuario eliminado permanentemente' })
+    } catch (error) {
         if (error?.code === 'P2003') {
             await db.usuario.update({ where: { id }, data: { activo: false } })
-            return noContent(reply)
+            return reply.status(400).send({ error: 'El usuario tiene registros (como visitas o infantes). No se puede eliminar de forma definitiva, por lo que se ha desactivado.' })
         }
         return reply.status(500).send({ error: 'Error eliminando usuario' })
     }

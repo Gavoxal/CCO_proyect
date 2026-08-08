@@ -428,14 +428,14 @@ function UsuarioDetailModal({ open, item, onClose }) {
 }
 
 // ─── CARD DE USUARIO ─────────────────────────────────────────
-function UsuarioCard({ item, canEdit, onEditar, onToggleActivo, onVerDetalle }) {
+function UsuarioCard({ item, canEdit, onEditar, onToggleActivo, onVerDetalle, onEliminar }) {
     const theme = useTheme();
     const cfg = ROLES[item.rol] || { label: item.rol, color: '#777' };
     return (
         <Card elevation={0} sx={{
             borderRadius: 3, border: '1.5px solid',
             borderColor: item.activo ? 'divider' : alpha('#f44336', 0.3),
-            transition: 'all 0.2s ease', height: '100%', display: 'flex', flexDirection: 'column',
+            transition: 'all 0.2s ease', height: '100%', display: 'flex', flexDirection: 'column', width: '100%',
             opacity: item.activo ? 1 : 0.75,
             cursor: 'pointer',
             '&:hover': {
@@ -452,7 +452,7 @@ function UsuarioCard({ item, canEdit, onEditar, onToggleActivo, onVerDetalle }) 
                         foto={item.persona?.tutor?.fotografia}
                         size={44} 
                     />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <Typography variant="body2" fontWeight={800} noWrap title={item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username}>
                             {item.persona ? `${item.persona.nombres} ${item.persona.apellidos}` : item.username}
                         </Typography>
@@ -489,6 +489,12 @@ function UsuarioCard({ item, canEdit, onEditar, onToggleActivo, onVerDetalle }) 
                         <IconButton size="small" onClick={() => onEditar(item)}
                             sx={{ bgcolor: alpha(CCO.azul, 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha(CCO.azul, 0.18) } }}>
                             <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Eliminar" arrow>
+                        <IconButton size="small" onClick={() => onEliminar(item)}
+                            sx={{ bgcolor: alpha('#f44336', 0.08), borderRadius: 1.5, '&:hover': { bgcolor: alpha('#f44336', 0.18) } }}>
+                            <DeleteIcon fontSize="small" sx={{ color: '#f44336' }} />
                         </IconButton>
                     </Tooltip>
                 </CardActions>
@@ -604,6 +610,18 @@ export default function UsuariosPage() {
         }
     };
 
+    const handleEliminar = async (item) => {
+        if (!window.confirm(`¿Estás seguro de eliminar permanentemente a ${item.username}?`)) return;
+        try {
+            await usuariosService.eliminar(item.id);
+            enqueueSnackbar('Usuario eliminado permanentemente', { variant: 'success' });
+            cargar();
+        } catch (error) {
+            enqueueSnackbar(error.response?.data?.error || 'Error eliminando usuario', { variant: 'error' });
+            cargar(); // Refrescar porque el backend pudo haberlo desactivado
+        }
+    };
+
     // ── Estadísticas ──────────────────────────────────────────
     const stats = useMemo(() => ({
         total: rows.length,
@@ -672,7 +690,12 @@ export default function UsuariosPage() {
                             <EditIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
-
+                    <Tooltip title="Eliminar" arrow>
+                        <IconButton size="small" onClick={() => handleEliminar(r)}
+                            sx={{ bgcolor: alpha('#f44336', 0.08), borderRadius: 1.5 }}>
+                            <DeleteIcon fontSize="small" sx={{ color: '#f44336' }} />
+                        </IconButton>
+                    </Tooltip>
                 </Stack>
             )
         },
@@ -814,6 +837,7 @@ export default function UsuariosPage() {
                                         onEditar={(r) => setFormModal({ open: true, tipo: 'editar', item: r })}
                                         onToggleActivo={handleToggleActivo}
                                         onVerDetalle={(r) => setDetailModal({ open: true, item: r })}
+                                        onEliminar={handleEliminar}
                                     />
                                 </Grid>
                             ))}

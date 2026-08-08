@@ -659,7 +659,7 @@ function FotoModal({ open, item, onClose, onSubirFoto }) {
                         </Stack>
                     )}
                 </Box>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile} />
+                <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
                     Optimización automática · Formatos: JPG, PNG, WebP
                 </Typography>

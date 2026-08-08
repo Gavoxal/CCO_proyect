@@ -1083,7 +1083,7 @@ export default function VisitasPage() {
                                                                 <>
                                                                     <IconButton color="primary" component="label" sx={{ bgcolor: alpha(CCO.naranja, 0.15), mb: 2, p: 2 }}>
                                                                         <PhotoIcon fontSize="large" sx={{ color: CCO.naranja }} />
-                                                                        <input type="file" hidden accept="image/*" capture="environment" onChange={async (e) => {
+                                                                        <input type="file" hidden accept="image/*" onChange={async (e) => {
                                                                             const file = e.target.files[0];
                                                                             if (!file) return;
                                                                             if (file.size > 30 * 1024 * 1024) {

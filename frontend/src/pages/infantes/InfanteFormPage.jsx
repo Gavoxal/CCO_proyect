@@ -330,7 +330,7 @@ const InfanteFormPage = () => {
                                     {!form.foto && <ChildIcon sx={{ fontSize: 60, color: alpha(CCO.azul, 0.4) }} />}
                                 </Avatar>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%', maxWidth: 200 }}>
-                                    <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{ display: 'none' }} />
+                                    <input ref={fotoRef} type="file" accept="image/*" onChange={handleFoto} style={{ display: 'none' }} />
                                     <Button variant="outlined" startIcon={<CameraIcon />}
                                         onClick={() => fotoRef.current?.click()}
                                         disabled={isRestrictedEditing}
@@ -496,8 +496,8 @@ const InfanteFormPage = () => {
                                     slotProps={{ inputLabel: { shrink: true } }} />
                             </Grid>
                             <Grid item xs={12} sm={4}>
-                                <TextField fullWidth label="Cédula" value={form.persona.cedula}
-                                    disabled={isRestrictedEditing}
+                                <TextField fullWidth label="Cédula *" value={form.persona.cedula}
+                                    disabled={isRestrictedEditing} required
                                     onChange={e => setP('cedula', e.target.value)} size="small" placeholder="0900000000" />
                             </Grid>
                             <Grid item xs={12} sm={4}>
