@@ -53,7 +53,7 @@ export async function listar(request, reply) {
                     tutor: { include: { persona: true } },
                     visitas: { take: 1, orderBy: { fecha: 'desc' } }
                 },
-                orderBy: [{ persona: { apellidos: 'asc' } }]
+                orderBy: [{ codigo: 'asc' }]
             })
         ])
 

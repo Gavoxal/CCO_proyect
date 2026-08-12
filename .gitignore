@@ -10,3 +10,4 @@ nginx.conf
 
 # Node
 package-lock.json
+.env
