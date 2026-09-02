@@ -39,7 +39,7 @@ const EMPTY_FORM = {
     enfermedades: '',
     alergias: '',
     tutorId: '',
-    tarifaDiaria: 0.50,
+    tarifaDiaria: 0.60,
     persona: {
         nombres: '', apellidos: '',
         fechaNacimiento: '',
@@ -188,7 +188,7 @@ const InfanteFormPage = () => {
                         fuentePatrocinio: db.fuentePatrocinio || 'Ninguno',
                         enfermedades: db.enfermedades || '',
                         alergias: db.alergias || '',
-                        tarifaDiaria: db.tarifaDiaria || 0.50,
+                        tarifaDiaria: db.tarifaDiaria !== undefined && db.tarifaDiaria !== null ? db.tarifaDiaria : 0.60,
                         persona: {
                             nombres: db.persona?.nombres || '',
                             apellidos: db.persona?.apellidos || '',

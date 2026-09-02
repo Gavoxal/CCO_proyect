@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE `personas` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `nombres` VARCHAR(255) NOT NULL,
@@ -71,7 +71,7 @@ CREATE TABLE `infantes` (
     `fechaActualizacionFoto` DATE NULL,
     `personaId` INTEGER NOT NULL,
     `tutorId` INTEGER NULL,
-    `tarifaDiaria` DECIMAL(10, 2) NOT NULL DEFAULT 0.50,
+    `tarifaDiaria` DECIMAL(10, 2) NOT NULL DEFAULT 0.60,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -102,6 +102,7 @@ CREATE TABLE `asistencias` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `fecha` DATE NOT NULL,
     `estado` ENUM('Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto', 'Ausente') NOT NULL DEFAULT 'Ausente',
+    `montoPagado` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     `infanteId` INTEGER NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,

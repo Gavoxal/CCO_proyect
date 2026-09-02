@@ -7,7 +7,7 @@ import {
     Tab, Tabs, Table, TableBody, TableCell, TableHead, TableRow,
     TablePagination, LinearProgress, Divider, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    MenuItem, Popover, TableContainer,
+    MenuItem, Popover, TableContainer, Radio, RadioGroup, FormControlLabel,
 } from '@mui/material';
 import {
     Save as SaveIcon, ChecklistRtl as AsistenciaIcon,
@@ -18,6 +18,9 @@ import {
     Cancel as CancelIcon, WatchLater as PendingIcon,
     Payment as PaymentIcon, Edit as EditIcon,
     DeleteForever as DeleteFechaIcon,
+    AccountBalanceWallet as WalletIcon,
+    AttachMoney as MoneyIcon,
+    PriceCheck as PriceCheckIcon,
 } from '@mui/icons-material';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import * as XLSX from 'xlsx';
@@ -111,6 +114,7 @@ const AsistenciaPage = () => {
 
     const [infantes, setInfantes] = useState([]);
     const [estados, setEstados] = useState({});
+    const [montosPagados, setMontosPagados] = useState({});
     const [historial, setHistorial] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -120,6 +124,12 @@ const AsistenciaPage = () => {
     const [exportFechaInicio, setExportFechaInicio] = useState(getMonthRange().start);
     const [exportFechaFin, setExportFechaFin] = useState(hoy);
 
+    // Filtro de programa en toma de asistencia ('all' por defecto para incluir al 100% de infantes)
+    const [filtroProgramaToma, setFiltroProgramaToma] = useState('all');
+
+    // Modal de Abono / Pago Parcial Diario
+    const [abonoDialog, setAbonoDialog] = useState({ open: false, infante: null, monto: '0.25' });
+
     // Edición inline en pivot
     const [editPopover, setEditPopover] = useState({ open: false, anchorEl: null, infanteId: null, fecha: null, estadoActual: null });
     const [savingCell, setSavingCell] = useState(false);
@@ -127,16 +137,17 @@ const AsistenciaPage = () => {
     // Eliminar fecha completa
     const [confirmFecha, setConfirmFecha] = useState({ open: false, fecha: null, count: 0 });
     
-    // Pago de deuda state
+    // Pago de deuda state (soporta pago total y abono parcial)
     const [pagoInfante, setPagoInfante] = useState(null);
     const [openPagoDialog, setOpenPagoDialog] = useState(false);
     const [procesandoPago, setProcesandoPago] = useState(false);
+    const [tipoPagoDeuda, setTipoPagoDeuda] = useState('total'); // 'total' | 'parcial'
+    const [montoAbonoDeuda, setMontoAbonoDeuda] = useState('');
 
     // Historial - Filtros de rango
     const [histFechaInicio, setHistFechaInicio] = useState(getMonthRange().start);
     const [histFechaFin, setHistFechaFin] = useState(hoy);
     const [histFiltroPatrocinio, setHistFiltroPatrocinio] = useState('all');
-
 
     // Historial state
     const [histFiltroEstado, setHistFiltroEstado] = useState('');
@@ -145,18 +156,22 @@ const AsistenciaPage = () => {
     const [tomaPage, setTomaPage] = useState(0);
     const [tomaRowsPerPage, setTomaRowsPerPage] = useState(25);
 
-    // Cargar Infantes dinámicamente según la fecha para actualizar badges de pago
+    // Cargar Infantes dinámicamente según la fecha para actualizar badges de pago (Total de infantes por defecto)
     const cargarDatosInfantes = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await infanteService.listar({ limit: 1000, referencia: fecha, tipoPrograma: 'Comedor' });
+            const params = { limit: 1000, referencia: fecha };
+            if (filtroProgramaToma !== 'all') {
+                params.tipoPrograma = filtroProgramaToma;
+            }
+            const res = await infanteService.listar(params);
             setInfantes(res.data || []);
         } catch (error) {
             enqueueSnackbar('Error al cargar infantes', { variant: 'error' });
         } finally {
             setLoading(false);
         }
-    }, [fecha, enqueueSnackbar]);
+    }, [fecha, filtroProgramaToma, enqueueSnackbar]);
 
     useEffect(() => {
         cargarDatosInfantes();
@@ -169,11 +184,23 @@ const AsistenciaPage = () => {
             const res = await asistenciaService.listar({ fecha, limit: 1000 });
             const data = res.data || [];
             const mapping = {};
-            // Inicializar todos con 'Ausente' por defecto si no tienen registro
-            infantes.forEach(i => mapping[i.id] = 'Ausente');
-            // Sobrescribir con los reales
-            data.forEach(r => mapping[r.infanteId] = r.estado);
+            const montos = {};
+            // Inicializar todos con 'Ausente' y monto 0
+            infantes.forEach(i => {
+                mapping[i.id] = 'Ausente';
+                montos[i.id] = 0;
+            });
+            // Sobrescribir con los registros reales
+            data.forEach(r => {
+                mapping[r.infanteId] = r.estado;
+                const tarifa = parseFloat(r.infante?.tarifaDiaria || 0.60);
+                const pagado = r.montoPagado !== null && r.montoPagado !== undefined 
+                    ? parseFloat(r.montoPagado) 
+                    : (r.estado === 'PagoDia' ? tarifa : 0);
+                montos[r.infanteId] = pagado;
+            });
             setEstados(mapping);
+            setMontosPagados(montos);
         } catch (error) {
             console.error('Error cargando asistencia de fecha:', error);
         }
@@ -185,7 +212,7 @@ const AsistenciaPage = () => {
         }
     }, [infantes, cargarTomaFecha]);
 
-    // Cargar Historial
+    // Cargar Historial (con todos los niños registrados)
     const cargarHistorial = useCallback(async () => {
         try {
             const res = await asistenciaService.listar({
@@ -194,7 +221,6 @@ const AsistenciaPage = () => {
                 esPatrocinado: histFiltroPatrocinio !== 'all' ? histFiltroPatrocinio : undefined,
                 fechaInicio: histFechaInicio || undefined,
                 fechaFin: histFechaFin || undefined,
-                tipoPrograma: 'Comedor',
             });
             setHistorial(res.data || []);
             setTotalHist(res.meta?.total || 0);
@@ -233,24 +259,111 @@ const AsistenciaPage = () => {
     const presentesHoy = conteo.Mes + conteo.Semana + conteo.PagoDia + conteo.Pendiente + conteo.Punto;
     const porcentajeAsist = totalInf > 0 ? Math.round((presentesHoy / totalInf) * 100) : 0;
 
+    // Métricas financieras del día en tiempo real
+    const metricasDia = useMemo(() => {
+        let recaudado = 0;
+        let debiendo = 0;
+        let pagaronCount = 0;
+        let debenCount = 0;
+        let deudaTotalSistema = 0;
+        let infantesConDeudaCount = 0;
+
+        infantes.forEach(inf => {
+            const tarifa = parseFloat(inf.tarifaDiaria || 0.60);
+            const st = estados[inf.id] || 'Ausente';
+            const pagado = montosPagados[inf.id] !== undefined 
+                ? montosPagados[inf.id] 
+                : (st === 'PagoDia' ? tarifa : 0);
+
+            if (st === 'PagoDia') {
+                recaudado += tarifa;
+                pagaronCount++;
+            } else if (st === 'Pendiente') {
+                if (pagado > 0) {
+                    recaudado += pagado;
+                    pagaronCount++;
+                }
+                const deudaHoy = Math.max(0, tarifa - pagado);
+                debiendo += deudaHoy;
+                if (deudaHoy > 0) debenCount++;
+            }
+
+            if (inf.deudaTotal > 0) {
+                deudaTotalSistema += inf.deudaTotal;
+                infantesConDeudaCount++;
+            }
+        });
+
+        return {
+            totalRecaudado: Math.round(recaudado * 100) / 100,
+            totalDebiendo: Math.round(debiendo * 100) / 100,
+            pagaronCount,
+            debenCount,
+            deudaTotalSistema: Math.round(deudaTotalSistema * 100) / 100,
+            infantesConDeudaCount
+        };
+    }, [infantes, estados, montosPagados]);
+
     const handleEstado = (infanteId, nuevoEstado) => {
         if (!nuevoEstado) return;
+        const inf = infantes.find(i => i.id === infanteId);
+        const tarifa = parseFloat(inf?.tarifaDiaria || 0.60);
         setEstados(e => ({ ...e, [infanteId]: nuevoEstado }));
+        setMontosPagados(m => {
+            if (nuevoEstado === 'PagoDia') {
+                return { ...m, [infanteId]: tarifa };
+            } else if (nuevoEstado === 'Pendiente') {
+                // Si tenía abono previo menor a tarifa, conservarlo; si no, 0
+                const prev = m[infanteId] || 0;
+                return { ...m, [infanteId]: prev > 0 && prev < tarifa ? prev : 0 };
+            } else {
+                return { ...m, [infanteId]: 0 };
+            }
+        });
+    };
+
+    const handleConfirmarAbono = () => {
+        if (!abonoDialog.infante) return;
+        const id = abonoDialog.infante.id;
+        const val = parseFloat(abonoDialog.monto) || 0;
+        const tarifa = parseFloat(abonoDialog.infante.tarifaDiaria || 0.60);
+        const valorFinal = Math.min(tarifa, Math.max(0, val));
+        setEstados(e => ({ ...e, [id]: 'Pendiente' }));
+        setMontosPagados(m => ({ ...m, [id]: valorFinal }));
+        setAbonoDialog({ open: false, infante: null, monto: '0.25' });
     };
 
     const marcarTodos = (estado) => {
         const updated = {};
-        infantes.forEach(i => { updated[i.id] = estado; });
+        const updatedMontos = {};
+        infantes.forEach(i => {
+            updated[i.id] = estado;
+            const tarifa = parseFloat(i.tarifaDiaria || 0.60);
+            updatedMontos[i.id] = estado === 'PagoDia' ? tarifa : 0;
+        });
         setEstados(updated);
+        setMontosPagados(updatedMontos);
     };
 
     const guardar = async () => {
         setSaving(true);
         try {
-            const payload = Object.entries(estados).map(([id, st]) => ({
-                infanteId: parseInt(id),
-                estado: st
-            }));
+            const payload = Object.entries(estados).map(([id, st]) => {
+                const infId = parseInt(id);
+                const inf = infantes.find(i => i.id === infId);
+                const tarifa = parseFloat(inf?.tarifaDiaria || 0.60);
+                let monto = montosPagados[infId] || 0;
+                if (st === 'PagoDia' && (!monto || monto === 0)) {
+                    monto = tarifa;
+                } else if (st !== 'PagoDia' && st !== 'Pendiente') {
+                    monto = 0;
+                }
+                return {
+                    infanteId: infId,
+                    estado: st,
+                    montoPagado: monto
+                };
+            });
             await asistenciaService.registrarBulk(fecha, payload);
             const fechaStr = new Date(fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
             enqueueSnackbar(`Asistencia del ${fechaStr} guardada correctamente`, { variant: 'success' });
@@ -267,9 +380,10 @@ const AsistenciaPage = () => {
         if (!pagoInfante) return;
         setProcesandoPago(true);
         try {
-            await asistenciaService.pagarDeuda(pagoInfante.id);
-            enqueueSnackbar(`Pago de deuda de ${pagoInfante.persona?.nombres} realizado con éxito`, { variant: 'success' });
-            cargarDatosInfantes(); // Recargar para ver deuda en $0
+            const monto = tipoPagoDeuda === 'parcial' ? parseFloat(montoAbonoDeuda) : null;
+            const res = await asistenciaService.pagarDeuda(pagoInfante.id, monto);
+            enqueueSnackbar(res.mensaje || `Pago de deuda de ${pagoInfante.persona?.nombres} realizado con éxito`, { variant: 'success' });
+            cargarDatosInfantes(); // Recargar para ver deuda actualizada
             if (tabIndex === 1) cargarHistorial();
         } catch (error) {
             enqueueSnackbar('Error al procesar el pago', { variant: 'error' });
@@ -277,6 +391,8 @@ const AsistenciaPage = () => {
             setProcesandoPago(false);
             setOpenPagoDialog(false);
             setPagoInfante(null);
+            setMontoAbonoDeuda('');
+            setTipoPagoDeuda('total');
         }
     };
 
@@ -378,10 +494,13 @@ const AsistenciaPage = () => {
             // 2. Identificar fechas únicas y ordenarlas
             const fechasUnicas = [...new Set(registros.map(r => r.fecha.split('T')[0]))].sort();
 
-            const asistenciaMap = {}; // { infanteId: { fecha: estado } }
+            const asistenciaMap = {}; // { infanteId: { fecha: { estado, montoPagado } } }
             registros.forEach(r => {
                 if (!asistenciaMap[r.infanteId]) asistenciaMap[r.infanteId] = {};
-                asistenciaMap[r.infanteId][r.fecha.split('T')[0]] = r.estado;
+                asistenciaMap[r.infanteId][r.fecha.split('T')[0]] = {
+                    estado: r.estado,
+                    montoPagado: r.montoPagado
+                };
             });
 
             // 4. Construir filas para Excel
@@ -400,13 +519,15 @@ const AsistenciaPage = () => {
                 let diasConRegistro = 0;
 
                 fechasUnicas.forEach(f => {
-                    const estado = asistenciaMap[inf.id]?.[f] || '-';
+                    const reg = asistenciaMap[inf.id]?.[f];
+                    const estado = reg?.estado || '-';
+                    const pagado = reg?.montoPagado ? parseFloat(reg.montoPagado) : 0;
                     const presenciasIds = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
                     let label = '-';
                     if (estado === 'Mes') label = 'MES';
                     else if (estado === 'Semana') label = 'SEM';
-                    else if (estado === 'PagoDia') label = inf.tarifaDiaria || '0.50';
-                    else if (estado === 'Pendiente') label = 'P';
+                    else if (estado === 'PagoDia') label = `$${inf.tarifaDiaria || '0.60'}`;
+                    else if (estado === 'Pendiente') label = pagado > 0 ? `P ($${pagado.toFixed(2)})` : 'P';
                     else if (estado === 'Punto') label = 'S';
                     else if (estado === 'Ausente') label = 'F';
 
@@ -535,14 +656,24 @@ const AsistenciaPage = () => {
                                 type="date" size="small" label="Fecha" value={fecha}
                                 onChange={e => setFecha(e.target.value)}
                                 slotProps={{ inputLabel: { shrink: true } }}
-                                sx={{ minWidth: 180 }}
+                                sx={{ minWidth: 160 }}
                             />
                             <TextField
                                 size="small" placeholder="Buscar infante..."
                                 value={searchToma} onChange={e => setSearchToma(e.target.value)}
-                                sx={{ flex: 1, minWidth: 200 }}
+                                sx={{ flex: 1, minWidth: 180 }}
                                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
                             />
+                            <TextField
+                                select size="small" label="Población / Programa" value={filtroProgramaToma}
+                                onChange={e => setFiltroProgramaToma(e.target.value)}
+                                sx={{ minWidth: 170 }}
+                            >
+                                <MenuItem value="all">Todos los Niños ({infantes.length})</MenuItem>
+                                <MenuItem value="Comedor">Solo Comedor</MenuItem>
+                                <MenuItem value="Ministerio">Solo Ministerio</MenuItem>
+                                <MenuItem value="Ambos">Ambos Programas</MenuItem>
+                            </TextField>
                             <Button variant="contained"
                                 startIcon={<SaveIcon />}
                                 onClick={guardar} disabled={saving}
@@ -550,6 +681,121 @@ const AsistenciaPage = () => {
                                 {saving ? 'Guardando...' : 'Guardar Asistencia'}
                             </Button>
                         </Stack>
+
+                        {/* ── Métricas Financieras y de Asistencia del Día ── */}
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card elevation={0} sx={{
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 3,
+                                    bgcolor: isDark ? alpha('#10b981', 0.08) : alpha('#10b981', 0.05),
+                                    boxShadow: '0 4px 12px rgba(16,185,129,0.06)'
+                                }}>
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                            <Box>
+                                                <Typography variant="caption" fontWeight={700} sx={{ color: '#059669', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                                    Recaudado Hoy
+                                                </Typography>
+                                                <Typography variant="h4" fontWeight={900} sx={{ color: '#059669', mt: 0.5 }}>
+                                                    ${metricasDia.totalRecaudado.toFixed(2)}
+                                                </Typography>
+                                            </Box>
+                                            <Avatar sx={{ bgcolor: alpha('#10b981', 0.15), color: '#059669', width: 44, height: 44 }}>
+                                                <WalletIcon />
+                                            </Avatar>
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontWeight: 600 }}>
+                                            {metricasDia.pagaronCount} infante{metricasDia.pagaronCount !== 1 ? 's' : ''} con cobro efectuado hoy
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card elevation={0} sx={{
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 3,
+                                    bgcolor: isDark ? alpha('#ef4444', 0.08) : alpha('#ef4444', 0.05),
+                                    boxShadow: '0 4px 12px rgba(239,68,68,0.06)'
+                                }}>
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                            <Box>
+                                                <Typography variant="caption" fontWeight={700} sx={{ color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                                    Quedan Debiendo Hoy
+                                                </Typography>
+                                                <Typography variant="h4" fontWeight={900} sx={{ color: '#dc2626', mt: 0.5 }}>
+                                                    ${metricasDia.totalDebiendo.toFixed(2)}
+                                                </Typography>
+                                            </Box>
+                                            <Avatar sx={{ bgcolor: alpha('#ef4444', 0.15), color: '#dc2626', width: 44, height: 44 }}>
+                                                <PendingIcon />
+                                            </Avatar>
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontWeight: 600 }}>
+                                            {metricasDia.debenCount} infante{metricasDia.debenCount !== 1 ? 's' : ''} con saldo pendiente hoy
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card elevation={0} sx={{
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 3,
+                                    bgcolor: isDark ? alpha(CCO.azul, 0.08) : alpha(CCO.azul, 0.05),
+                                    boxShadow: '0 4px 12px rgba(65,105,225,0.06)'
+                                }}>
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                            <Box>
+                                                <Typography variant="caption" fontWeight={700} sx={{ color: CCO.azul, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                                    Asistencia Hoy
+                                                </Typography>
+                                                <Typography variant="h4" fontWeight={900} sx={{ color: CCO.azul, mt: 0.5 }}>
+                                                    {presentesHoy} <Typography component="span" variant="body1" fontWeight={700} color="text.secondary">/ {totalInf}</Typography>
+                                                </Typography>
+                                            </Box>
+                                            <Avatar sx={{ bgcolor: alpha(CCO.azul, 0.15), color: CCO.azul, width: 44, height: 44 }}>
+                                                <GroupIcon />
+                                            </Avatar>
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontWeight: 600 }}>
+                                            {porcentajeAsist}% sobre el total de niños ({totalInf})
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card elevation={0} sx={{
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 3,
+                                    bgcolor: isDark ? alpha(CCO.violeta, 0.08) : alpha(CCO.violeta, 0.05),
+                                    boxShadow: '0 4px 12px rgba(106,90,205,0.06)'
+                                }}>
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                            <Box>
+                                                <Typography variant="caption" fontWeight={700} sx={{ color: CCO.violeta, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                                    Deuda Total Sistema
+                                                </Typography>
+                                                <Typography variant="h4" fontWeight={900} sx={{ color: CCO.violeta, mt: 0.5 }}>
+                                                    ${metricasDia.deudaTotalSistema.toFixed(2)}
+                                                </Typography>
+                                            </Box>
+                                            <Avatar sx={{ bgcolor: alpha(CCO.violeta, 0.15), color: CCO.violeta, width: 44, height: 44 }}>
+                                                <PaymentIcon />
+                                            </Avatar>
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontWeight: 600 }}>
+                                            {metricasDia.infantesConDeudaCount} infante{metricasDia.infantesConDeudaCount !== 1 ? 's' : ''} con deuda pendiente
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        </Grid>
 
 
                         {/* ── Conteo del día actual + Marcar todos ── */}
@@ -569,7 +815,7 @@ const AsistenciaPage = () => {
                                     ))}
                                     <Divider orientation="vertical" flexItem />
                                     <Chip
-                                        label={`${porcentajeAsist || 0}% hoy`}
+                                        label={`${porcentajeAsist || 0}% asistencia`}
                                         sx={{
                                             fontWeight: 700, fontSize: '0.82rem',
                                             bgcolor: alpha(porcentajeAsist >= 80 ? '#4caf50' : porcentajeAsist >= 50 ? '#ff9800' : '#ef5350', 0.1),
@@ -589,24 +835,27 @@ const AsistenciaPage = () => {
                                     <TableRow>
                                         <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 40 }}>#</TableCell>
                                         <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Infante</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 100 }}>Estatus Pago</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 80 }}>Deuda</TableCell>
-                                        <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', minWidth: 400 }}>Estado / Pago</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 90 }}>Programa</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 140 }}>Estatus Hoy</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', width: 90 }}>Deuda</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', minWidth: 460 }}>Estado / Pago</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {loading ? (
-                                        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 5 }}><CircularProgress size={24} /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}><CircularProgress size={24} /></TableCell></TableRow>
                                     ) : infantesPaginados.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                                            <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                                                 <Typography color="text.secondary">No se encontraron infantes</Typography>
                                             </TableCell>
                                         </TableRow>
                                     ) : infantesPaginados.map((inf, idx) => {
                                         const estado = estados[inf.id] || 'Ausente';
+                                        const tarifa = parseFloat(inf.tarifaDiaria || 0.60);
+                                        const pagadoHoy = montosPagados[inf.id] !== undefined ? montosPagados[inf.id] : (estado === 'PagoDia' ? tarifa : 0);
                                         const actualIdx = (tomaPage * tomaRowsPerPage) + idx;
-                                        const accentColor = estado === 'Presente' ? '#4caf50' : estado === 'Ausente' ? '#ef5350' : '#ff9800';
+                                        const accentColor = estado === 'PagoDia' ? '#4caf50' : estado === 'Ausente' ? '#ef5350' : '#ff9800';
                                         return (
                                             <TableRow key={inf.id} sx={{
                                                 borderLeft: `4px solid ${accentColor}`,
@@ -634,7 +883,7 @@ const AsistenciaPage = () => {
                                                             </Typography>
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                                                                    Cod: {inf.codigo} • Tarifa: ${inf.tarifaDiaria}
+                                                                    Cod: {inf.codigo} • Tarifa: ${tarifa.toFixed(2)}
                                                                 </Typography>
                                                                 <Tooltip title="Editar datos/tarifa">
                                                                     <IconButton size="small" onClick={() => navigate(`/infantes/${inf.id}/editar`)} sx={{ p: 0.2 }}>
@@ -646,10 +895,35 @@ const AsistenciaPage = () => {
                                                     </Box>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Stack direction="row" spacing={0.5}>
+                                                    <Chip
+                                                        label={inf.tipoPrograma || 'Ministerio'}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color={inf.tipoPrograma === 'Comedor' ? 'warning' : inf.tipoPrograma === 'Ambos' ? 'secondary' : 'default'}
+                                                        sx={{ fontSize: '0.65rem', fontWeight: 700, height: 20 }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
                                                         {inf.pagoMesActivo && <Chip label="MES" size="small" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />}
                                                         {inf.pagoSemanaActivo && <Chip label="SEM" size="small" color="primary" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />}
-                                                        {!inf.pagoMesActivo && !inf.pagoSemanaActivo && <Typography variant="caption" color="text.disabled">Pendiente</Typography>}
+                                                        {estado === 'PagoDia' && (
+                                                            <Chip label={`PAGÓ $${tarifa.toFixed(2)}`} size="small" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />
+                                                        )}
+                                                        {estado === 'Pendiente' && pagadoHoy > 0 && (
+                                                            <Tooltip title={`Abonó $${pagadoHoy.toFixed(2)} - Queda debiendo $${Math.max(0, tarifa - pagadoHoy).toFixed(2)}`}>
+                                                                <Chip label={`ABONÓ $${pagadoHoy.toFixed(2)}`} size="small" color="warning" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />
+                                                            </Tooltip>
+                                                        )}
+                                                        {estado === 'Pendiente' && pagadoHoy === 0 && (
+                                                            <Chip label={`DEBE $${tarifa.toFixed(2)}`} size="small" color="error" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />
+                                                        )}
+                                                        {estado === 'Punto' && (
+                                                            <Chip label="SEGUIM." size="small" color="secondary" sx={{ fontSize: '0.65rem', fontWeight: 900, height: 20 }} />
+                                                        )}
+                                                        {estado === 'Ausente' && !inf.pagoMesActivo && !inf.pagoSemanaActivo && (
+                                                            <Typography variant="caption" color="text.disabled">Falta</Typography>
+                                                        )}
                                                     </Stack>
                                                 </TableCell>
                                                 <TableCell>
@@ -658,11 +932,16 @@ const AsistenciaPage = () => {
                                                             ${inf.deudaTotal?.toFixed(2) || '0.00'}
                                                         </Typography>
                                                         {inf.deudaTotal > 0 && (
-                                                            <Tooltip title="Pagar deuda total">
+                                                            <Tooltip title="Cobrar / Abonar deuda">
                                                                 <IconButton 
                                                                     size="small" 
                                                                     color="primary" 
-                                                                    onClick={() => { setPagoInfante(inf); setOpenPagoDialog(true); }}
+                                                                    onClick={() => { 
+                                                                        setPagoInfante(inf); 
+                                                                        setTipoPagoDeuda('total');
+                                                                        setMontoAbonoDeuda(inf.tarifaDiaria ? inf.tarifaDiaria.toString() : '0.60');
+                                                                        setOpenPagoDialog(true); 
+                                                                    }}
                                                                     sx={{ p: 0.5, bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}
                                                                 >
                                                                     <PaymentIcon sx={{ fontSize: 16 }} />
@@ -672,18 +951,45 @@ const AsistenciaPage = () => {
                                                     </Stack>
                                                 </TableCell>
                                                 <TableCell align="center">
-                                                    <ToggleButtonGroup
-                                                        value={estado} exclusive size="small"
-                                                        onChange={(_, val) => handleEstado(inf.id, val)}
-                                                        sx={{ '& .MuiToggleButton-root': { px: 1.2, py: 0.5, fontSize: '0.7rem', fontWeight: 800 } }}
-                                                    >
-                                                        <ToggleButton value="Mes" color="success">MES</ToggleButton>
-                                                        <ToggleButton value="Semana" color="primary">SEM</ToggleButton>
-                                                        <ToggleButton value="PagoDia" color="info">${inf.tarifaDiaria || '0.50'}</ToggleButton>
-                                                        <ToggleButton value="Pendiente" color="error">P</ToggleButton>
-                                                        <ToggleButton value="Punto" color="secondary">S</ToggleButton>
-                                                        <ToggleButton value="Ausente">F</ToggleButton>
-                                                    </ToggleButtonGroup>
+                                                    <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
+                                                        <ToggleButtonGroup
+                                                            value={estado} exclusive size="small"
+                                                            onChange={(_, val) => handleEstado(inf.id, val)}
+                                                            sx={{ '& .MuiToggleButton-root': { px: 1.1, py: 0.5, fontSize: '0.7rem', fontWeight: 800 } }}
+                                                        >
+                                                            <ToggleButton value="Mes" color="success">MES</ToggleButton>
+                                                            <ToggleButton value="Semana" color="primary">SEM</ToggleButton>
+                                                            <ToggleButton value="PagoDia" color="info">${tarifa.toFixed(2)}</ToggleButton>
+                                                            <ToggleButton value="Pendiente" color="error">P</ToggleButton>
+                                                            <ToggleButton value="Punto" color="secondary">S</ToggleButton>
+                                                            <ToggleButton value="Ausente">F</ToggleButton>
+                                                        </ToggleButtonGroup>
+
+                                                        {/* Botón de Abono / Pago Parcial */}
+                                                        <Tooltip title={estado === 'Pendiente' && pagadoHoy > 0 ? `Abono de $${pagadoHoy.toFixed(2)} (Clic para modificar)` : 'Registrar Pago Parcial (ej. $0.25)'}>
+                                                            <Button
+                                                                size="small"
+                                                                variant={estado === 'Pendiente' && pagadoHoy > 0 ? 'contained' : 'outlined'}
+                                                                color="warning"
+                                                                onClick={() => setAbonoDialog({ 
+                                                                    open: true, 
+                                                                    infante: inf, 
+                                                                    monto: pagadoHoy > 0 ? pagadoHoy.toString() : '0.25' 
+                                                                })}
+                                                                sx={{ 
+                                                                    fontSize: '0.68rem', 
+                                                                    fontWeight: 800, 
+                                                                    textTransform: 'none', 
+                                                                    px: 1, 
+                                                                    py: 0.4, 
+                                                                    borderRadius: 2,
+                                                                    whiteSpace: 'nowrap'
+                                                                }}
+                                                            >
+                                                                {estado === 'Pendiente' && pagadoHoy > 0 ? `½ $${pagadoHoy.toFixed(2)}` : '½ Abono'}
+                                                            </Button>
+                                                        </Tooltip>
+                                                    </Stack>
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -1130,21 +1436,91 @@ const AsistenciaPage = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* ── Modal de Confirmación de Pago ── */}
-            <Dialog open={openPagoDialog} onClose={() => !procesandoPago && setOpenPagoDialog(false)} PaperProps={{ sx: { borderRadius: 4, maxWidth: 400 } }}>
-                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Confirmar Pago de Deuda</DialogTitle>
+            {/* ── Modal de Confirmación y Abono de Deuda ── */}
+            <Dialog open={openPagoDialog} onClose={() => !procesandoPago && setOpenPagoDialog(false)} PaperProps={{ sx: { borderRadius: 4, maxWidth: 440, p: 1 } }}>
+                <DialogTitle sx={{ fontWeight: 800, pb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PaymentIcon sx={{ color: 'primary.main' }} />
+                    Cobro de Deuda Pendiente
+                </DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" sx={{ mb: 2 }}>
-                        ¿Confirmas que el infante <strong>{pagoInfante?.persona?.nombres} {pagoInfante?.persona?.apellidos}</strong> ha cancelado el total de su deuda pendiente?
+                        Infante: <strong>{pagoInfante?.persona?.nombres} {pagoInfante?.persona?.apellidos}</strong> (Cód: {pagoInfante?.codigo})
                     </Typography>
-                    <Box sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 3, border: `1px dashed ${theme.palette.error.main}`, textAlign: 'center' }}>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>MONTO TOTAL A CANCELAR</Typography>
+
+                    <Box sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 3, border: `1px dashed ${theme.palette.error.main}`, textAlign: 'center', mb: 2.5 }}>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>DEUDA TOTAL PENDIENTE</Typography>
                         <Typography variant="h4" fontWeight={900} color="error.main">
-                            ${pagoInfante?.deudaTotal?.toFixed(2)}
+                            ${pagoInfante?.deudaTotal?.toFixed(2) || '0.00'}
                         </Typography>
                     </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, fontStyle: 'italic' }}>
-                        Esta acción marcará todas sus asistencias pendientes como "Pagado".
+
+                    <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        Modalidad de Pago:
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2.5 }}>
+                        <Button
+                            variant={tipoPagoDeuda === 'total' ? 'contained' : 'outlined'}
+                            color="primary"
+                            onClick={() => setTipoPagoDeuda('total')}
+                            sx={{ flex: 1, borderRadius: 2.5, fontWeight: 800, textTransform: 'none' }}
+                        >
+                            Pagar Total (${pagoInfante?.deudaTotal?.toFixed(2)})
+                        </Button>
+                        <Button
+                            variant={tipoPagoDeuda === 'parcial' ? 'contained' : 'outlined'}
+                            color="warning"
+                            onClick={() => {
+                                setTipoPagoDeuda('parcial');
+                                if (!montoAbonoDeuda) setMontoAbonoDeuda('0.60');
+                            }}
+                            sx={{ flex: 1, borderRadius: 2.5, fontWeight: 800, textTransform: 'none' }}
+                        >
+                            Abono Parcial
+                        </Button>
+                    </Stack>
+
+                    {tipoPagoDeuda === 'parcial' && (
+                        <Box sx={{ p: 2, bgcolor: alpha(theme.palette.warning.main, 0.05), borderRadius: 3, border: `1px solid ${alpha(theme.palette.warning.main, 0.25)}`, mb: 1 }}>
+                            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                Atajos rápidos:
+                            </Typography>
+                            <Stack direction="row" spacing={0.8} sx={{ mb: 1.5 }} flexWrap="wrap">
+                                {['0.25', '0.50', '0.60', '1.00', '1.20'].map(val => (
+                                    <Chip
+                                        key={val}
+                                        label={`$${val}`}
+                                        clickable
+                                        size="small"
+                                        color={montoAbonoDeuda === val ? 'warning' : 'default'}
+                                        variant={montoAbonoDeuda === val ? 'filled' : 'outlined'}
+                                        onClick={() => setMontoAbonoDeuda(val)}
+                                        sx={{ fontWeight: 800, mb: 0.5 }}
+                                    />
+                                ))}
+                            </Stack>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                label="Monto a Abonar ($)"
+                                type="number"
+                                inputProps={{ step: '0.05', min: '0.01', max: pagoInfante?.deudaTotal || 999 }}
+                                value={montoAbonoDeuda}
+                                onChange={e => setMontoAbonoDeuda(e.target.value)}
+                                sx={{ mb: 1 }}
+                            />
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                <Typography variant="caption" color="text.secondary">Saldo restante estimado:</Typography>
+                                <Typography variant="subtitle2" fontWeight={900} color={Math.max(0, (pagoInfante?.deudaTotal || 0) - (parseFloat(montoAbonoDeuda) || 0)) > 0 ? 'error.main' : 'success.main'}>
+                                    ${Math.max(0, (pagoInfante?.deudaTotal || 0) - (parseFloat(montoAbonoDeuda) || 0)).toFixed(2)}
+                                </Typography>
+                            </Stack>
+                        </Box>
+                    )}
+
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
+                        {tipoPagoDeuda === 'total' 
+                            ? 'Esta acción marcará todas sus asistencias pendientes como "Pagado".' 
+                            : 'El abono se aplicará a las fechas pendientes más antiguas en orden cronológico (FIFO).'}
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ p: 2.5, pt: 0 }}>
@@ -1152,11 +1528,87 @@ const AsistenciaPage = () => {
                     <Button 
                         variant="contained" 
                         onClick={handleConfirmarPago} 
-                        disabled={procesandoPago}
+                        disabled={procesandoPago || (tipoPagoDeuda === 'parcial' && (!montoAbonoDeuda || parseFloat(montoAbonoDeuda) <= 0))}
                         startIcon={procesandoPago ? <CircularProgress size={18} color="inherit" /> : <CheckIcon />}
                         sx={{ borderRadius: 3, fontWeight: 700, textTransform: 'none', px: 3 }}
                     >
-                        Confirmar Pago
+                        {tipoPagoDeuda === 'total' ? 'Confirmar Pago Total' : 'Registrar Abono'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ── Modal de Registro de Abono / Pago Parcial Diario ── */}
+            <Dialog 
+                open={abonoDialog.open} 
+                onClose={() => setAbonoDialog({ open: false, infante: null, monto: '0.25' })}
+                PaperProps={{ sx: { borderRadius: 4, maxWidth: 420, p: 1 } }}
+            >
+                <DialogTitle sx={{ fontWeight: 800, pb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PaymentIcon sx={{ color: 'warning.main' }} />
+                    Registrar Pago Parcial (Abono)
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Registra el pago parcial de <strong>{abonoDialog.infante?.persona?.nombres} {abonoDialog.infante?.persona?.apellidos}</strong> para el día seleccionado.
+                    </Typography>
+
+                    <Box sx={{ p: 2, bgcolor: alpha(theme.palette.warning.main, 0.06), borderRadius: 3, border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`, mb: 2.5 }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary" fontWeight={700}>Tarifa del Día:</Typography>
+                            <Typography variant="subtitle2" fontWeight={800}>${parseFloat(abonoDialog.infante?.tarifaDiaria || 0.60).toFixed(2)}</Typography>
+                        </Stack>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary" fontWeight={700}>Monto que paga hoy:</Typography>
+                            <Typography variant="subtitle1" fontWeight={900} color="warning.main">${(parseFloat(abonoDialog.monto) || 0).toFixed(2)}</Typography>
+                        </Stack>
+                        <Divider sx={{ my: 1 }} />
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                            <Typography variant="caption" fontWeight={800} color="error.main">Quedará debiendo hoy:</Typography>
+                            <Typography variant="h6" fontWeight={900} color="error.main">
+                                ${Math.max(0, parseFloat(abonoDialog.infante?.tarifaDiaria || 0.60) - (parseFloat(abonoDialog.monto) || 0)).toFixed(2)}
+                            </Typography>
+                        </Stack>
+                    </Box>
+
+                    <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        Montos rápidos:
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                        {['0.10', '0.20', '0.25', '0.30', '0.50'].map(val => (
+                            <Chip
+                                key={val}
+                                label={`$${val}`}
+                                clickable
+                                color={abonoDialog.monto === val ? 'warning' : 'default'}
+                                variant={abonoDialog.monto === val ? 'filled' : 'outlined'}
+                                onClick={() => setAbonoDialog(prev => ({ ...prev, monto: val }))}
+                                sx={{ fontWeight: 800 }}
+                            />
+                        ))}
+                    </Stack>
+
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="Otro Monto a Pagar ($)"
+                        type="number"
+                        inputProps={{ step: '0.05', min: '0', max: parseFloat(abonoDialog.infante?.tarifaDiaria || 0.60) }}
+                        value={abonoDialog.monto}
+                        onChange={e => setAbonoDialog(prev => ({ ...prev, monto: e.target.value }))}
+                        helperText={`Valor entre $0.01 y $${parseFloat(abonoDialog.infante?.tarifaDiaria || 0.60).toFixed(2)}`}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <Button onClick={() => setAbonoDialog({ open: false, infante: null, monto: '0.25' })} color="inherit" sx={{ fontWeight: 700 }}>
+                        Cancelar
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="warning"
+                        onClick={handleConfirmarAbono}
+                        sx={{ fontWeight: 800, borderRadius: 2.5, px: 3 }}
+                    >
+                        Aplicar Pago Parcial
                     </Button>
                 </DialogActions>
             </Dialog>

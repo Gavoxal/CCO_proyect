@@ -80,7 +80,7 @@ model Infante {
   fechaActualizacionFoto DateTime?          @db.Date
   personaId              Int                @unique
   tutorId                Int?
-  tarifaDiaria           Decimal            @default(0.50) @db.Decimal(10, 2)
+  tarifaDiaria           Decimal            @default(0.60) @db.Decimal(10, 2)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   asistencias            Asistencia[]
@@ -115,8 +115,9 @@ model Tutor {
 model Asistencia {
   id        Int              @id @default(autoincrement())
   fecha     DateTime         @db.Date
-  estado    EstadoAsistencia @default(Ausente)
-  infanteId Int
+  estado      EstadoAsistencia @default(Ausente)
+  montoPagado Decimal          @default(0.00) @db.Decimal(10, 2)
+  infanteId   Int
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   infante   Infante          @relation(fields: [infanteId], references: [id])

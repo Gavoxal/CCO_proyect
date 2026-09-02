@@ -32,10 +32,13 @@ const asistenciaService = {
     },
 
     /**
-     * Paga toda la deuda pendiente de un infante
+     * Paga la deuda de un infante (total o abono parcial)
+     * @param {number} infanteId
+     * @param {number|null} monto - Monto a abonar (si no se envía, paga toda la deuda)
      */
-    pagarDeuda: async (infanteId) => {
-        const res = await api.patch(`/asistencia/pagar-deuda/${infanteId}`);
+    pagarDeuda: async (infanteId, monto = null) => {
+        const body = monto !== null && monto !== undefined ? { monto: parseFloat(monto) } : {};
+        const res = await api.patch(`/asistencia/pagar-deuda/${infanteId}`, body);
         return res.data;
     },
 
@@ -53,9 +56,14 @@ const asistenciaService = {
      * @param {number} infanteId
      * @param {string} fecha - Formato 'YYYY-MM-DD'
      * @param {string} estado - Mes|Semana|PagoDia|Pendiente|Punto|Ausente
+     * @param {number|null} montoPagado - Monto pagado ese día
      */
-    actualizarRegistro: async (infanteId, fecha, estado) => {
-        const res = await api.patch(`/asistencia/${infanteId}/${fecha}`, { estado });
+    actualizarRegistro: async (infanteId, fecha, estado, montoPagado = null) => {
+        const payload = { estado };
+        if (montoPagado !== null && montoPagado !== undefined) {
+            payload.montoPagado = parseFloat(montoPagado);
+        }
+        const res = await api.patch(`/asistencia/${infanteId}/${fecha}`, payload);
         return res.data;
     }
 };

@@ -29,11 +29,7 @@ export async function getStats(request, reply) {
         const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
         const asistenciaValidaEstados = ['Mes', 'Semana', 'PagoDia', 'Pendiente', 'Punto'];
         
-        // Obtenemos solo los infantes que pertenecen al comedor para la base del porcentaje
-        const totalInfantesComedor = await db.infante.count({
-            where: { tipoPrograma: { in: ['Comedor', 'Ambos'] } }
-        });
-
+        // Se calcula el porcentaje sobre el total de todos los infantes registrados en el sistema
         const infantesAsistieronMes = await db.asistencia.groupBy({
             by: ['infanteId'],
             where: {
@@ -42,7 +38,7 @@ export async function getStats(request, reply) {
             }
         });
         const asistentesUnicosMes = infantesAsistieronMes.length;
-        const pctAsistencia = totalInfantesComedor > 0 ? Math.round((asistentesUnicosMes / totalInfantesComedor) * 100) : 0;
+        const pctAsistencia = totalInfantes > 0 ? Math.round((asistentesUnicosMes / totalInfantes) * 100) : 0;
 
         // 4. Regalos y Kits (este año)
         const regalosRaw = await db.regalo.groupBy({

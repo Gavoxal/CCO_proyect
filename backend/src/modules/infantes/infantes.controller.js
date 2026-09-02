@@ -62,8 +62,9 @@ export async function listar(request, reply) {
 
         const infantesConStatus = await Promise.all(infantes.map(async (infante) => {
             const [asistenciasPendientes, pagoMes, pagoSemana] = await Promise.all([
-                db.asistencia.count({
-                    where: { infanteId: infante.id, estado: 'Pendiente' }
+                db.asistencia.findMany({
+                    where: { infanteId: infante.id, estado: 'Pendiente' },
+                    select: { montoPagado: true }
                 }),
                 db.asistencia.count({
                     where: { 
@@ -81,9 +82,15 @@ export async function listar(request, reply) {
                 })
             ])
 
+            const tarifa = parseFloat(infante.tarifaDiaria || 0.60)
+            const deudaTotal = asistenciasPendientes.reduce((acc, a) => {
+                const pagado = parseFloat(a.montoPagado || 0)
+                return acc + Math.max(0, tarifa - pagado)
+            }, 0)
+
             return {
                 ...infante,
-                deudaTotal: asistenciasPendientes * parseFloat(infante.tarifaDiaria),
+                deudaTotal: Math.round(deudaTotal * 100) / 100,
                 pagoMesActivo: pagoMes > 0,
                 pagoSemanaActivo: pagoSemana > 0
             }
@@ -115,12 +122,19 @@ export async function obtener(request, reply) {
     })
     if (!infante) return notFound(reply)
 
-    const asistenciasPendientes = await db.asistencia.count({
-        where: { infanteId: infante.id, estado: 'Pendiente' }
+    const asistenciasPendientes = await db.asistencia.findMany({
+        where: { infanteId: infante.id, estado: 'Pendiente' },
+        select: { montoPagado: true }
     })
+    const tarifa = parseFloat(infante.tarifaDiaria || 0.60)
+    const deudaTotal = asistenciasPendientes.reduce((acc, a) => {
+        const pagado = parseFloat(a.montoPagado || 0)
+        return acc + Math.max(0, tarifa - pagado)
+    }, 0)
+
     const infanteConDeuda = {
         ...infante,
-        deudaTotal: asistenciasPendientes * parseFloat(infante.tarifaDiaria)
+        deudaTotal: Math.round(deudaTotal * 100) / 100
     }
 
     return ok(reply, infanteConDeuda)
