@@ -13,13 +13,13 @@ class InfantesProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> fetchInfantes({String? query}) async {
+  Future<void> fetchInfantes({String? query, String? tipoPrograma}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _infantes = await _repository.getInfantes(buscar: query);
+      _infantes = await _repository.getInfantes(buscar: query, tipoPrograma: tipoPrograma);
     } catch (e) {
       _error = e.toString();
     }

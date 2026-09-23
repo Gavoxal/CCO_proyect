@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -19,6 +18,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   bool _obscurePassword = true;
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
@@ -29,6 +29,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeOut),
+    );
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
     );
     _animController.forward();
   }
@@ -57,7 +60,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString()), backgroundColor: AppColors.naranja),
+            SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: AppColors.secondary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           );
         }
       }
@@ -70,209 +78,161 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Fondo base
-          Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-          ),
-          // Decoración superior - Círculo desenfocado (Naranja)
-          Positioned(
-            top: -80,
-            right: -80,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                color: AppColors.naranja.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-          // Decoración inferior - Círculo desenfocado (Violeta)
-          Positioned(
-            bottom: -80,
-            left: -80,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                color: AppColors.violeta.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-          // Contenido Principal
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo
-                      Image.asset(
-                        'assets/images/logo.png',
-                        height: 120,
-                        width: 120,
-                        color: isDark ? Colors.white : AppColors.naranja,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
+                position: _slideAnimation,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Header Minimalista con Logo
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          )
+                        ]
                       ),
-                      const SizedBox(height: 32),
-                      
-                      // Tarjeta Glassmorphism
-                      ClipRRect(
+                      child: Image.asset(
+                        'assets/images/logo_blanco.png',
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Tarjeta Principal (Clean UI)
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.surface : Colors.white,
                         borderRadius: BorderRadius.circular(24),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                          child: Container(
-                            padding: const EdgeInsets.all(32),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(isDark ? 0.1 : 0.4),
-                                width: 1,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.textPrimary.withOpacity(isDark ? 0.2 : 0.04),
+                            blurRadius: 32,
+                            offset: const Offset(0, 16),
+                          ),
+                          BoxShadow(
+                            color: AppColors.textPrimary.withOpacity(isDark ? 0.1 : 0.02),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'KidsCam',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -0.5,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 32,
-                                  offset: const Offset(0, 16),
-                                )
-                              ],
                             ),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    'Bienvenido a KidsCam',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.white : Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Inicia sesión para continuar.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: isDark ? Colors.white70 : Colors.black54,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 32),
-                                  
-                                  // Campo Username (Neumórfico suave)
-                                  _buildInputField(
-                                    controller: _usernameController,
-                                    hint: 'Usuario o Correo',
-                                    icon: Icons.person_outline,
-                                    isDark: isDark,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  
-                                  // Campo Password
-                                  _buildInputField(
-                                    controller: _passwordController,
-                                    hint: 'Contraseña',
-                                    icon: Icons.lock_outline,
-                                    isPassword: true,
-                                    isDark: isDark,
-                                    obscureText: _obscurePassword,
-                                    onToggleObscure: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
-                                  ),
-                                  
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: () {},
-                                      child: const Text(
-                                        '¿Olvidaste tu contraseña?',
-                                        style: TextStyle(
-                                          color: AppColors.naranja,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  
-                                  // Botón de Login (Degradado)
-                                  Container(
-                                    height: 56,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(16),
-                                      gradient: const LinearGradient(
-                                        colors: [AppColors.naranja, AppColors.amarillo],
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.naranja.withOpacity(0.3),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 6),
-                                        )
-                                      ],
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(16),
-                                        onTap: isLoading ? null : _login,
-                                        child: Center(
-                                          child: isLoading
-                                              ? const CircularProgressIndicator(color: Colors.white)
-                                              : const Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      'Ingresar',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 18,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 8),
-                                                    Icon(Icons.arrow_forward, color: Colors.white),
-                                                  ],
-                                                ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Acceso administrativo',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            
+                            // Campo Username
+                            _buildInputField(
+                              controller: _usernameController,
+                              hint: 'Usuario o Correo',
+                              icon: Icons.person_outline,
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Campo Password
+                            _buildInputField(
+                              controller: _passwordController,
+                              hint: 'Contraseña',
+                              icon: Icons.lock_outline,
+                              isPassword: true,
+                              obscureText: _obscurePassword,
+                              onToggleObscure: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            
+                            // Botón de Login (Teal)
+                            Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: AppColors.primary,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withOpacity(0.3),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 8),
+                                  )
                                 ],
                               ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: isLoading ? null : _login,
+                                  child: Center(
+                                    child: isLoading
+                                        ? const SizedBox(
+                                            height: 24,
+                                            width: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 3,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Ingresar',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -282,43 +242,47 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     required String hint,
     required IconData icon,
     bool isPassword = false,
-    bool isDark = false,
     bool obscureText = false,
     VoidCallback? onToggleObscure,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? Colors.black26 : Colors.white60,
-        borderRadius: BorderRadius.circular(12),
-        // Sombra neumórfica sutil in-set
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black54 : Colors.grey.shade300,
-            offset: const Offset(2, 2),
-            blurRadius: 4,
-          ),
-          BoxShadow(
-            color: isDark ? Colors.white10 : Colors.white,
-            offset: const Offset(-2, -2),
-            blurRadius: 4,
-          ),
-        ],
+        color: AppColors.surfaceVariant, // Siempre gris claro
+        borderRadius: BorderRadius.circular(16),
       ),
       child: TextFormField(
         controller: controller,
         obscureText: obscureText,
-        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+        style: const TextStyle(
+          color: Colors.black87, // Siempre texto oscuro
+          fontWeight: FontWeight.w600,
+        ),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black38),
-          prefixIcon: Icon(icon, color: isDark ? Colors.white70 : Colors.black54),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          hintStyle: const TextStyle(
+            color: Colors.black54, // Siempre hint oscuro
+            fontWeight: FontWeight.w400,
+          ),
+          prefixIcon: Icon(
+            icon, 
+            color: Colors.black54,
+            size: 22,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
-                    obscureText ? Icons.visibility_off : Icons.visibility,
-                    color: isDark ? Colors.white70 : Colors.black54,
+                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: Colors.black54,
+                    size: 22,
                   ),
                   onPressed: onToggleObscure,
                 )
@@ -329,7 +293,3 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 }
-
-// Extensión para soportar Offset con inset (simulado mediante containers o simple drop shadow para textfields)
-// Dado que Flutter no tiene inner shadow nativo, usaremos un truco o omitimos inner shadow para mantener compatibilidad,
-// así que simplifiqué la sombra arriba eliminando el parámetro inset imaginario.

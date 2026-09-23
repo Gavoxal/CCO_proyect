@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color amarillo = Color(0xFFFFD700);
-  static const Color naranja = Color(0xFFFF8C00);
-  static const Color violeta = Color(0xFF6A5ACD);
-  static const Color azul = Color(0xFF4169E1);
+  // Teal (Primary)
+  static const Color primary = Color(0xFF14B8A6);
+  // Coral (Secondary / Accent)
+  static const Color secondary = Color(0xFFF43F5E);
   
-  static const Color backgroundLight = Color(0xFFF5F7FF);
-  static const Color paperLight = Color(0xFFFFFFFF);
+  // Backgrounds & Surfaces
+  static const Color background = Color(0xFFF8FAFC); // Slate 50
+  static const Color surface = Color(0xFFFFFFFF); // White
+  static const Color surfaceVariant = Color(0xFFF1F5F9); // Slate 100
   
-  static const Color backgroundDark = Color(0xFF0A0E1A);
-  static const Color paperDark = Color(0xFF0F1629);
+  // Text
+  static const Color textPrimary = Color(0xFF0F172A); // Slate 900
+  static const Color textSecondary = Color(0xFF64748B); // Slate 500
 }

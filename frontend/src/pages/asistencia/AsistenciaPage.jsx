@@ -273,10 +273,16 @@ const AsistenciaPage = () => {
             const st = estados[inf.id] || 'Ausente';
             const pagado = montosPagados[inf.id] !== undefined 
                 ? montosPagados[inf.id] 
-                : (st === 'PagoDia' ? tarifa : 0);
+                : 0; // Se asume 0 si es undefined, ya que se calcula en el setMontosPagados
 
             if (st === 'PagoDia') {
                 recaudado += tarifa;
+                pagaronCount++;
+            } else if (st === 'Mes') {
+                recaudado += tarifa * 10;
+                pagaronCount++;
+            } else if (st === 'Semana') {
+                recaudado += tarifa * 3;
                 pagaronCount++;
             } else if (st === 'Pendiente') {
                 if (pagado > 0) {
@@ -312,6 +318,10 @@ const AsistenciaPage = () => {
         setMontosPagados(m => {
             if (nuevoEstado === 'PagoDia') {
                 return { ...m, [infanteId]: tarifa };
+            } else if (nuevoEstado === 'Mes') {
+                return { ...m, [infanteId]: tarifa * 10 };
+            } else if (nuevoEstado === 'Semana') {
+                return { ...m, [infanteId]: tarifa * 3 };
             } else if (nuevoEstado === 'Pendiente') {
                 // Si tenía abono previo menor a tarifa, conservarlo; si no, 0
                 const prev = m[infanteId] || 0;
@@ -339,7 +349,10 @@ const AsistenciaPage = () => {
         infantes.forEach(i => {
             updated[i.id] = estado;
             const tarifa = parseFloat(i.tarifaDiaria || 0.60);
-            updatedMontos[i.id] = estado === 'PagoDia' ? tarifa : 0;
+            if (estado === 'PagoDia') updatedMontos[i.id] = tarifa;
+            else if (estado === 'Mes') updatedMontos[i.id] = tarifa * 10;
+            else if (estado === 'Semana') updatedMontos[i.id] = tarifa * 3;
+            else updatedMontos[i.id] = 0;
         });
         setEstados(updated);
         setMontosPagados(updatedMontos);
@@ -353,11 +366,17 @@ const AsistenciaPage = () => {
                 const inf = infantes.find(i => i.id === infId);
                 const tarifa = parseFloat(inf?.tarifaDiaria || 0.60);
                 let monto = montosPagados[infId] || 0;
+                
                 if (st === 'PagoDia' && (!monto || monto === 0)) {
                     monto = tarifa;
+                } else if (st === 'Mes') {
+                    monto = tarifa * 10;
+                } else if (st === 'Semana') {
+                    monto = tarifa * 3;
                 } else if (st !== 'PagoDia' && st !== 'Pendiente') {
                     monto = 0;
                 }
+                
                 return {
                     infanteId: infId,
                     estado: st,

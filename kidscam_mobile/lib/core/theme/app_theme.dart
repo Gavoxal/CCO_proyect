@@ -1,40 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.light(
-        primary: AppColors.azul,
-        secondary: AppColors.violeta,
-        background: AppColors.backgroundLight,
-        surface: AppColors.paperLight,
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.primary,
+        secondary: AppColors.secondary,
+        background: AppColors.background,
+        surface: AppColors.surface,
       ),
-      scaffoldBackgroundColor: AppColors.backgroundLight,
-      fontFamily: 'Inter', // Si agregamos la fuente luego
+      scaffoldBackgroundColor: AppColors.background,
+      textTheme: GoogleFonts.plusJakartaSansTextTheme().apply(
+        bodyColor: AppColors.textPrimary,
+        displayColor: AppColors.textPrimary,
+      ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.paperLight,
-        selectedItemColor: AppColors.azul,
-        unselectedItemColor: Colors.grey,
+        backgroundColor: AppColors.surface,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textSecondary,
       ),
     );
   }
 
   static ThemeData get darkTheme {
+    // For now we just return lightTheme or a slightly modified one since Clean UI is mostly light.
+    // If you want a true dark mode for Clean UI, you can invert colors later.
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.dark(
-        primary: AppColors.naranja,
-        secondary: AppColors.violeta,
-        background: AppColors.backgroundDark,
-        surface: AppColors.paperDark,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primary,
+        secondary: AppColors.secondary,
+        background: Color(0xFF0F172A), // Slate 900
+        surface: Color(0xFF1E293B), // Slate 800
       ),
-      scaffoldBackgroundColor: AppColors.backgroundDark,
-      fontFamily: 'Inter',
+      scaffoldBackgroundColor: const Color(0xFF0F172A),
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme).apply(
+        bodyColor: Colors.white,
+        displayColor: Colors.white,
+      ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.paperDark,
-        selectedItemColor: AppColors.naranja,
+        backgroundColor: Color(0xFF1E293B),
+        selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
       ),
     );

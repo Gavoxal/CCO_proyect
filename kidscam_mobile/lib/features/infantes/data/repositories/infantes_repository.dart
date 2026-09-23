@@ -26,11 +26,16 @@ class InfantesRepository {
     ));
   }
 
-  Future<List<Infante>> getInfantes({String? buscar}) async {
+  Future<List<Infante>> getInfantes({String? buscar, int limit = 1000, String? tipoPrograma}) async {
     try {
-      final queryParams = <String, dynamic>{};
+      final queryParams = <String, dynamic>{
+        'limit': limit,
+      };
       if (buscar != null && buscar.isNotEmpty) {
         queryParams['buscar'] = buscar;
+      }
+      if (tipoPrograma != null && tipoPrograma != 'all') {
+        queryParams['tipoPrograma'] = tipoPrograma;
       }
       
       final response = await _dio.get('/infantes', queryParameters: queryParams);

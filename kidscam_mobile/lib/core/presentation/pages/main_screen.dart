@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../features/infantes/presentation/pages/infantes_screen.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../features/asistencias/presentation/pages/asistencias_screen.dart';
+import '../../../features/dashboard/presentation/pages/dashboard_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -11,12 +13,12 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 1; // 1 = Infantes por defecto, según requerimiento
+  int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    const Center(child: Text('Dashboard')),
+    const DashboardScreen(),
     const InfantesScreen(),
-    const Center(child: Text('Asistencias')),
+    const AsistenciaScreen(),
     const Center(child: Text('Visitas')),
     const Center(child: Text('Inventario')),
   ];
@@ -92,12 +94,12 @@ class _MainScreenState extends State<MainScreen> {
         padding: EdgeInsets.symmetric(horizontal: isSelected ? 4 : 0, vertical: 8),
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.naranja : Colors.transparent,
+          color: isSelected ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppColors.naranja.withOpacity(0.4),
+                    color: AppColors.primary.withOpacity(0.4),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   )

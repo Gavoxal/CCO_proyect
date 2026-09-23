@@ -38,6 +38,10 @@ dependencies:
   dio: ^5.11.0
   flutter_dotenv: ^6.0.1
   shared_preferences: ^2.5.5
+  google_fonts: ^8.2.1
+  image_picker: ^1.2.3
+  url_launcher: ^6.3.2
+  geolocator: ^14.0.3
 
 dev_dependencies:
   flutter_test:
@@ -65,6 +69,7 @@ flutter:
   assets:
     - .env
     - assets/images/logo.png
+    - assets/images/logo_blanco.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

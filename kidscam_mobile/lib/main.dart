@@ -6,6 +6,8 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/infantes/presentation/providers/infantes_provider.dart';
+import 'features/asistencias/presentation/providers/asistencia_provider.dart';
+import 'features/dashboard/presentation/providers/dashboard_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +20,8 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => InfantesProvider()),
+        ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
+        ChangeNotifierProvider(create: (_) => DashboardProvider()),
       ],
       child: const KidsCamApp(),
     ),
@@ -34,7 +38,7 @@ class KidsCamApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system, // Cambia automáticamente según el dispositivo
+      themeMode: ThemeMode.light, // Forza el modo claro para evitar conflictos de contraste en la tablet
       home: const LoginPage(),
     );
   }

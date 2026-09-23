@@ -8,7 +8,7 @@ export async function login(request, reply) {
 
     const usuario = await db.usuario.findFirst({
         where: { OR: [{ username }, { email: username }], activo: true },
-        include: { persona: true }
+        include: { persona: { include: { tutor: true } } }
     })
 
     if (!usuario) {
@@ -33,6 +33,7 @@ export async function login(request, reply) {
         nombre: usuario.persona
             ? `${usuario.persona.nombres} ${usuario.persona.apellidos}`
             : usuario.username,
+        fotoUrl: usuario.persona?.tutor?.fotografia,
         passwordExpired: (new Date() - new Date(usuario.passwordUpdatedAt)) / (1000 * 60 * 60 * 24) >= 90
     }
 
